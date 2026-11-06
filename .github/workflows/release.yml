@@ -1,0 +1,40 @@
+name: Build Windows release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Configurar .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restaurar dependências
+        run: dotnet restore LoLIdleDesktop.csproj
+
+      - name: Publicar para Windows 64 bits
+        run: dotnet publish LoLIdleDesktop.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
+
+      - name: Criar pacote ZIP
+        shell: pwsh
+        run: |
+          $publish = "bin/Release/net8.0-windows/win-x64/publish"
+          if (!(Test-Path "$publish/LoL Idle.exe")) {
+            throw "Executável não encontrado em $publish"
+          }
+          Compress-Archive -Path "$publish/*" -DestinationPath "LoLIdleDesktop-win-x64.zip" -Force
+
+      - name: Anexar ZIP à Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" "LoLIdleDesktop-win-x64.zip" --clobber
