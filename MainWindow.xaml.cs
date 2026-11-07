@@ -138,11 +138,6 @@ public partial class MainWindow : Window
             _settingsSaveTimer.Stop();
             SaveWindowSettings();
         };
-        _panelRefreshTimer = new System.Windows.Threading.DispatcherTimer
-        {
-            Interval = TimeSpan.FromSeconds(2)
-        };
-        _panelRefreshTimer.Tick += async (_, _) => await RefreshPanelDataAsync();
         InitializeTrayIcon();
         SourceInitialized += Window_SourceInitialized;
     }
@@ -428,7 +423,6 @@ public partial class MainWindow : Window
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
         RestoreWindowSettings();
-        RestorePanelWindows();
 
         try
         {
@@ -481,8 +475,6 @@ public partial class MainWindow : Window
                 if (args.IsSuccess)
                 {
                     _ = ApplyAudioSettingsAsync();
-                    _panelRefreshTimer?.Start();
-                    _ = RefreshPanelDataAsync();
                 }
             };
 
@@ -697,9 +689,6 @@ public partial class MainWindow : Window
             var toolbarGrid = new Grid();
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
-            toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(68) });
-            toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(58) });
-            toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(66) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
@@ -759,10 +748,10 @@ public partial class MainWindow : Window
                 SaveWindowSettings();
                 _ = ApplyAudioSettingsAsync();
             };
-            Grid.SetColumn(audioMuteButton, 5);
+            Grid.SetColumn(audioMuteButton, 2);
             toolbarGrid.Children.Add(audioMuteButton);
 
-            Grid.SetColumn(topmostButton, 6);
+            Grid.SetColumn(topmostButton, 3);
             toolbarGrid.Children.Add(topmostButton);
 
             var settingsButton = new Button
@@ -779,13 +768,6 @@ public partial class MainWindow : Window
             Grid.SetColumn(settingsButton, 1);
             toolbarGrid.Children.Add(settingsButton);
 
-            var questToggleButton = CreatePanelToggleButton("Missões", "quest", 2);
-            var sidebarToggleButton = CreatePanelToggleButton("Barra lateral", "sidebar", 3);
-            var characterToggleButton = CreatePanelToggleButton("Herói", "character", 4);
-            toolbarGrid.Children.Add(questToggleButton);
-            toolbarGrid.Children.Add(sidebarToggleButton);
-            toolbarGrid.Children.Add(characterToggleButton);
-
             var closeButton = new Button
             {
                 Content = "×",
@@ -798,7 +780,7 @@ public partial class MainWindow : Window
                 ToolTip = "Fechar janela flutuante"
             };
             closeButton.Click += (_, _) => popupWindow.Close();
-            Grid.SetColumn(closeButton, 7);
+            Grid.SetColumn(closeButton, 4);
             toolbarGrid.Children.Add(closeButton);
 
             toolbar.MouseLeftButtonDown += (_, args) =>
@@ -884,8 +866,7 @@ public partial class MainWindow : Window
                 if (navArgs.IsSuccess)
                 {
                     _ = ApplyAudioSettingsAsync();
-                    _panelRefreshTimer?.Start();
-                    _ = RefreshPanelDataAsync();
+                    _ = ActivateGameEconomyModeAsync(view.CoreWebView2);
                 }
             };
 
@@ -1016,20 +997,6 @@ public partial class MainWindow : Window
 
         stack.Children.Add(new TextBlock
         {
-            Text = "PAINÉIS INDEPENDENTES",
-            Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143)),
-            FontWeight = FontWeights.Bold,
-            FontSize = 13,
-            Margin = new Thickness(0, 0, 0, 12)
-        });
-
-        AddPanelSetting(stack, "Missões", "quest", _settings.ShowQuestPanel, _settings.QuestPanelOpacity);
-        AddPanelSetting(stack, "Barra lateral", "sidebar", _settings.ShowSidebarPanel, _settings.SidebarPanelOpacity);
-        AddPanelSetting(stack, "Personagem", "character", _settings.ShowCharacterPanel, _settings.CharacterPanelOpacity);
-
-        stack.Children.Add(new Separator { Margin = new Thickness(0, 18, 0, 16), Background = new SolidColorBrush(Color.FromRgb(55, 61, 72)) });
-        stack.Children.Add(new TextBlock
-        {
             Text = "ÁUDIO",
             Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143)),
             FontWeight = FontWeights.Bold,
@@ -1068,46 +1035,6 @@ public partial class MainWindow : Window
         window.Content = scroll;
         window.Show();
         window.Activate();
-    }
-
-    private void AddPanelSetting(Panel parent, string title, string key, bool visible, double opacity)
-    {
-        var group = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
-        var toggle = new CheckBox
-        {
-            Content = "Ativar " + title,
-            IsChecked = visible,
-            Foreground = Brushes.White,
-            FontSize = 13,
-            Margin = new Thickness(0, 0, 0, 7)
-        };
-        toggle.Checked += (_, _) => SetPanelVisibility(key, true);
-        toggle.Unchecked += (_, _) => SetPanelVisibility(key, false);
-        group.Children.Add(toggle);
-
-        var slider = new Slider
-        {
-            Minimum = 15,
-            Maximum = 100,
-            Value = Math.Clamp(opacity * 100, 15, 100),
-            TickFrequency = 5,
-            IsSnapToTickEnabled = false,
-        };
-        var valueText = new TextBlock
-        {
-            Text = $"Opacidade: {Math.Round(slider.Value)}%",
-            Foreground = new SolidColorBrush(Color.FromRgb(155, 164, 178)),
-            FontSize = 11,
-            Margin = new Thickness(0, 3, 0, 0)
-        };
-        slider.ValueChanged += (_, _) =>
-        {
-            valueText.Text = $"Opacidade: {Math.Round(slider.Value)}% (ao passar o mouse: 100%)";
-            SetPanelOpacity(key, slider.Value / 100.0);
-        };
-        group.Children.Add(slider);
-        group.Children.Add(valueText);
-        parent.Children.Add(group);
     }
 
     private static void AddAudioSetting(Panel parent, string title, bool initialValue, Action<bool> changed)
@@ -1427,6 +1354,89 @@ public partial class MainWindow : Window
         return panel;
     }
 
+    // Ativa a opção nativa de economia de bateria sem alterná-la quando já estiver ligada.
+    private async Task ActivateGameEconomyModeAsync(CoreWebView2? core = null)
+    {
+        core ??= _floatingView?.CoreWebView2;
+        if (core == null || string.Equals(core.Source, "about:blank", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        const string openSettingsScript = @"(() => {
+            const visible = el => {
+                if (!el || !el.isConnected) return false;
+                const r = el.getBoundingClientRect(), s = getComputedStyle(el);
+                return r.width > 0 && r.height > 0 && s.display !== 'none' &&
+                    s.visibility !== 'hidden' && Number(s.opacity) !== 0;
+            };
+            const pattern = /economia\s*(de\s*)?(bateria|energia)|modo\s+econ[oô]mico|modo\s+economia/i;
+            if ([...document.querySelectorAll('body *')].some(el =>
+                visible(el) && el.children.length === 0 &&
+                pattern.test((el.innerText || el.getAttribute('aria-label') || el.getAttribute('title') || '').trim())))
+                return 'settings_already_open';
+            const controls = [...document.querySelectorAll('button,[role=""button""],[aria-label],[title]')].filter(visible);
+            const gear = controls.find(el => {
+                const hint = [el.innerText, el.getAttribute('aria-label'), el.getAttribute('title'),
+                    el.getAttribute('data-tooltip')].filter(Boolean).join(' ').trim().toLowerCase();
+                return hint === '⚙' || hint === 'configurações' || hint === 'configuracoes' ||
+                    hint.includes('configurações') || hint.includes('configuracoes');
+            });
+            if (!gear) return 'settings_button_not_found';
+            gear.click();
+            return 'settings_opened';
+        })();";
+
+        try
+        {
+            var openResult = await core.ExecuteScriptAsync(openSettingsScript);
+            await Task.Delay(500);
+
+            const string enableScript = @"(() => {
+                const visible = el => {
+                    if (!el || !el.isConnected) return false;
+                    const r = el.getBoundingClientRect(), s = getComputedStyle(el);
+                    return r.width > 0 && r.height > 0 && s.display !== 'none' &&
+                        s.visibility !== 'hidden' && Number(s.opacity) !== 0;
+                };
+                const pattern = /economia\s*(de\s*)?(bateria|energia)|modo\s+econ[oô]mico|modo\s+economia/i;
+                const labels = [...document.querySelectorAll('body *')]
+                    .filter(el => visible(el) && el.children.length === 0 &&
+                        pattern.test((el.innerText || el.getAttribute('aria-label') || el.getAttribute('title') || '').trim()))
+                    .sort((a,b) => (a.innerText || '').length - (b.innerText || '').length);
+                if (!labels.length) return 'economy_option_not_found';
+                const label = labels[0], roots = [label, label.closest('label'), label.parentElement, label.parentElement?.parentElement].filter(Boolean);
+                const controls = [];
+                for (const root of roots) {
+                    if (root.matches?.('input[type=checkbox],[role=switch],[role=checkbox],button,[role=button]')) controls.push(root);
+                    controls.push(...root.querySelectorAll?.('input[type=checkbox],[role=switch],[role=checkbox],button,[role=button]') || []);
+                }
+                const control = controls.find(visible);
+                if (!control) return 'economy_control_not_found';
+                let state = null;
+                if (control.matches('input[type=checkbox]')) state = control.checked;
+                else {
+                    const aria = control.getAttribute('aria-checked') ?? control.getAttribute('aria-pressed');
+                    if (aria === 'true' || aria === 'false') state = aria === 'true';
+                    const ds = control.getAttribute('data-state');
+                    if (state === null && (ds === 'checked' || ds === 'unchecked')) state = ds === 'checked';
+                    const cls = String(control.className || '').toLowerCase();
+                    if (state === null && /(^|\s)(active|enabled|checked|on)(\s|$)/.test(cls)) state = true;
+                    if (state === null && /(^|\s)(inactive|disabled|unchecked|off)(\s|$)/.test(cls)) state = false;
+                }
+                if (state === true) return 'economy_already_enabled';
+                if (state === null) return 'economy_state_unclear_no_click';
+                control.click();
+                return 'economy_enabled';
+            })();";
+
+            var result = await core.ExecuteScriptAsync(enableScript);
+            LogFloatingWindowEvent($"Economia nativa: abrir={openResult}; resultado={result}");
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"Economia nativa: falha ao ativar: {ex.Message}");
+        }
+    }
+
     private async Task ApplyAudioSettingsAsync()
     {
         var preferences = JsonSerializer.Serialize(new
@@ -1515,6 +1525,8 @@ public partial class MainWindow : Window
                 : GameUrl;
             if (string.IsNullOrWhiteSpace(core.Source) || core.Source == "about:blank")
                 core.Navigate(target);
+            else
+                _ = ActivateGameEconomyModeAsync(core);
 
             _ = PrepareFloatingWebViewAsync(this);
         }
