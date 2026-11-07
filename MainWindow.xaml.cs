@@ -8,6 +8,7 @@ using System.Windows;
 using System.Windows.Controls;
 using Button = System.Windows.Controls.Button;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
 using Forms = System.Windows.Forms;
@@ -351,6 +352,7 @@ public partial class MainWindow : Window
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
         RestoreWindowSettings();
+        RestorePanelWindows();
 
         try
         {
@@ -860,7 +862,6 @@ public partial class MainWindow : Window
             Value = Math.Clamp(opacity * 100, 15, 100),
             TickFrequency = 5,
             IsSnapToTickEnabled = false,
-            IsEnabled = key != "character" || true
         };
         var valueText = new TextBlock
         {
@@ -928,7 +929,17 @@ public partial class MainWindow : Window
         if (_panelWindows.TryGetValue(key, out var panel))
             panel.SetPanelOpacity(opacity);
 
-        SaveWindowSettings();
+        QueueWindowSettingsSave();
+    }
+
+    private void RestorePanelWindows()
+    {
+        if (_settings.ShowQuestPanel)
+            GetOrCreatePanel("quest").SetPanelVisible(true);
+        if (_settings.ShowSidebarPanel)
+            GetOrCreatePanel("sidebar").SetPanelVisible(true);
+        if (_settings.ShowCharacterPanel)
+            GetOrCreatePanel("character").SetPanelVisible(true);
     }
 
     private AuxiliaryPanelWindow GetOrCreatePanel(string key)
