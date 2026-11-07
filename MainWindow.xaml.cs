@@ -2,6 +2,7 @@ using Microsoft.Web.WebView2.Core;
 using System;
 using System.IO;
 using System.Collections.Generic;
+using System.Linq;
 using System.ComponentModel;
 using System.Text.Json;
 using System.Windows;
@@ -30,6 +31,7 @@ public partial class MainWindow : Window
     private bool _allowExit;
     private bool _settingsReady;
     private System.Windows.Threading.DispatcherTimer? _settingsSaveTimer;
+    private System.Windows.Threading.DispatcherTimer? _panelRefreshTimer;
     private System.Drawing.Icon? _appIcon;
     private CoreWebView2Environment? _webViewEnvironment;
     private string _lastFloatingUri = GameUrl;
@@ -86,6 +88,11 @@ public partial class MainWindow : Window
             _settingsSaveTimer.Stop();
             SaveWindowSettings();
         };
+        _panelRefreshTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromSeconds(2)
+        };
+        _panelRefreshTimer.Tick += async (_, _) => await RefreshPanelDataAsync();
         InitializeTrayIcon();
         SourceInitialized += Window_SourceInitialized;
     }
@@ -422,7 +429,11 @@ public partial class MainWindow : Window
                     ? "LoL Idle pronto  •  Sua sessão fica salva neste computador"
                     : "Não foi possível carregar. Verifique sua conexão e tente atualizar.";
                 if (args.IsSuccess)
+                {
                     _ = ApplyAudioSettingsAsync();
+                    _panelRefreshTimer?.Start();
+                    _ = RefreshPanelDataAsync();
+                }
             };
 
             GameView.CoreWebView2.NewWindowRequested += (_, args) =>
@@ -786,7 +797,11 @@ public partial class MainWindow : Window
             view.CoreWebView2.NavigationCompleted += (_, navArgs) =>
             {
                 if (navArgs.IsSuccess)
+                {
                     _ = ApplyAudioSettingsAsync();
+                    _panelRefreshTimer?.Start();
+                    _ = RefreshPanelDataAsync();
+                }
             };
 
             popupWindow.Hide();
@@ -1052,6 +1067,63 @@ public partial class MainWindow : Window
             GetOrCreatePanel("character").SetPanelVisible(true);
     }
 
+    private sealed class PanelSnapshot
+    {
+        public string Quest { get; set; } = "";
+        public string Sidebar { get; set; } = "";
+        public string Character { get; set; } = "";
+    }
+
+    // Lê somente texto presente no DOM do jogo. Não estima nem inventa atributos.
+    private async Task RefreshPanelDataAsync()
+    {
+        if (!_panelWindows.Values.Any(panel => panel.IsVisible))
+            return;
+
+        var source = _floatingView?.CoreWebView2 ?? GameView?.CoreWebView2;
+        if (source == null)
+            return;
+
+        const string script = @"(() => {
+            const lines = (document.body?.innerText || '')
+                .split(/\\n+/).map(x => x.trim()).filter(Boolean);
+            const collect = (pattern) => {
+                const found = [];
+                for (let i = 0; i < lines.length; i++) {
+                    if (pattern.test(lines[i])) {
+                        for (let j = Math.max(0, i - 1); j <= Math.min(lines.length - 1, i + 2); j++)
+                            found.push(lines[j]);
+                    }
+                }
+                return [...new Set(found)].slice(0, 28).join('\\n');
+            };
+            return {
+                quest: collect(/missões|missao|quest|progresso|objetivo|recompensa/i),
+                sidebar: collect(/mochila|equipamento|itens|poções|pocões|poção|runas|cartas/i),
+                character: collect(/nível|nivel|experiência|experiencia|habilidades|atributos|dano|armadura|poder|mana|crítico|critico|esquiva|abates|mortes/i)
+            };
+        })();";
+
+        try
+        {
+            var json = await source.ExecuteScriptAsync(script);
+            var snapshot = JsonSerializer.Deserialize<PanelSnapshot>(json);
+            if (snapshot == null)
+                return;
+
+            if (_panelWindows.TryGetValue("quest", out var quest) && quest.IsVisible)
+                quest.SetPanelContent(snapshot.Quest);
+            if (_panelWindows.TryGetValue("sidebar", out var sidebar) && sidebar.IsVisible)
+                sidebar.SetPanelContent(snapshot.Sidebar);
+            if (_panelWindows.TryGetValue("character", out var character) && character.IsVisible)
+                character.SetPanelContent(snapshot.Character);
+        }
+        catch
+        {
+            // Uma leitura indisponível não deve interromper o jogo.
+        }
+    }
+
     private AuxiliaryPanelWindow GetOrCreatePanel(string key)
     {
         if (_panelWindows.TryGetValue(key, out var existing))
@@ -1059,12 +1131,12 @@ public partial class MainWindow : Window
 
         var (title, description, opacity) = key switch
         {
-            "quest" => ("Missões", "Janela independente reservada para as missões do LoL Idle. A leitura dos dados reais do jogo será conectada na próxima etapa.", _settings.QuestPanelOpacity),
-            "sidebar" => ("Barra lateral", "Janela independente para os indicadores e atalhos laterais do jogo. Os dados serão conectados sem inventar valores.", _settings.SidebarPanelOpacity),
-            _ => ("Personagem", "Janela independente para as informações do personagem. Nome, nível, experiência e habilidades dependem da leitura da interface real do jogo.", _settings.CharacterPanelOpacity)
+            "quest" => ("Missões", "Aguardando informações visíveis na interface do jogo.", _settings.QuestPanelOpacity),
+            "sidebar" => ("Itens", "Aguardando informações visíveis na interface do jogo.", _settings.SidebarPanelOpacity),
+            _ => ("Herói", "Aguardando informações visíveis na interface do jogo.", _settings.CharacterPanelOpacity)
         };
 
-        var panel = new AuxiliaryPanelWindow(title, description, true, opacity);
+        var panel = new AuxiliaryPanelWindow(title, description, key != "character", opacity);
         panel.Closed += (_, _) => _panelWindows.Remove(key);
         _panelWindows[key] = panel;
         return panel;
