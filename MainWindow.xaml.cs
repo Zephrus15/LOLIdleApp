@@ -58,6 +58,11 @@ public partial class MainWindow : Window
         public double Left { get; set; } = 100;
         public double Top { get; set; } = 100;
         public bool IsAlwaysOnTop { get; set; }
+        public bool HasFloatingBounds { get; set; }
+        public double FloatingWidth { get; set; } = 900;
+        public double FloatingHeight { get; set; } = 650;
+        public double FloatingLeft { get; set; } = 100;
+        public double FloatingTop { get; set; } = 100;
         public bool ShowQuestPanel { get; set; }
         public bool ShowSidebarPanel { get; set; }
         public bool ShowCharacterPanel { get; set; }
@@ -207,6 +212,7 @@ public partial class MainWindow : Window
             _settings.NormalHeight = _normalHeight;
             _settings.Left = Left;
             _settings.Top = Top;
+            CaptureFloatingWindowBounds();
 
             File.WriteAllText(SettingsPath,
                 JsonSerializer.Serialize(_settings, new JsonSerializerOptions
@@ -492,15 +498,17 @@ public partial class MainWindow : Window
         }
     }
 
-    // Reposiciona a janela preparada, que nasceu fora da tela, antes de exibi-la.
+    // Restaura a última geometria da janela flutuante sem deixá-la fora da tela.
     private void ShowFloatingWindow(Window window)
     {
-        const double width = 900;
-        const double height = 650;
-        var workLeft = SystemParameters.WorkArea.Left;
-        var workTop = SystemParameters.WorkArea.Top;
-        var workWidth = SystemParameters.WorkArea.Width;
-        var workHeight = SystemParameters.WorkArea.Height;
+        var areaLeft = SystemParameters.VirtualScreenLeft;
+        var areaTop = SystemParameters.VirtualScreenTop;
+        var areaRight = areaLeft + SystemParameters.VirtualScreenWidth;
+        var areaBottom = areaTop + SystemParameters.VirtualScreenHeight;
+        var width = _settings.HasFloatingBounds ? _settings.FloatingWidth : 900;
+        var height = _settings.HasFloatingBounds ? _settings.FloatingHeight : 650;
+        width = Math.Clamp(width, 360, Math.Max(360, SystemParameters.VirtualScreenWidth));
+        height = Math.Clamp(height, 240, Math.Max(240, SystemParameters.VirtualScreenHeight));
 
         window.WindowState = WindowState.Normal;
         window.WindowStyle = WindowStyle.None;
@@ -508,14 +516,25 @@ public partial class MainWindow : Window
         window.ShowInTaskbar = true;
         window.ShowActivated = true;
         window.Opacity = 1;
-        window.Width = Math.Min(width, workWidth);
-        window.Height = Math.Min(height, workHeight);
+        window.Width = width;
+        window.Height = height;
         window.WindowStartupLocation = WindowStartupLocation.Manual;
-        window.Left = workLeft + Math.Max(0, (workWidth - window.Width) / 2);
-        window.Top = workTop + Math.Max(0, (workHeight - window.Height) / 2);
+        window.Left = _settings.HasFloatingBounds
+            ? Math.Clamp(_settings.FloatingLeft, areaLeft, Math.Max(areaLeft, areaRight - width))
+            : areaLeft + Math.Max(0, (SystemParameters.VirtualScreenWidth - width) / 2);
+        window.Top = _settings.HasFloatingBounds
+            ? Math.Clamp(_settings.FloatingTop, areaTop, Math.Max(areaTop, areaBottom - height))
+            : areaTop + Math.Max(0, (SystemParameters.VirtualScreenHeight - height) / 2);
 
         if (!window.IsVisible)
             window.Show();
+
+        if (!window.Tag?.Equals("floating-bounds-tracked") ?? true)
+        {
+            window.Tag = "floating-bounds-tracked";
+            window.LocationChanged += (_, _) => QueueWindowSettingsSave();
+            window.SizeChanged += (_, _) => QueueWindowSettingsSave();
+        }
 
         // Garante que a janela recém-revelada fique acima do jogo e receba foco.
         window.Topmost = true;
@@ -525,6 +544,24 @@ public partial class MainWindow : Window
             window.Topmost = false;
             window.Activate();
         }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+    }
+
+    private void CaptureFloatingWindowBounds()
+    {
+        if (_floatingWindow == null || !_floatingWindow.IsVisible ||
+            _floatingWindow.WindowState != WindowState.Normal)
+            return;
+
+        var window = _floatingWindow;
+        if (window.Width < 360 || window.Height < 240 ||
+            !double.IsFinite(window.Left) || !double.IsFinite(window.Top))
+            return;
+
+        _settings.FloatingWidth = window.ActualWidth > 0 ? window.ActualWidth : window.Width;
+        _settings.FloatingHeight = window.ActualHeight > 0 ? window.ActualHeight : window.Height;
+        _settings.FloatingLeft = window.Left;
+        _settings.FloatingTop = window.Top;
+        _settings.HasFloatingBounds = true;
     }
 
     // Log técnico mínimo, sem gravar URLs completas, cookies ou tokens.
@@ -689,6 +726,8 @@ public partial class MainWindow : Window
 
                 if (wasActiveFloatingWindow)
                 {
+                    CaptureFloatingWindowBounds();
+                    SaveWindowSettings();
                     var closedView = _floatingView;
                     _floatingWindow = null;
                     _floatingView = null;
