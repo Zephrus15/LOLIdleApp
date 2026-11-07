@@ -672,7 +672,7 @@ public partial class MainWindow : Window
         }
     }
 
-    private static System.Windows.Shapes.Path CreateToolbarIcon(string name, Brush color)
+    private static System.Windows.Shapes.Path CreateToolbarIcon(string name, System.Windows.Media.Brush color)
     {
         var data = name switch
         {
