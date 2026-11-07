@@ -803,6 +803,11 @@ public partial class MainWindow : Window
 
             toolbar.MouseLeftButtonDown += (_, args) =>
             {
+                // O clique nos botões percorre a árvore visual até o Border.
+                // Não iniciar DragMove nesses casos, senão o botão perde o clique.
+                if (IsInsideButton(args.OriginalSource as DependencyObject))
+                    return;
+
                 if (args.LeftButton == MouseButtonState.Pressed)
                     popupWindow.DragMove();
             };
@@ -915,6 +920,27 @@ public partial class MainWindow : Window
         }
     }
 
+
+    private static bool IsInsideButton(DependencyObject? element)
+    {
+        while (element != null)
+        {
+            if (element is Button)
+                return true;
+
+            if (element is System.Windows.Media.Visual ||
+                element is System.Windows.Media.Media3D.Visual3D)
+            {
+                element = System.Windows.Media.VisualTreeHelper.GetParent(element);
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
 
     private Button CreatePanelToggleButton(string label, string key, int column)
     {
