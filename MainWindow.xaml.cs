@@ -26,6 +26,7 @@ public partial class MainWindow : Window
     private System.Windows.Threading.DispatcherTimer? _settingsSaveTimer;
     private System.Drawing.Icon? _appIcon;
     private CoreWebView2Environment? _webViewEnvironment;
+    private string _lastFloatingUri = GameUrl;
     private string SettingsPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "LoLIdleDesktop", "window-settings.json");
@@ -441,6 +442,12 @@ public partial class MainWindow : Window
 
                 try
                 {
+                    if (!string.IsNullOrWhiteSpace(args.Uri))
+                    {
+                        _lastFloatingUri = args.Uri;
+                        FloatingReopenButton.IsEnabled = true;
+                    }
+
                     var popupCore = await CreateFloatingWebViewAsync(this);
                     args.NewWindow = popupCore;
                     args.Handled = true;
@@ -516,6 +523,12 @@ public partial class MainWindow : Window
             var popupDeferral = popupArgs.GetDeferral();
             try
             {
+                if (!string.IsNullOrWhiteSpace(popupArgs.Uri))
+                {
+                    _lastFloatingUri = popupArgs.Uri;
+                    FloatingReopenButton.IsEnabled = true;
+                }
+
                 popupArgs.NewWindow = await CreateFloatingWebViewAsync(popupWindow);
                 popupArgs.Handled = true;
             }
@@ -534,6 +547,25 @@ public partial class MainWindow : Window
         };
 
         return popupView.CoreWebView2;
+    }
+
+    // Recria uma janela flutuante usando o último endereço solicitado pelo jogo.
+    // O novo WebView2 compartilha o mesmo ambiente e, portanto, a sessão/cookies.
+    private async void ReopenFloatingWindow_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var floatingCore = await CreateFloatingWebViewAsync(this);
+            floatingCore.Navigate(_lastFloatingUri);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                "Não foi possível reabrir a janela flutuante.\n\n" + ex.Message,
+                "LoL Idle - janela flutuante",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
     }
 
     private void Minimize_Click(object sender, RoutedEventArgs e)
