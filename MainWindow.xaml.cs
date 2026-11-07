@@ -648,6 +648,34 @@ public partial class MainWindow : Window
         }
     }
 
+    private static System.Windows.Shapes.Path CreateToolbarIcon(string name, Brush color)
+    {
+        var data = name switch
+        {
+            "volume" => "M3,9 L7,9 L12,5 L12,19 L7,15 L3,15 Z M15,9 C17.5,11 17.5,13 15,15 M17.5,6.5 C21.5,10 21.5,14 17.5,17.5",
+            "mute" => "M3,9 L7,9 L12,5 L12,19 L7,15 L3,15 Z M16,9 L21,15 M21,9 L16,15",
+            "pin" => "M9,3 L15,3 L14,8 L17,11 L17,13 L13,13 L12,21 L10,13 L6,13 L6,11 L9,8 Z",
+            "pin-filled" => "M9,3 L15,3 L14,8 L17,11 L17,13 L13,13 L12,21 L10,13 L6,13 L6,11 L9,8 Z",
+            _ => "M6,6 L18,18 M18,6 L6,18"
+        };
+
+        return new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse(data),
+            Fill = name == "pin-filled" ? color : Brushes.Transparent,
+            Stroke = color,
+            StrokeThickness = 1.7,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Width = 17,
+            Height = 17,
+            Stretch = System.Windows.Media.Stretch.Uniform,
+            SnapsToDevicePixels = true,
+            IsHitTestVisible = false
+        };
+    }
+
     // Prepara uma janela invisível antes de qualquer pedido do jogo.
     private async Task PrepareFloatingWebViewAsync(Window? owner)
     {
@@ -703,48 +731,59 @@ public partial class MainWindow : Window
                 VerticalAlignment = VerticalAlignment.Center
             });
 
+            var toolbarIconColor = new SolidColorBrush(Color.FromRgb(216, 220, 228));
             var topmostButton = new Button
             {
-                Content = "◇",
-                Foreground = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(216, 220, 228)),
-                Background = System.Windows.Media.Brushes.Transparent,
+                Content = CreateToolbarIcon("pin", toolbarIconColor),
+                Foreground = toolbarIconColor,
+                Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
-                FontSize = 16,
-                Cursor = System.Windows.Input.Cursors.Hand,
+                Padding = new Thickness(0),
+                Width = 36,
+                Height = 32,
+                Cursor = Cursors.Hand,
                 ToolTip = "Ativar janela sempre no topo"
             };
             topmostButton.Click += (_, _) =>
             {
                 popupWindow.Topmost = !popupWindow.Topmost;
-                topmostButton.Content = popupWindow.Topmost ? "◆" : "◇";
                 topmostButton.Foreground = popupWindow.Topmost
-                    ? System.Windows.Media.Brushes.Gold
-                    : new System.Windows.Media.SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(216, 220, 228));
+                    ? Brushes.Gold
+                    : toolbarIconColor;
+                topmostButton.Content = CreateToolbarIcon(
+                    popupWindow.Topmost ? "pin-filled" : "pin",
+                    (Brush)topmostButton.Foreground);
                 topmostButton.ToolTip = popupWindow.Topmost
                     ? "Desativar janela sempre no topo"
                     : "Ativar janela sempre no topo";
             };
             var audioMuteButton = new Button
             {
-                Content = _settings.MasterMuted ? "🔇" : "🔊",
+                Content = CreateToolbarIcon(
+                    _settings.MasterMuted ? "mute" : "volume",
+                    _settings.MasterMuted
+                        ? new SolidColorBrush(Color.FromRgb(232, 207, 143))
+                        : toolbarIconColor),
                 Foreground = _settings.MasterMuted
                     ? new SolidColorBrush(Color.FromRgb(232, 207, 143))
-                    : new SolidColorBrush(Color.FromRgb(216, 220, 228)),
+                    : toolbarIconColor,
                 Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
-                FontSize = 15,
+                Padding = new Thickness(0),
+                Width = 36,
+                Height = 32,
                 Cursor = Cursors.Hand,
                 ToolTip = _settings.MasterMuted ? "Ativar todo o áudio" : "Silenciar todo o áudio"
             };
             audioMuteButton.Click += (_, _) =>
             {
                 _settings.MasterMuted = !_settings.MasterMuted;
-                audioMuteButton.Content = _settings.MasterMuted ? "🔇" : "🔊";
                 audioMuteButton.Foreground = _settings.MasterMuted
                     ? new SolidColorBrush(Color.FromRgb(232, 207, 143))
-                    : new SolidColorBrush(Color.FromRgb(216, 220, 228));
+                    : toolbarIconColor;
+                audioMuteButton.Content = CreateToolbarIcon(
+                    _settings.MasterMuted ? "mute" : "volume",
+                    (Brush)audioMuteButton.Foreground);
                 audioMuteButton.ToolTip = _settings.MasterMuted
                     ? "Ativar todo o áudio"
                     : "Silenciar todo o áudio";
@@ -759,13 +798,14 @@ public partial class MainWindow : Window
 
             var closeButton = new Button
             {
-                Content = "×",
-                Foreground = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(216, 220, 228)),
-                Background = System.Windows.Media.Brushes.Transparent,
+                Content = CreateToolbarIcon("close", toolbarIconColor),
+                Foreground = toolbarIconColor,
+                Background = Brushes.Transparent,
                 BorderThickness = new Thickness(0),
-                FontSize = 22,
-                Cursor = System.Windows.Input.Cursors.Hand,
+                Padding = new Thickness(0),
+                Width = 36,
+                Height = 32,
+                Cursor = Cursors.Hand,
                 ToolTip = "Fechar janela flutuante"
             };
             closeButton.Click += (_, _) => popupWindow.Close();
