@@ -1392,7 +1392,7 @@ public partial class MainWindow : Window
                 return r.width > 0 && r.height > 0 && s.display !== 'none' &&
                     s.visibility !== 'hidden' && Number(s.opacity || 1) > 0;
             };
-            const normalize = value => String(value || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+            const normalize = value => String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
             const hasEconomyText = () => [...document.querySelectorAll('body *')].some(el =>
                 visible(el) && normalize(el.innerText || el.getAttribute('aria-label') || el.getAttribute('title')) === 'modo economia');
             if (!hasEconomyText()) {
