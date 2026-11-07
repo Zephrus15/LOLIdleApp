@@ -478,7 +478,7 @@ public partial class MainWindow : Window
         var workHeight = SystemParameters.WorkArea.Height;
 
         window.WindowState = WindowState.Normal;
-        window.WindowStyle = WindowStyle.SingleBorderWindow;
+        window.WindowStyle = WindowStyle.None;
         window.ResizeMode = ResizeMode.CanResize;
         window.ShowInTaskbar = true;
         window.ShowActivated = true;
@@ -566,6 +566,7 @@ public partial class MainWindow : Window
             var toolbarGrid = new Grid();
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
+            toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.Children.Add(new TextBlock
             {
                 Text = "LoL Idle",
@@ -599,6 +600,28 @@ public partial class MainWindow : Window
             };
             Grid.SetColumn(topmostButton, 1);
             toolbarGrid.Children.Add(topmostButton);
+
+            var closeButton = new Button
+            {
+                Content = "×",
+                Foreground = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(216, 220, 228)),
+                Background = System.Windows.Media.Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                FontSize = 22,
+                Cursor = System.Windows.Input.Cursors.Hand,
+                ToolTip = "Fechar janela flutuante"
+            };
+            closeButton.Click += (_, _) => popupWindow.Close();
+            Grid.SetColumn(closeButton, 2);
+            toolbarGrid.Children.Add(closeButton);
+
+            toolbar.MouseLeftButtonDown += (_, args) =>
+            {
+                if (args.LeftButton == MouseButtonState.Pressed)
+                    popupWindow.DragMove();
+            };
+
             toolbar.Child = toolbarGrid;
             Grid.SetRow(toolbar, 0);
             root.Children.Add(toolbar);
@@ -646,7 +669,7 @@ public partial class MainWindow : Window
             popupWindow.Hide();
             popupWindow.Opacity = 1;
             popupWindow.ShowInTaskbar = true;
-            popupWindow.WindowStyle = WindowStyle.SingleBorderWindow;
+            popupWindow.WindowStyle = WindowStyle.None;
             popupWindow.ResizeMode = ResizeMode.CanResize;
             popupWindow.Width = 900;
             popupWindow.Height = 650;
