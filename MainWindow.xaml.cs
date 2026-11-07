@@ -324,6 +324,11 @@ public partial class MainWindow : Window
         SaveWindowSettings();
         _allowExit = true;
 
+        _floatingSettingsWindow?.Close();
+        foreach (var panel in new List<AuxiliaryPanelWindow>(_panelWindows.Values))
+            panel.Close();
+        _panelWindows.Clear();
+
         // Fecha a janela flutuante junto com o processo quando o usuário escolhe Sair.
         if (_floatingWindow != null)
         {
