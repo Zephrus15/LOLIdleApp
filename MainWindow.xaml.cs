@@ -77,6 +77,30 @@ public partial class MainWindow : Window
         };
     })();";
 
+    // Permite mover a janela flutuante arrastando o próprio conteúdo do jogo.
+    // Cliques simples continuam funcionando; o movimento só começa após ultrapassar o limite.
+    private const string FloatingDragScript = @"(() => {
+        if (window.__lolIdleFloatingDragInstalled) return;
+        window.__lolIdleFloatingDragInstalled = true;
+        let startX = 0, startY = 0, dragging = false;
+        document.addEventListener('pointerdown', event => {
+            if (event.button !== 0) return;
+            startX = event.screenX;
+            startY = event.screenY;
+            dragging = false;
+        }, true);
+        document.addEventListener('pointermove', event => {
+            if (!event.buttons || !(event.buttons & 1) || dragging) return;
+            const dx = event.screenX - startX;
+            const dy = event.screenY - startY;
+            if (Math.hypot(dx, dy) < 7) return;
+            dragging = true;
+            try { window.chrome.webview.postMessage('lol-idle-drag-window'); } catch (_) {}
+        }, true);
+        document.addEventListener('pointerup', () => { dragging = false; }, true);
+        document.addEventListener('pointercancel', () => { dragging = false; }, true);
+    })();";
+
     private Forms.NotifyIcon? _trayIcon;
     private bool _allowExit;
     private bool _settingsReady;
@@ -723,14 +747,6 @@ public partial class MainWindow : Window
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
-            toolbarGrid.Children.Add(new TextBlock
-            {
-                Text = "LoL Idle",
-                Foreground = System.Windows.Media.Brushes.White,
-                FontWeight = FontWeights.SemiBold,
-                VerticalAlignment = VerticalAlignment.Center
-            });
-
             var toolbarIconColor = new SolidColorBrush(Color.FromRgb(216, 220, 228));
             var topmostButton = new Button
             {
@@ -889,7 +905,23 @@ public partial class MainWindow : Window
             LogFloatingWindowEvent("Prepare: antes de EnsureCoreWebView2Async.");
             await view.EnsureCoreWebView2Async(_webViewEnvironment);
             await view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(AudioBootstrapScript);
-            LogFloatingWindowEvent("Prepare: EnsureCoreWebView2Async concluído e controle de áudio instalado.");
+            await view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(FloatingDragScript);
+            view.CoreWebView2.WebMessageReceived += (_, messageArgs) =>
+            {
+                try
+                {
+                    if (messageArgs.TryGetWebMessageAsString() == "lol-idle-drag-window" &&
+                        popupWindow.IsVisible && popupWindow.WindowState == WindowState.Normal)
+                    {
+                        popupWindow.DragMove();
+                    }
+                }
+                catch (InvalidOperationException)
+                {
+                    // O ponteiro pode soltar antes de o Windows iniciar o movimento.
+                }
+            };
+            LogFloatingWindowEvent("Prepare: EnsureCoreWebView2Async concluído, áudio e arraste instalados.");
 
             view.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
             view.CoreWebView2.Settings.IsStatusBarEnabled = false;
