@@ -1268,7 +1268,7 @@ public partial class MainWindow : Window
             RegexOptions.IgnoreCase))
         {
             var answer = MessageBox.Show(
-                $"Deseja executar esta ação dentro do LoL Idle?\\n\\n{action.Label}",
+                $"Deseja executar esta ação dentro do LoL Idle?\n\n{action.Label}",
                 "Confirmar ação do jogo",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question);
@@ -1276,8 +1276,11 @@ public partial class MainWindow : Window
                 return;
         }
 
-        var source = _floatingView?.CoreWebView2 ??
-            GameView?.CoreWebView2;
+        var floatingCore = _floatingView?.CoreWebView2;
+        var source = floatingCore != null &&
+            !string.Equals(floatingCore.Source, "about:blank", StringComparison.OrdinalIgnoreCase)
+                ? floatingCore
+                : GameView?.CoreWebView2;
         if (source == null)
             return;
 
