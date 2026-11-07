@@ -37,7 +37,16 @@ jobs:
             $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
             $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
             $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-            $graphics.DrawImage($source, 0, 0, $size, $size)
+            # Ícones pequenos recebem margem transparente para evitar corte no Explorer.
+            # Os tamanhos maiores mantêm a arte em escala integral.
+            $artSize = switch ($size) {
+              16 { 12 }
+              24 { 20 }
+              32 { 28 }
+              default { $size }
+            }
+            $offset = [Math]::Floor(($size - $artSize) / 2)
+            $graphics.DrawImage($source, [float]$offset, [float]$offset, [float]$artSize, [float]$artSize)
             $stream = New-Object System.IO.MemoryStream
             $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
             $frames += ,@{ Size = $size; Data = $stream.ToArray() }
