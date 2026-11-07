@@ -690,7 +690,6 @@ public partial class MainWindow : Window
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
-            toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.Children.Add(new TextBlock
             {
                 Text = "LoL Idle",
@@ -750,46 +749,7 @@ public partial class MainWindow : Window
             Grid.SetColumn(audioMuteButton, 1);
             toolbarGrid.Children.Add(audioMuteButton);
 
-            var economyButton = new Button
-            {
-                Content = "⚡",
-                Foreground = new SolidColorBrush(Color.FromRgb(216, 220, 228)),
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                FontSize = 17,
-                Cursor = Cursors.Hand,
-                ToolTip = "Abrir e ativar o modo economia do LoL Idle"
-            };
-            economyButton.Click += async (_, _) =>
-            {
-                economyButton.IsEnabled = false;
-                economyButton.Content = "…";
-                try
-                {
-                    var status = await ActivateGameEconomyModeAsync(
-                        _floatingView?.CoreWebView2 ?? _preparedFloatingView?.CoreWebView2);
-                    economyButton.Content = status is "economy_enabled" or "economy_already_enabled"
-                        ? "⚡✓" : "⚡!";
-                    economyButton.ToolTip = status switch
-                    {
-                        "economy_enabled" => "Modo economia ativado",
-                        "economy_already_enabled" => "Modo economia já estava ativado",
-                        "economy_option_not_found" => "Não encontrei 'Modo economia'. Abra a aba Desempenho nas configurações do jogo e tente novamente.",
-                        "economy_control_not_found" => "Encontrei o texto, mas não identifiquei a caixa de seleção.",
-                        "settings_button_not_found" => "Não encontrei o botão de configurações do jogo.",
-                        "game_not_ready" => "O jogo ainda não terminou de carregar.",
-                        _ => "Não foi possível ativar: " + status
-                    };
-                }
-                finally
-                {
-                    economyButton.IsEnabled = true;
-                }
-            };
-            Grid.SetColumn(economyButton, 2);
-            toolbarGrid.Children.Add(economyButton);
-
-            Grid.SetColumn(topmostButton, 3);
+            Grid.SetColumn(topmostButton, 2);
             toolbarGrid.Children.Add(topmostButton);
 
             var closeButton = new Button
@@ -804,7 +764,7 @@ public partial class MainWindow : Window
                 ToolTip = "Fechar janela flutuante"
             };
             closeButton.Click += (_, _) => popupWindow.Close();
-            Grid.SetColumn(closeButton, 4);
+            Grid.SetColumn(closeButton, 3);
             toolbarGrid.Children.Add(closeButton);
 
             toolbar.MouseLeftButtonDown += (_, args) =>
@@ -1375,126 +1335,6 @@ public partial class MainWindow : Window
         panel.Closed += (_, _) => _panelWindows.Remove(key);
         _panelWindows[key] = panel;
         return panel;
-    }
-
-    // Ativa a opção nativa de economia de bateria sem alterná-la quando já estiver ligada.
-    private async Task<string> ActivateGameEconomyModeAsync(CoreWebView2? core = null)
-    {
-        core ??= _floatingView?.CoreWebView2;
-        if (core == null || string.Equals(core.Source, "about:blank", StringComparison.OrdinalIgnoreCase))
-            return "game_not_ready";
-
-        // A opção precisa ser associada ao seu próprio rótulo. Não usamos mais
-        // checkboxes encontrados em ancestrais genéricos, pois isso podia atingir
-        // outra configuração e produzir um falso positivo.
-        const string script = @"(async () => {
-            const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-            const normalize = value => String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
-            const visible = el => {
-                if (!el || !el.isConnected) return false;
-                const r = el.getBoundingClientRect(), s = getComputedStyle(el);
-                return r.width > 0 && r.height > 0 && s.display !== 'none' &&
-                    s.visibility !== 'hidden' && Number(s.opacity || 1) > 0;
-            };
-            const controls = root => [...root.querySelectorAll(
-                'input[type=""checkbox""],[role=""checkbox""],[role=""switch""],button[aria-pressed],button[data-state]'
-            )].filter(visible);
-            const readState = control => {
-                if (control.matches('input[type=""checkbox""]')) return !!control.checked;
-                const aria = control.getAttribute('aria-checked') ?? control.getAttribute('aria-pressed');
-                if (aria === 'true' || aria === 'false') return aria === 'true';
-                const dataState = control.getAttribute('data-state');
-                if (dataState === 'checked' || dataState === 'unchecked') return dataState === 'checked';
-                const nested = control.querySelector('input[type=""checkbox""]');
-                return nested ? !!nested.checked : null;
-            };
-            const findOption = () => {
-                // Primeiro, associação HTML explícita: label/control ou label[for].
-                for (const label of [...document.querySelectorAll('label')].filter(visible)) {
-                    if (normalize(label.innerText) !== 'modo economia') continue;
-                    if (label.control) return { control: label.control, trigger: label };
-                    const nested = label.querySelector('input[type=""checkbox""],[role=""checkbox""],[role=""switch""]');
-                    if (nested) return { control: nested, trigger: label };
-                    const id = label.getAttribute('for');
-                    if (id) {
-                        const linked = document.getElementById(id);
-                        if (linked && visible(linked)) return { control: linked, trigger: label };
-                    }
-                }
-
-                // Segundo, rótulo e um único controle dentro do mesmo item visual.
-                const textNodes = [...document.querySelectorAll('body *')].filter(el =>
-                    visible(el) && el.children.length === 0 &&
-                    normalize(el.innerText || el.getAttribute('aria-label') || el.getAttribute('title')) === 'modo economia');
-                for (const text of textNodes) {
-                    let row = text.parentElement;
-                    for (let depth = 0; depth < 4 && row; depth++, row = row.parentElement) {
-                        const rowText = normalize(row.innerText);
-                        if (!rowText.includes('modo economia')) continue;
-                        const found = controls(row);
-                        if (found.length === 1) return { control: found[0], trigger: found[0] };
-                    }
-                }
-                return null;
-            };
-
-            const optionVisible = () => [...document.querySelectorAll('body *')].some(el =>
-                visible(el) && el.children.length === 0 && normalize(el.innerText) === 'modo economia');
-
-            if (!optionVisible()) {
-                const gear = [...document.querySelectorAll('button,[role=""button""],[aria-label],[title],[data-tooltip]')]
-                    .filter(visible)
-                    .find(el => {
-                        const hint = normalize([el.innerText, el.getAttribute('aria-label'),
-                            el.getAttribute('title'), el.getAttribute('data-tooltip')].filter(Boolean).join(' '));
-                        return hint === '⚙' || hint.includes('configurações') || hint.includes('configuracoes');
-                    });
-                if (!gear) return 'settings_button_not_found';
-                gear.click();
-                await sleep(500);
-            }
-
-            let option = findOption();
-            if (!option) {
-                const performance = [...document.querySelectorAll('body *')].find(el =>
-                    visible(el) && el.children.length === 0 && normalize(el.innerText) === 'desempenho');
-                if (performance) {
-                    const tab = performance.closest('button,[role=""button""],a,[role=""tab""]') || performance;
-                    tab.click();
-                    await sleep(400);
-                    option = findOption();
-                }
-            }
-            if (!option) return optionVisible() ? 'economy_control_not_found' : 'economy_option_not_found';
-
-            const before = readState(option.control);
-            if (before === true) return 'economy_already_enabled';
-
-            // Aciona somente o controle ligado ao rótulo exato.
-            option.trigger.click();
-            await sleep(350);
-
-            const after = readState(option.control);
-            if (after === true) return 'economy_enabled';
-            if (after === false) return 'economy_click_not_applied';
-            return 'economy_state_unconfirmed';
-        })();";
-
-        try
-        {
-            var raw = await core.ExecuteScriptAsync(script);
-            using var document = JsonDocument.Parse(raw);
-            var result = document.RootElement.ValueKind == JsonValueKind.String
-                ? document.RootElement.GetString() ?? "unknown_result"
-                : document.RootElement.ToString();
-            LogFloatingWindowEvent($"Economia nativa: resultado={result}");
-            return result;
-        }
-        catch (Exception ex)
-        {
-            LogFloatingWindowEvent($"Economia nativa: falha ao ativar: {ex.Message}");
-            return "script_error";
-        }
     }
 
     private async Task ApplyAudioSettingsAsync()
