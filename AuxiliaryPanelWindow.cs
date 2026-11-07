@@ -15,6 +15,23 @@ namespace LoLIdleDesktop;
 
 public sealed record PanelActionItem(string Id, string Label, string Category, string Context);
 
+public sealed class CharacterStatValue
+{
+    public string Label { get; set; } = "";
+    public string Current { get; set; } = "";
+    public string Maximum { get; set; } = "";
+    public double? Percent { get; set; }
+}
+
+public sealed class CharacterPanelStats
+{
+    public CharacterStatValue? Hp { get; set; }
+    public CharacterStatValue? Mp { get; set; }
+    public CharacterStatValue? Xp { get; set; }
+    public string Level { get; set; } = "";
+    public List<string> Skills { get; set; } = new();
+}
+
 public sealed class AuxiliaryPanelWindow : Window
 {
     private readonly bool _supportsOpacity;
@@ -22,6 +39,7 @@ public sealed class AuxiliaryPanelWindow : Window
     private readonly TextBlock _contentText;
     private readonly StackPanel _actionsList;
     private readonly TextBlock _actionStatus;
+    private readonly StackPanel _characterStatsPanel;
     private double _panelOpacity;
 
     public AuxiliaryPanelWindow(string title, string description, bool supportsOpacity, double opacity)
@@ -102,6 +120,9 @@ public sealed class AuxiliaryPanelWindow : Window
             TextWrapping = TextWrapping.Wrap,
             FontSize = 12
         };
+        _characterStatsPanel = new StackPanel { Margin = new Thickness(0, 0, 0, 10) };
+        if (isCharacterPanel)
+            overview.Children.Add(_characterStatsPanel);
         overview.Children.Add(_contentText);
         _opacityHint = new TextBlock
         {
@@ -152,6 +173,130 @@ public sealed class AuxiliaryPanelWindow : Window
         _contentText.Text = string.IsNullOrWhiteSpace(content)
             ? "Não encontrei dados visíveis desta área no momento. Abra a seção correspondente no jogo."
             : content;
+    }
+
+
+    public void SetCharacterStats(CharacterPanelStats? stats)
+    {
+        _characterStatsPanel.Children.Clear();
+        if (stats == null)
+        {
+            _characterStatsPanel.Children.Add(new TextBlock
+            {
+                Text = "Aguardando leitura de vida, mana, experiência e habilidades...",
+                Foreground = new SolidColorBrush(Color.FromRgb(190, 196, 207)),
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 12,
+                Margin = new Thickness(0, 0, 0, 10)
+            });
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(stats.Level))
+        {
+            _characterStatsPanel.Children.Add(new TextBlock
+            {
+                Text = stats.Level,
+                Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143)),
+                FontSize = 15,
+                FontWeight = FontWeights.Bold,
+                Margin = new Thickness(0, 0, 0, 10)
+            });
+        }
+
+        AddCharacterStat(stats.Hp, Color.FromRgb(218, 82, 86));
+        AddCharacterStat(stats.Mp, Color.FromRgb(76, 145, 225));
+        AddCharacterStat(stats.Xp, Color.FromRgb(183, 126, 230));
+
+        if (stats.Skills.Count > 0)
+        {
+            _characterStatsPanel.Children.Add(new TextBlock
+            {
+                Text = "HABILIDADES",
+                Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143)),
+                FontSize = 10,
+                FontWeight = FontWeights.SemiBold,
+                Margin = new Thickness(0, 10, 0, 5)
+            });
+            foreach (var skill in stats.Skills.Take(8))
+            {
+                _characterStatsPanel.Children.Add(new TextBlock
+                {
+                    Text = "✦  " + skill,
+                    Foreground = new SolidColorBrush(Color.FromRgb(220, 224, 232)),
+                    FontSize = 11,
+                    TextWrapping = TextWrapping.Wrap,
+                    Margin = new Thickness(0, 2, 0, 2)
+                });
+            }
+        }
+
+        if (_characterStatsPanel.Children.Count == 0)
+        {
+            _characterStatsPanel.Children.Add(new TextBlock
+            {
+                Text = "Ainda não encontrei indicadores estruturados de HP, MP, XP ou habilidades na interface visível.",
+                Foreground = new SolidColorBrush(Color.FromRgb(190, 196, 207)),
+                TextWrapping = TextWrapping.Wrap,
+                FontSize = 12,
+                Margin = new Thickness(0, 0, 0, 10)
+            });
+        }
+    }
+
+    private void AddCharacterStat(CharacterStatValue? stat, Color color)
+    {
+        if (stat == null || (string.IsNullOrWhiteSpace(stat.Current) && !stat.Percent.HasValue))
+            return;
+
+        var row = new StackPanel { Margin = new Thickness(0, 0, 0, 9) };
+        var value = !string.IsNullOrWhiteSpace(stat.Current) && !string.IsNullOrWhiteSpace(stat.Maximum)
+            ? $"{stat.Current} / {stat.Maximum}"
+            : !string.IsNullOrWhiteSpace(stat.Current) ? stat.Current
+            : $"{Math.Round(stat.Percent!.Value)}%";
+        var heading = new Grid();
+        heading.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        heading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        heading.Children.Add(new TextBlock
+        {
+            Text = stat.Label,
+            Foreground = Brushes.White,
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold
+        });
+        var valueText = new TextBlock
+        {
+            Text = value,
+            Foreground = new SolidColorBrush(Color.FromRgb(205, 211, 221)),
+            FontSize = 10,
+            HorizontalAlignment = HorizontalAlignment.Right
+        };
+        Grid.SetColumn(valueText, 1);
+        heading.Children.Add(valueText);
+        row.Children.Add(heading);
+
+        if (stat.Percent.HasValue)
+        {
+            var track = new Border
+            {
+                Height = 7,
+                Background = new SolidColorBrush(Color.FromArgb(110, 90, 96, 108)),
+                CornerRadius = new CornerRadius(4),
+                Margin = new Thickness(0, 4, 0, 0),
+                ClipToBounds = true
+            };
+            var fill = new Border
+            {
+                HorizontalAlignment = HorizontalAlignment.Left,
+                Width = Math.Clamp(stat.Percent.Value, 0, 100) * 2.5,
+                Background = new SolidColorBrush(color),
+                CornerRadius = new CornerRadius(4)
+            };
+            track.Child = fill;
+            track.SizeChanged += (_, e) => fill.Width = e.NewSize.Width * Math.Clamp(stat.Percent.Value, 0, 100) / 100.0;
+            row.Children.Add(track);
+        }
+        _characterStatsPanel.Children.Add(row);
     }
 
     public void SetPanelActions(IEnumerable<PanelActionItem> actions, Action<PanelActionItem> execute)
