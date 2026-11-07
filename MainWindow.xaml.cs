@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using Button = System.Windows.Controls.Button;
+using Cursors = System.Windows.Input.Cursors;
 using System.Windows.Input;
 using System.Windows.Media;
 using Color = System.Windows.Media.Color;
