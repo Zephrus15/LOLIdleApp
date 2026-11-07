@@ -57,7 +57,6 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="42"/>
                 <RowDefinition Height="*"/>
-                <RowDefinition Height="22"/>
             </Grid.RowDefinitions>
 
             <!-- Barra de título -->
@@ -135,17 +134,10 @@
                           Grid.Row="1"
                           DefaultBackgroundColor="#111318"/>
 
-            <!-- Barra de status -->
-            <Grid Grid.Row="2"
-                  Background="#191C23">
-
-                <TextBlock x:Name="StatusText"
-                           Text="Preparando o jogo..."
-                           Foreground="#9AA1AE"
-                           FontSize="10"
-                           VerticalAlignment="Center"
-                           Margin="10,0"/>
-            </Grid>
+            <!-- Mantido oculto para preservar as referências do code-behind. -->
+            <TextBlock x:Name="StatusText"
+                       Visibility="Collapsed"
+                       Text="Preparando o jogo..."/>
         </Grid>
     </Border>
 </Window>
