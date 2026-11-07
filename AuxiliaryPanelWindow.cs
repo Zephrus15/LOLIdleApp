@@ -14,6 +14,7 @@ public sealed class AuxiliaryPanelWindow : Window
 {
     private readonly bool _supportsOpacity;
     private readonly TextBlock _opacityHint;
+    private readonly TextBlock _contentText;
     private double _panelOpacity;
 
     public AuxiliaryPanelWindow(string title, string description, bool supportsOpacity, double opacity)
@@ -82,19 +83,20 @@ public sealed class AuxiliaryPanelWindow : Window
         };
         body.Children.Add(new TextBlock
         {
-            Text = "Painel preparado",
+            Text = "INFORMAÇÕES DO JOGO",
             Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143)),
-            FontSize = 16,
+            FontSize = 11,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(0, 0, 0, 8)
         });
-        body.Children.Add(new TextBlock
+        _contentText = new TextBlock
         {
             Text = description,
             Foreground = new SolidColorBrush(Color.FromRgb(190, 196, 207)),
             TextWrapping = TextWrapping.Wrap,
             FontSize = 12
-        });
+        };
+        body.Children.Add(_contentText);
         _opacityHint = new TextBlock
         {
             Text = supportsOpacity
@@ -115,6 +117,13 @@ public sealed class AuxiliaryPanelWindow : Window
             MouseEnter += (_, _) => Opacity = 1.0;
             MouseLeave += (_, _) => Opacity = _panelOpacity;
         }
+    }
+
+    public void SetPanelContent(string content)
+    {
+        _contentText.Text = string.IsNullOrWhiteSpace(content)
+            ? "Não encontrei dados visíveis desta área no momento. Abra a seção correspondente no jogo."
+            : content;
     }
 
     public void SetPanelOpacity(double value)
