@@ -18,12 +18,9 @@ public partial class MainWindow : Window
 {
     private const string GameUrl = "https://lolidle.com/jogar";
     private const string GameHost = "lolidle.com";
-    private const double CompactWidth = 900;
-    private const double CompactHeight = 620;
 
     private Forms.NotifyIcon? _trayIcon;
     private bool _allowExit;
-    private bool _isCompact;
     private bool _settingsReady;
     private System.Windows.Threading.DispatcherTimer? _settingsSaveTimer;
     private System.Drawing.Icon? _appIcon;
@@ -47,7 +44,6 @@ public partial class MainWindow : Window
         public double NormalHeight { get; set; } = 800;
         public double Left { get; set; } = 100;
         public double Top { get; set; } = 100;
-        public bool IsCompact { get; set; }
         public bool IsAlwaysOnTop { get; set; }
     }
 
@@ -169,8 +165,6 @@ public partial class MainWindow : Window
                 Top = Math.Clamp(settings.Top, minTop, Math.Max(minTop, maxTop));
             }
 
-            if (settings.IsCompact)
-                SetCompactLayout(true);
         }
 
         _settingsReady = true;
@@ -192,7 +186,6 @@ public partial class MainWindow : Window
                 NormalHeight = _normalHeight,
                 Left = Left,
                 Top = Top,
-                IsCompact = _isCompact
             };
 
             File.WriteAllText(SettingsPath,
@@ -223,7 +216,7 @@ public partial class MainWindow : Window
 
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (_settingsReady && !_isCompact && WindowState == WindowState.Normal)
+        if (_settingsReady && WindowState == WindowState.Normal)
         {
             _normalWidth = Width;
             _normalHeight = Height;
@@ -334,43 +327,6 @@ public partial class MainWindow : Window
         Close();
     }
 
-    // Aplica o tamanho compacto da janela ou restaura as dimensões normais.
-    private void SetCompactLayout(bool compact)
-    {
-        if (compact)
-        {
-            if (WindowState == WindowState.Maximized)
-                WindowState = WindowState.Normal;
-
-            if (!_isCompact)
-            {
-                _normalWidth = Width;
-                _normalHeight = Height;
-            }
-
-            MinWidth = 640;
-            MinHeight = 460;
-            Width = CompactWidth;
-            Height = CompactHeight;
-            _isCompact = true;
-        }
-        else
-        {
-            MinWidth = 480;
-            MinHeight = 320;
-            Width = _normalWidth;
-            Height = _normalHeight;
-            _isCompact = false;
-        }
-
-        SaveWindowSettings();
-    }
-
-    private void Compact_Click(object sender, RoutedEventArgs e)
-    {
-        SetCompactLayout(!_isCompact);
-    }
-
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
         RestoreWindowSettings();
@@ -447,42 +403,50 @@ public partial class MainWindow : Window
         }
     }
 
-    // Atende a solicitação de pop-up usando o mecanismo oficial do WebView2.
-    // O deferral permite inicializar o novo WebView2 sem bloquear a janela principal.
+    // Atende pop-ups sem reutilizar um CoreWebView2 que já recebeu navegação.
     private async Task HandleNewWindowRequestedAsync(
         CoreWebView2NewWindowRequestedEventArgs args,
         Window? owner)
     {
-        using var deferral = args.GetDeferral();
-
-        try
+        using (args.GetDeferral())
         {
-            var requestedUrl = args.Uri;
-            if (Uri.TryCreate(requestedUrl, UriKind.Absolute, out var requestedUri) &&
-                requestedUri.Scheme is "http" or "https")
+            try
             {
+                var requestedUrl = args.Uri;
+                if (!Uri.TryCreate(requestedUrl, UriKind.Absolute, out var requestedUri) ||
+                    requestedUri.Scheme is not ("http" or "https"))
+                {
+                    args.Handled = true;
+                    return;
+                }
+
                 _lastFloatingUri = requestedUri.ToString();
                 FloatingReopenButton.IsEnabled = true;
+
+                // Se a janela já existe, direcionamos a navegação para ela.
+                // Não a entregamos novamente como args.NewWindow: o WebView2 exige
+                // uma instância nova, ainda não navegada, nesse campo.
+                if (_floatingWindow != null && _floatingView?.CoreWebView2 != null)
+                {
+                    _floatingWindow.Activate();
+                    _floatingView.CoreWebView2.Navigate(requestedUri.ToString());
+                    args.Handled = true;
+                    return;
+                }
+
+                var newCore = await CreateFloatingWebViewAsync(owner);
+                args.NewWindow = newCore;
+                args.Handled = true;
             }
-
-            var core = await CreateFloatingWebViewAsync(owner);
-
-            // Sem NewWindow, o site entende que o navegador bloqueou o pop-up.
-            // Ao fornecer o CoreWebView2, o próprio WebView2 conclui a navegação.
-            args.NewWindow = core;
-            args.Handled = true;
-        }
-        catch (Exception ex)
-        {
-            MessageBox.Show(
-                "Não foi possível abrir a janela flutuante.\\n\\n" + ex.Message,
-                "LoL Idle - janela flutuante",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
-        }
-        finally
-        {
-            deferral.Complete();
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Não foi possível abrir a janela flutuante.\n\n" + ex.Message,
+                    "LoL Idle - janela flutuante",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                args.Handled = true;
+            }
         }
     }
 
@@ -624,21 +588,30 @@ public partial class MainWindow : Window
     {
         try
         {
+            if (_floatingWindow != null && _floatingView?.CoreWebView2 != null)
+            {
+                _floatingWindow.Activate();
+                return;
+            }
+
             var floatingCore = await CreateFloatingWebViewAsync(this);
+            var target = Uri.TryCreate(_lastFloatingUri, UriKind.Absolute, out var savedUri) &&
+                         savedUri.Scheme is "http" or "https"
+                ? savedUri.ToString()
+                : GameUrl;
+
+            // O botão é uma abertura explícita, então a nova janela recebe o jogo
+            // somente depois que o WebView2 terminou sua inicialização.
             if (floatingCore.Source == "about:blank" ||
                 string.IsNullOrWhiteSpace(floatingCore.Source))
             {
-                var target = Uri.TryCreate(_lastFloatingUri, UriKind.Absolute, out var savedUri) &&
-                             savedUri.Scheme is "http" or "https"
-                    ? savedUri.ToString()
-                    : GameUrl;
                 floatingCore.Navigate(target);
             }
         }
         catch (Exception ex)
         {
             MessageBox.Show(
-                "Não foi possível reabrir a janela flutuante.\\n\\n" + ex.Message,
+                "Não foi possível abrir a janela flutuante.\n\n" + ex.Message,
                 "LoL Idle - janela flutuante",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
