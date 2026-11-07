@@ -4,6 +4,8 @@ using System.IO;
 using System.ComponentModel;
 using System.Text.Json;
 using System.Windows;
+using System.Windows.Controls;
+using Button = System.Windows.Controls.Button;
 using System.Windows.Input;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
@@ -422,36 +424,21 @@ public partial class MainWindow : Window
                     : "Não foi possível carregar. Verifique sua conexão e tente atualizar.";
             };
 
-            GameView.CoreWebView2.NewWindowRequested += async (_, args) =>
+            GameView.CoreWebView2.NewWindowRequested += (_, args) =>
             {
-                // O jogo usa window.open() para solicitar janelas flutuantes.
-                // O WebView2 precisa receber outro CoreWebView2, não um navegador externo.
-                var deferral = args.GetDeferral();
+                // Responde imediatamente ao WebView2. A criação do segundo navegador
+                // acontece depois, fora do evento, para não prender a janela principal.
+                args.Handled = true;
 
-                try
+                var requestedUrl = args.Uri;
+                if (Uri.TryCreate(requestedUrl, UriKind.Absolute, out var requestedUri) &&
+                    requestedUri.Scheme is "http" or "https")
                 {
-                    if (!string.IsNullOrWhiteSpace(args.Uri))
-                    {
-                        _lastFloatingUri = args.Uri;
-                        FloatingReopenButton.IsEnabled = true;
-                    }
+                    _lastFloatingUri = requestedUri.ToString();
+                    FloatingReopenButton.IsEnabled = true;
+                }
 
-                    var popupCore = await CreateFloatingWebViewAsync(this);
-                    args.NewWindow = popupCore;
-                    args.Handled = true;
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show(
-                        "Não foi possível abrir a janela flutuante.\\n\\n" + ex.Message,
-                        "LoL Idle - janela flutuante",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
-                }
-                finally
-                {
-                    deferral.Complete();
-                }
+                _ = OpenFloatingWindowSafelyAsync(requestedUrl, this);
             };
 
             GameView.Source = new Uri(GameUrl);
@@ -467,6 +454,32 @@ public partial class MainWindow : Window
                 "LoL Idle - erro de inicialização",
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
+        }
+    }
+
+    // Abre a janela flutuante sem bloquear o evento NewWindowRequested do WebView2.
+    private async Task OpenFloatingWindowSafelyAsync(string? requestedUrl, Window? owner)
+    {
+        try
+        {
+            var core = await CreateFloatingWebViewAsync(owner);
+            if (Uri.TryCreate(requestedUrl, UriKind.Absolute, out var target) &&
+                target.Scheme is "http" or "https")
+            {
+                core.Navigate(target.ToString());
+            }
+            else if (core.Source == "about:blank" || string.IsNullOrWhiteSpace(core.Source))
+            {
+                core.Navigate(GameUrl);
+            }
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                "Não foi possível abrir a janela flutuante.\\n\\n" + ex.Message,
+                "LoL Idle - janela flutuante",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
         }
     }
 
@@ -583,34 +596,20 @@ public partial class MainWindow : Window
             popupView.CoreWebView2.Settings.IsStatusBarEnabled = false;
             popupView.CoreWebView2.Settings.AreDevToolsEnabled = false;
 
-            popupView.CoreWebView2.NewWindowRequested += async (_, popupArgs) =>
+            popupView.CoreWebView2.NewWindowRequested += (_, popupArgs) =>
             {
-                var popupDeferral = popupArgs.GetDeferral();
-                try
-                {
-                    if (!string.IsNullOrWhiteSpace(popupArgs.Uri) &&
-                        Uri.TryCreate(popupArgs.Uri, UriKind.Absolute, out var requestedUri) &&
-                        requestedUri.Scheme is "http" or "https")
-                    {
-                        _lastFloatingUri = requestedUri.ToString();
-                        FloatingReopenButton.IsEnabled = true;
-                    }
+                // Também não aguardamos a inicialização de outro WebView2 neste evento.
+                popupArgs.Handled = true;
+                var requestedUrl = popupArgs.Uri;
 
-                    popupArgs.NewWindow = await CreateFloatingWebViewAsync(popupWindow);
-                    popupArgs.Handled = true;
-                }
-                catch (Exception ex)
+                if (Uri.TryCreate(requestedUrl, UriKind.Absolute, out var requestedUri) &&
+                    requestedUri.Scheme is "http" or "https")
                 {
-                    MessageBox.Show(
-                        "Não foi possível abrir outra janela flutuante.\\n\\n" + ex.Message,
-                        "LoL Idle - janela flutuante",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Warning);
+                    _lastFloatingUri = requestedUri.ToString();
+                    FloatingReopenButton.IsEnabled = true;
                 }
-                finally
-                {
-                    popupDeferral.Complete();
-                }
+
+                _ = OpenFloatingWindowSafelyAsync(requestedUrl, popupWindow);
             };
 
             popupWindow.Show();
