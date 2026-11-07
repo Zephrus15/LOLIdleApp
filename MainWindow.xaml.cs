@@ -201,17 +201,20 @@ public partial class MainWindow : Window
     // Salva as preferências no perfil local do Windows.
     private void SaveWindowSettings()
     {
-        if (!_settingsReady || WindowState == WindowState.Minimized)
+        if (!_settingsReady)
             return;
 
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
 
-            _settings.NormalWidth = _normalWidth;
-            _settings.NormalHeight = _normalHeight;
-            _settings.Left = Left;
-            _settings.Top = Top;
+            if (WindowState != WindowState.Minimized)
+            {
+                _settings.NormalWidth = _normalWidth;
+                _settings.NormalHeight = _normalHeight;
+                _settings.Left = Left;
+                _settings.Top = Top;
+            }
             CaptureFloatingWindowBounds();
 
             File.WriteAllText(SettingsPath,
@@ -534,6 +537,11 @@ public partial class MainWindow : Window
             window.Tag = "floating-bounds-tracked";
             window.LocationChanged += (_, _) => QueueWindowSettingsSave();
             window.SizeChanged += (_, _) => QueueWindowSettingsSave();
+            window.Closing += (_, _) =>
+            {
+                CaptureFloatingWindowBounds();
+                SaveWindowSettings();
+            };
         }
 
         // Garante que a janela recém-revelada fique acima do jogo e receba foco.
