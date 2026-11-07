@@ -636,6 +636,9 @@ public partial class MainWindow : Window
             var toolbarGrid = new Grid();
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
+            toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(68) });
+            toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(58) });
+            toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(66) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.Children.Add(new TextBlock
@@ -669,7 +672,7 @@ public partial class MainWindow : Window
                     ? "Desativar janela sempre no topo"
                     : "Ativar janela sempre no topo";
             };
-            Grid.SetColumn(topmostButton, 2);
+            Grid.SetColumn(topmostButton, 5);
             toolbarGrid.Children.Add(topmostButton);
 
             var settingsButton = new Button
@@ -686,6 +689,13 @@ public partial class MainWindow : Window
             Grid.SetColumn(settingsButton, 1);
             toolbarGrid.Children.Add(settingsButton);
 
+            var questToggleButton = CreatePanelToggleButton("Missões", "quest", 2);
+            var sidebarToggleButton = CreatePanelToggleButton("Itens", "sidebar", 3);
+            var characterToggleButton = CreatePanelToggleButton("Herói", "character", 4);
+            toolbarGrid.Children.Add(questToggleButton);
+            toolbarGrid.Children.Add(sidebarToggleButton);
+            toolbarGrid.Children.Add(characterToggleButton);
+
             var closeButton = new Button
             {
                 Content = "×",
@@ -698,7 +708,7 @@ public partial class MainWindow : Window
                 ToolTip = "Fechar janela flutuante"
             };
             closeButton.Click += (_, _) => popupWindow.Close();
-            Grid.SetColumn(closeButton, 3);
+            Grid.SetColumn(closeButton, 6);
             toolbarGrid.Children.Add(closeButton);
 
             toolbar.MouseLeftButtonDown += (_, args) =>
@@ -811,6 +821,49 @@ public partial class MainWindow : Window
         }
     }
 
+
+    private Button CreatePanelToggleButton(string label, string key, int column)
+    {
+        var isEnabled = key switch
+        {
+            "quest" => _settings.ShowQuestPanel,
+            "sidebar" => _settings.ShowSidebarPanel,
+            _ => _settings.ShowCharacterPanel
+        };
+
+        var button = new Button
+        {
+            Content = isEnabled ? label + " ✓" : label,
+            Foreground = isEnabled
+                ? new SolidColorBrush(Color.FromRgb(232, 207, 143))
+                : new SolidColorBrush(Color.FromRgb(155, 164, 178)),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            FontSize = 11,
+            Padding = new Thickness(2, 0, 2, 0),
+            Cursor = Cursors.Hand,
+            ToolTip = isEnabled ? "Desativar painel " + label : "Ativar painel " + label
+        };
+        button.Click += (_, _) =>
+        {
+            var currentlyEnabled = key switch
+            {
+                "quest" => _settings.ShowQuestPanel,
+                "sidebar" => _settings.ShowSidebarPanel,
+                _ => _settings.ShowCharacterPanel
+            };
+            SetPanelVisibility(key, !currentlyEnabled);
+            button.Content = !currentlyEnabled ? label + " ✓" : label;
+            button.Foreground = !currentlyEnabled
+                ? new SolidColorBrush(Color.FromRgb(232, 207, 143))
+                : new SolidColorBrush(Color.FromRgb(155, 164, 178));
+            button.ToolTip = !currentlyEnabled
+                ? "Desativar painel " + label
+                : "Ativar painel " + label;
+        };
+        Grid.SetColumn(button, column);
+        return button;
+    }
 
     // Abre o centro de controle dos painéis independentes e do áudio.
     private void ShowFloatingSettings()
