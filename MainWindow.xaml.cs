@@ -25,6 +25,7 @@ public partial class MainWindow : Window
     private bool _settingsReady;
     private System.Windows.Threading.DispatcherTimer? _settingsSaveTimer;
     private System.Drawing.Icon? _appIcon;
+    private CoreWebView2Environment? _webViewEnvironment;
     private string SettingsPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "LoLIdleDesktop", "window-settings.json");
@@ -391,10 +392,10 @@ public partial class MainWindow : Window
 
             Directory.CreateDirectory(userData);
 
-            var environment = await CoreWebView2Environment.CreateAsync(
+            _webViewEnvironment = await CoreWebView2Environment.CreateAsync(
                 userDataFolder: userData);
 
-            await GameView.EnsureCoreWebView2Async(environment);
+            await GameView.EnsureCoreWebView2Async(_webViewEnvironment);
 
             GameView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
             GameView.CoreWebView2.Settings.IsStatusBarEnabled = false;
@@ -432,22 +433,29 @@ public partial class MainWindow : Window
                     : "Não foi possível carregar. Verifique sua conexão e tente atualizar.";
             };
 
-            GameView.CoreWebView2.NewWindowRequested += (_, args) =>
+            GameView.CoreWebView2.NewWindowRequested += async (_, args) =>
             {
-                args.Handled = true;
+                // O jogo usa window.open() para solicitar janelas flutuantes.
+                // O WebView2 precisa receber outro CoreWebView2, não um navegador externo.
+                var deferral = args.GetDeferral();
 
-                if (Uri.TryCreate(args.Uri, UriKind.Absolute, out var uri))
+                try
                 {
-                    try
-                    {
-                        System.Diagnostics.Process.Start(
-                            new System.Diagnostics.ProcessStartInfo
-                            {
-                                FileName = uri.ToString(),
-                                UseShellExecute = true
-                            });
-                    }
-                    catch { }
+                    var popupCore = await CreateFloatingWebViewAsync(this);
+                    args.NewWindow = popupCore;
+                    args.Handled = true;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(
+                        "Não foi possível abrir a janela flutuante.\\n\\n" + ex.Message,
+                        "LoL Idle - janela flutuante",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+                finally
+                {
+                    deferral.Complete();
                 }
             };
 
@@ -465,6 +473,67 @@ public partial class MainWindow : Window
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
+    }
+
+    // Cria uma janela WPF independente para cada solicitação window.open() do jogo.
+    // Todas compartilham o mesmo ambiente WebView2 para manter a sessão e os cookies.
+    private async Task<CoreWebView2> CreateFloatingWebViewAsync(Window? owner)
+    {
+        if (_webViewEnvironment == null)
+            throw new InvalidOperationException("O ambiente WebView2 ainda não foi inicializado.");
+
+        var popupWindow = new Window
+        {
+            Title = "LoL Idle - Janela flutuante",
+            Width = 900,
+            Height = 650,
+            MinWidth = 360,
+            MinHeight = 240,
+            WindowStartupLocation = owner == null
+                ? WindowStartupLocation.CenterScreen
+                : WindowStartupLocation.CenterOwner,
+            Owner = owner,
+            Background = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(17, 19, 24))
+        };
+
+        var popupView = new Microsoft.Web.WebView2.Wpf.WebView2
+        {
+            DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24)
+        };
+
+        popupWindow.Content = popupView;
+        popupWindow.Show();
+
+        await popupView.EnsureCoreWebView2Async(_webViewEnvironment);
+        popupView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+        popupView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+        popupView.CoreWebView2.Settings.AreDevToolsEnabled = false;
+
+        // Permite que uma janela flutuante também abra outras janelas.
+        popupView.CoreWebView2.NewWindowRequested += async (_, popupArgs) =>
+        {
+            var popupDeferral = popupArgs.GetDeferral();
+            try
+            {
+                popupArgs.NewWindow = await CreateFloatingWebViewAsync(popupWindow);
+                popupArgs.Handled = true;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Não foi possível abrir outra janela flutuante.\\n\\n" + ex.Message,
+                    "LoL Idle - janela flutuante",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+            }
+            finally
+            {
+                popupDeferral.Complete();
+            }
+        };
+
+        return popupView.CoreWebView2;
     }
 
     private void Minimize_Click(object sender, RoutedEventArgs e)
