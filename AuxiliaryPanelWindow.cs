@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -10,11 +12,15 @@ using Cursors = System.Windows.Input.Cursors;
 
 namespace LoLIdleDesktop;
 
+public sealed record PanelActionItem(string Id, string Label, string Category, string Context);
+
 public sealed class AuxiliaryPanelWindow : Window
 {
     private readonly bool _supportsOpacity;
     private readonly TextBlock _opacityHint;
     private readonly TextBlock _contentText;
+    private readonly StackPanel _actionsList;
+    private readonly TextBlock _actionStatus;
     private double _panelOpacity;
 
     public AuxiliaryPanelWindow(string title, string description, bool supportsOpacity, double opacity)
@@ -23,10 +29,10 @@ public sealed class AuxiliaryPanelWindow : Window
         _panelOpacity = Math.Clamp(opacity, 0.15, 1.0);
 
         Title = title;
-        Width = 340;
-        Height = 250;
-        MinWidth = 260;
-        MinHeight = 160;
+        Width = 380;
+        Height = 330;
+        MinWidth = 280;
+        MinHeight = 210;
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.CanResize;
         ShowInTaskbar = true;
@@ -43,7 +49,6 @@ public sealed class AuxiliaryPanelWindow : Window
             Margin = new Thickness(0)
         };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-
         var titleText = new TextBlock
         {
             Text = title,
@@ -58,16 +63,18 @@ public sealed class AuxiliaryPanelWindow : Window
             if (e.LeftButton == MouseButtonState.Pressed)
                 DragMove();
         };
-
         Grid.SetRow(header, 0);
         root.Children.Add(header);
 
-        var body = new StackPanel
+        var tabs = new TabControl
         {
-            Margin = new Thickness(16),
-            VerticalAlignment = VerticalAlignment.Center
+            Margin = new Thickness(8),
+            Background = new SolidColorBrush(Color.FromRgb(17, 19, 24)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(48, 52, 61))
         };
-        body.Children.Add(new TextBlock
+
+        var overview = new StackPanel { Margin = new Thickness(12) };
+        overview.Children.Add(new TextBlock
         {
             Text = "INFORMAÇÕES DO JOGO",
             Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143)),
@@ -82,7 +89,7 @@ public sealed class AuxiliaryPanelWindow : Window
             TextWrapping = TextWrapping.Wrap,
             FontSize = 12
         };
-        body.Children.Add(_contentText);
+        overview.Children.Add(_contentText);
         _opacityHint = new TextBlock
         {
             Text = supportsOpacity
@@ -92,10 +99,29 @@ public sealed class AuxiliaryPanelWindow : Window
             FontSize = 10,
             Margin = new Thickness(0, 14, 0, 0)
         };
-        body.Children.Add(_opacityHint);
-        Grid.SetRow(body, 1);
-        root.Children.Add(body);
+        overview.Children.Add(_opacityHint);
+        tabs.Items.Add(new TabItem { Header = "Visão geral", Content = overview });
 
+        _actionsList = new StackPanel { Margin = new Thickness(10) };
+        _actionStatus = new TextBlock
+        {
+            Text = "Aguardando leitura dos controles disponíveis no jogo...",
+            Foreground = new SolidColorBrush(Color.FromRgb(150, 158, 172)),
+            TextWrapping = TextWrapping.Wrap,
+            FontSize = 11,
+            Margin = new Thickness(4, 4, 4, 10)
+        };
+        var actionContent = new StackPanel();
+        actionContent.Children.Add(_actionStatus);
+        actionContent.Children.Add(new ScrollViewer
+        {
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = _actionsList
+        });
+        tabs.Items.Add(new TabItem { Header = "Ações do jogo", Content = actionContent });
+
+        Grid.SetRow(tabs, 1);
+        root.Children.Add(tabs);
         Content = root;
 
         if (supportsOpacity)
@@ -110,6 +136,45 @@ public sealed class AuxiliaryPanelWindow : Window
         _contentText.Text = string.IsNullOrWhiteSpace(content)
             ? "Não encontrei dados visíveis desta área no momento. Abra a seção correspondente no jogo."
             : content;
+    }
+
+    public void SetPanelActions(IEnumerable<PanelActionItem> actions, Action<PanelActionItem> execute)
+    {
+        _actionsList.Children.Clear();
+        var available = actions
+            .Where(x => !string.IsNullOrWhiteSpace(x.Label))
+            .GroupBy(x => x.Id)
+            .Select(x => x.First())
+            .Take(80)
+            .ToList();
+
+        _actionStatus.Text = available.Count == 0
+            ? "Nenhum controle interativo identificável nesta área. Os controles aparecem aqui quando o jogo os expõe ao WebView."
+            : $"{available.Count} controle(s) encontrado(s). Selecione para executar a ação correspondente no jogo.";
+
+        foreach (var action in available)
+        {
+            var button = new Button
+            {
+                Content = action.Label,
+                Tag = action,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                Padding = new Thickness(10, 7, 10, 7),
+                Margin = new Thickness(0, 0, 0, 6),
+                Background = new SolidColorBrush(Color.FromRgb(34, 39, 49)),
+                Foreground = Brushes.White,
+                BorderBrush = new SolidColorBrush(Color.FromRgb(64, 71, 84)),
+                Cursor = Cursors.Hand,
+                ToolTip = string.IsNullOrWhiteSpace(action.Context) ? action.Category : action.Context
+            };
+            button.Click += (_, _) => execute(action);
+            _actionsList.Children.Add(button);
+        }
+    }
+
+    public void SetActionStatus(string message)
+    {
+        _actionStatus.Text = message;
     }
 
     public void SetPanelOpacity(double value)
