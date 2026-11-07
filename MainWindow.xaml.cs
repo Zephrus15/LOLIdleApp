@@ -691,6 +691,7 @@ public partial class MainWindow : Window
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
+            toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.Children.Add(new TextBlock
             {
                 Text = "LoL Idle",
@@ -750,7 +751,32 @@ public partial class MainWindow : Window
             Grid.SetColumn(audioMuteButton, 1);
             toolbarGrid.Children.Add(audioMuteButton);
 
-            Grid.SetColumn(topmostButton, 2);
+            var economyButton = new Button
+            {
+                Content = "⚡",
+                Foreground = new SolidColorBrush(Color.FromRgb(216, 220, 228)),
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                FontSize = 17,
+                Cursor = Cursors.Hand,
+                ToolTip = "Abrir e ativar o modo economia do LoL Idle"
+            };
+            economyButton.Click += async (_, _) =>
+            {
+                economyButton.IsEnabled = false;
+                try
+                {
+                    await ActivateGameEconomyModeAsync(view.CoreWebView2);
+                }
+                finally
+                {
+                    economyButton.IsEnabled = true;
+                }
+            };
+            Grid.SetColumn(economyButton, 2);
+            toolbarGrid.Children.Add(economyButton);
+
+            Grid.SetColumn(topmostButton, 3);
             toolbarGrid.Children.Add(topmostButton);
 
             var closeButton = new Button
@@ -765,7 +791,7 @@ public partial class MainWindow : Window
                 ToolTip = "Fechar janela flutuante"
             };
             closeButton.Click += (_, _) => popupWindow.Close();
-            Grid.SetColumn(closeButton, 3);
+            Grid.SetColumn(closeButton, 4);
             toolbarGrid.Children.Add(closeButton);
 
             toolbar.MouseLeftButtonDown += (_, args) =>
@@ -851,7 +877,6 @@ public partial class MainWindow : Window
                 if (navArgs.IsSuccess)
                 {
                     _ = ApplyAudioSettingsAsync();
-                    _ = ActivateGameEconomyModeAsync(view.CoreWebView2);
                 }
             };
 
@@ -1510,9 +1535,6 @@ public partial class MainWindow : Window
                 : GameUrl;
             if (string.IsNullOrWhiteSpace(core.Source) || core.Source == "about:blank")
                 core.Navigate(target);
-            else
-                _ = ActivateGameEconomyModeAsync(core);
-
             _ = PrepareFloatingWebViewAsync(this);
         }
         catch (Exception ex)
