@@ -16,8 +16,8 @@ public partial class MainWindow : Window
 {
     private const string GameUrl = "https://lolidle.com/jogar";
     private const string GameHost = "lolidle.com";
-    private const double CompactWidth = 720;
-    private const double CompactHeight = 480;
+    private const double CompactWidth = 900;
+    private const double CompactHeight = 620;
 
     private Forms.NotifyIcon? _trayIcon;
     private bool _allowExit;
@@ -323,7 +323,7 @@ public partial class MainWindow : Window
         Close();
     }
 
-    // Aplica o layout compacto ou restaura as dimensões normais.
+    // Aplica o tamanho compacto da janela ou restaura as dimensões normais.
     private void SetCompactLayout(bool compact)
     {
         if (compact)
@@ -337,8 +337,8 @@ public partial class MainWindow : Window
                 _normalHeight = Height;
             }
 
-            MinWidth = 360;
-            MinHeight = 260;
+            MinWidth = 640;
+            MinHeight = 460;
             Width = CompactWidth;
             Height = CompactHeight;
             _isCompact = true;
