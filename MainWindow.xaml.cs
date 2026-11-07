@@ -1202,7 +1202,7 @@ public partial class MainWindow : Window
                 for (const el of statElements) {
                     const hint = [el.innerText, el.getAttribute('aria-label'), el.getAttribute('title'),
                         el.getAttribute('data-tooltip'), el.id, el.className,
-                        el.getAttribute('role')].filter(Boolean).join(' ').replace(/\\s+/g, ' ').trim();
+                        el.getAttribute('role')].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
                     if (!re.test(hint)) continue;
                     const nearby = (el.innerText || el.parentElement?.innerText ||
                         el.parentElement?.parentElement?.innerText || '').replace(/\\s+/g, ' ').trim();
