@@ -141,7 +141,7 @@ public partial class MainWindow : Window
             Text = "LoL Idle Desktop",
             Icon = _appIcon,
             ContextMenuStrip = menu,
-            Visible = true
+            Visible = false
         };
 
         _trayIcon.MouseClick += (_, e) =>
@@ -154,6 +154,9 @@ public partial class MainWindow : Window
     // Esconde a janela sem exibir notificações do Windows.
     private void HideToTray()
     {
+        if (_trayIcon != null)
+            _trayIcon.Visible = true;
+
         Hide();
     }
 
@@ -161,6 +164,11 @@ public partial class MainWindow : Window
     private void RestoreFromTray()
     {
         Show();
+
+        // O ícone só aparece na área de notificação enquanto a janela
+        // estiver realmente escondida na bandeja.
+        if (_trayIcon != null)
+            _trayIcon.Visible = false;
 
         if (WindowState == WindowState.Minimized)
             WindowState = WindowState.Normal;
