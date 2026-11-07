@@ -555,7 +555,7 @@ public partial class MainWindow : Window
                 Background = System.Windows.Media.Brushes.Transparent,
                 BorderThickness = new Thickness(0),
                 FontSize = 16,
-                Cursor = Cursors.Hand,
+                Cursor = System.Windows.Input.Cursors.Hand,
                 ToolTip = "Ativar janela sempre no topo"
             };
             topmostButton.Click += (_, _) =>
