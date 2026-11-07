@@ -20,6 +20,7 @@ public partial class MainWindow : Window
     private Forms.NotifyIcon? _trayIcon;
     private bool _allowExit;
     private bool _isCompact;
+    private System.Drawing.Icon? _appIcon;
 
     private const int WM_GETMINMAXINFO = 0x0024;
     private const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
@@ -115,10 +116,16 @@ public partial class MainWindow : Window
                 null,
                 (_, _) => ExitApplication()));
 
+        var iconResource = System.Windows.Application.GetResourceStream(
+            new Uri("pack://application:,,,/Assets/lol-idle.ico"));
+        _appIcon = iconResource != null
+            ? new System.Drawing.Icon(iconResource.Stream)
+            : (System.Drawing.Icon)System.Drawing.SystemIcons.Application.Clone();
+
         _trayIcon = new Forms.NotifyIcon
         {
             Text = "LoL Idle Desktop",
-            Icon = System.Drawing.SystemIcons.Application,
+            Icon = _appIcon,
             ContextMenuStrip = menu,
             Visible = true
         };
@@ -157,6 +164,10 @@ public partial class MainWindow : Window
             _trayIcon.Visible = false;
             _trayIcon.Dispose();
             _trayIcon = null;
+        }
+
+        _appIcon?.Dispose();
+        _appIcon = null;
         }
 
         Close();
