@@ -825,7 +825,13 @@ public partial class MainWindow : Window
                     _ = Dispatcher.BeginInvoke(new Action(() =>
                     {
                         if (!_allowExit && _floatingWindow == null)
+                        {
+                            // Ao fechar a janela flutuante, traz o app de volta
+                            // da bandeja para a janela principal.
+                            RestoreFromTray();
+                            LogFloatingWindowEvent("FloatingWindow: janela principal restaurada após fechar o modo flutuante.");
                             _ = PrepareFloatingWebViewAsync(this);
+                        }
                     }), System.Windows.Threading.DispatcherPriority.Background);
                 }
                 else if (wasPreparedWindow)
