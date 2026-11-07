@@ -1,4 +1,5 @@
-LoL Idle - Aplicativo desktop para Windows
+LoL Idle Desktop - versão 1.0.1
+Aplicativo desktop não oficial para Windows
 
 O que é
 -------
@@ -8,10 +9,13 @@ usando Microsoft Edge WebView2. Não altera o jogo nem automatiza ações.
 Recursos
 --------
 - Janela personalizada sem abas ou barra de endereço do navegador.
-- Botões voltar, avançar, atualizar e início.
+- Botão de modo compacto.
+- Minimizar (－) envia a janela para a barra de tarefas do Windows.
+- Fechar (×) oculta o aplicativo na bandeja do sistema, sem notificação.
+- Clique esquerdo no ícone da bandeja restaura a janela.
+- Clique direito no ícone da bandeja mostra as opções Abrir LoL Idle e Sair.
 - Cookies e sessão persistidos em %LOCALAPPDATA%\LoLIdleDesktop\WebView2.
 - Links externos abrem no navegador padrão.
-- Pode ser minimizado; para continuar jogando, mantenha o aplicativo aberto.
 
 Requisitos
 ----------
@@ -26,16 +30,16 @@ Como compilar
 3. Clique na barra de endereço, digite cmd e pressione Enter.
 4. Execute:
 
-   dotnet restore
-   dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
+   COMPILAR.bat
 
 5. O executável será criado em:
    bin\Release\net8.0-windows\win-x64\publish\LoL Idle.exe
 
 Observações importantes
-----------------------
+-----------------------
 - Este projeto é um contêiner desktop para o site oficial; o jogo e o login
   continuam sendo fornecidos pelo próprio lolidle.com.
 - A primeira abertura precisa de internet.
-- Fechar o aplicativo encerra a sessão ativa do jogo. Minimizá-lo não.
+- Ocultar na bandeja mantém o aplicativo e a sessão ativos.
+- A opção Sair no menu da bandeja encerra o aplicativo.
 - O projeto não é oficial nem afiliado à Riot Games ou ao LoL Idle.
