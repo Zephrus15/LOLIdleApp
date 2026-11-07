@@ -69,7 +69,6 @@
                     <ColumnDefinition Width="44"/>
                     <ColumnDefinition Width="44"/>
                     <ColumnDefinition Width="44"/>
-                    <ColumnDefinition Width="44"/>
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal"
