@@ -456,15 +456,7 @@ public partial class MainWindow : Window
             args.Handled = true;
             LogFloatingWindowEvent("Popup: Core pré-inicializado entregue ao jogo.");
 
-            window.Opacity = 1;
-            window.ShowInTaskbar = true;
-            window.WindowStyle = WindowStyle.SingleBorderWindow;
-            window.ResizeMode = ResizeMode.CanResize;
-            window.Width = 900;
-            window.Height = 650;
-            window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            window.Show();
-            window.Activate();
+            ShowFloatingWindow(window);
             LogFloatingWindowEvent("Popup: janela exibida.");
 
             _ = PrepareFloatingWebViewAsync(this);
@@ -473,6 +465,33 @@ public partial class MainWindow : Window
         {
             LogFloatingWindowEvent($"Popup: erro ao entregar WebView preparado: {ex}");
         }
+    }
+
+    // Reposiciona a janela preparada, que nasceu fora da tela, antes de exibi-la.
+    private void ShowFloatingWindow(Window window)
+    {
+        const double width = 900;
+        const double height = 650;
+        var workLeft = SystemParameters.WorkArea.Left;
+        var workTop = SystemParameters.WorkArea.Top;
+        var workWidth = SystemParameters.WorkArea.Width;
+        var workHeight = SystemParameters.WorkArea.Height;
+
+        window.WindowState = WindowState.Normal;
+        window.WindowStyle = WindowStyle.SingleBorderWindow;
+        window.ResizeMode = ResizeMode.CanResize;
+        window.ShowInTaskbar = true;
+        window.Opacity = 1;
+        window.Width = Math.Min(width, workWidth);
+        window.Height = Math.Min(height, workHeight);
+        window.WindowStartupLocation = WindowStartupLocation.Manual;
+        window.Left = workLeft + Math.Max(0, (workWidth - window.Width) / 2);
+        window.Top = workTop + Math.Max(0, (workHeight - window.Height) / 2);
+
+        if (!window.IsVisible)
+            window.Show();
+
+        window.Activate();
     }
 
     // Log técnico mínimo, sem gravar URLs completas, cookies ou tokens.
@@ -677,9 +696,7 @@ public partial class MainWindow : Window
             _floatingWindow = window;
             _floatingView = view;
 
-            window.Opacity = 1;
-            window.Show();
-            window.Activate();
+            ShowFloatingWindow(window);
 
             var target = Uri.TryCreate(_lastFloatingUri, UriKind.Absolute, out var savedUri) &&
                          savedUri.Scheme is "http" or "https"
