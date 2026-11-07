@@ -48,6 +48,7 @@ public partial class MainWindow : Window
             } catch (_) {}
         }
         window.__lolIdleSetAudioPrefs = async (prefs) => {
+            window.__lolIdleAudioPrefs = prefs;
             document.querySelectorAll('audio,video').forEach(el => {
                 if (!el.__lolIdleOriginalMutedSaved) {
                     el.__lolIdleOriginalMuted = el.muted;
@@ -1003,7 +1004,7 @@ public partial class MainWindow : Window
 
         stack.Children.Add(new TextBlock
         {
-            Text = "A separação entre música e efeitos depende de como o jogo identifica cada som. O controle geral atua sobre os elementos de áudio e vídeo HTML; sons gerados diretamente por Web Audio podem não responder.",
+            Text = "Música e efeitos separados só podem ser controlados quando o jogo identifica cada canal. O silenciamento geral também pausa os contextos Web Audio detectados; sons criados antes da instalação do controle ou por mecanismos externos podem ter limitações.",
             Foreground = new SolidColorBrush(Color.FromRgb(145, 153, 168)),
             FontSize = 11,
             TextWrapping = TextWrapping.Wrap,
@@ -1228,7 +1229,7 @@ public partial class MainWindow : Window
             if (!window.__lolIdleAudioObserver) {
                 window.__lolIdleAudioObserver = new MutationObserver(() => {
                     if (typeof window.__lolIdleSetAudioPrefs === 'function')
-                        window.__lolIdleSetAudioPrefs(prefs);
+                        window.__lolIdleSetAudioPrefs(window.__lolIdleAudioPrefs || prefs);
                 });
                 window.__lolIdleAudioObserver.observe(document.documentElement, {
                     childList: true, subtree: true, attributes: true,
