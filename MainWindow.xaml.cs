@@ -450,9 +450,16 @@ public partial class MainWindow : Window
 
     private void Maximize_Click(object sender, RoutedEventArgs e)
     {
-        WindowState = WindowState == WindowState.Maximized
-            ? WindowState.Normal
-            : WindowState.Maximized;
+        if (WindowState == WindowState.Normal)
+        {
+            _lastLeft = Left;
+            _lastTop = Top;
+            WindowState = WindowState.Maximized;
+        }
+        else
+        {
+            WindowState = WindowState.Normal;
+        }
 
         SaveWindowSettings();
     }
