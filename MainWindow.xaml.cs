@@ -27,6 +27,8 @@ public partial class MainWindow : Window
     private System.Drawing.Icon? _appIcon;
     private CoreWebView2Environment? _webViewEnvironment;
     private string _lastFloatingUri = GameUrl;
+    private Window? _floatingWindow;
+    private Microsoft.Web.WebView2.Wpf.WebView2? _floatingView;
     private string SettingsPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "LoLIdleDesktop", "window-settings.json");
@@ -312,6 +314,15 @@ public partial class MainWindow : Window
         SaveWindowSettings();
         _allowExit = true;
 
+        // Fecha a janela flutuante junto com o processo quando o usuário escolhe Sair.
+        if (_floatingWindow != null)
+        {
+            var floating = _floatingWindow;
+            _floatingWindow = null;
+            _floatingView = null;
+            floating.Close();
+        }
+
         if (_trayIcon != null)
         {
             _trayIcon.Visible = false;
@@ -482,12 +493,18 @@ public partial class MainWindow : Window
         }
     }
 
-    // Cria uma janela WPF independente para cada solicitação window.open() do jogo.
-    // Todas compartilham o mesmo ambiente WebView2 para manter a sessão e os cookies.
+    // Mantém uma única janela flutuante e limpa a referência quando ela é fechada.
+    // O WebView2 compartilha o mesmo ambiente para preservar cookies e sessão.
     private async Task<CoreWebView2> CreateFloatingWebViewAsync(Window? owner)
     {
         if (_webViewEnvironment == null)
             throw new InvalidOperationException("O ambiente WebView2 ainda não foi inicializado.");
+
+        if (_floatingWindow != null && _floatingView?.CoreWebView2 != null)
+        {
+            _floatingWindow.Activate();
+            return _floatingView.CoreWebView2;
+        }
 
         var popupWindow = new Window
         {
@@ -509,59 +526,95 @@ public partial class MainWindow : Window
             DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24)
         };
 
-        popupWindow.Content = popupView;
-        popupWindow.Show();
+        _floatingWindow = popupWindow;
+        _floatingView = popupView;
 
-        await popupView.EnsureCoreWebView2Async(_webViewEnvironment);
-        popupView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
-        popupView.CoreWebView2.Settings.IsStatusBarEnabled = false;
-        popupView.CoreWebView2.Settings.AreDevToolsEnabled = false;
-
-        // Permite que uma janela flutuante também abra outras janelas.
-        popupView.CoreWebView2.NewWindowRequested += async (_, popupArgs) =>
+        popupWindow.Closed += (_, _) =>
         {
-            var popupDeferral = popupArgs.GetDeferral();
-            try
+            // Não deixar uma referência morta bloquear a próxima abertura.
+            if (ReferenceEquals(_floatingWindow, popupWindow))
             {
-                if (!string.IsNullOrWhiteSpace(popupArgs.Uri))
-                {
-                    _lastFloatingUri = popupArgs.Uri;
-                    FloatingReopenButton.IsEnabled = true;
-                }
-
-                popupArgs.NewWindow = await CreateFloatingWebViewAsync(popupWindow);
-                popupArgs.Handled = true;
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(
-                    "Não foi possível abrir outra janela flutuante.\\n\\n" + ex.Message,
-                    "LoL Idle - janela flutuante",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-            }
-            finally
-            {
-                popupDeferral.Complete();
+                _floatingWindow = null;
+                _floatingView = null;
             }
         };
 
-        return popupView.CoreWebView2;
+        popupWindow.Content = popupView;
+
+        try
+        {
+            // Inicializa o controle antes de exibir a janela, evitando a janela preta
+            // causada por entregar ao WebView2 um CoreWebView2 ainda não pronto.
+            await popupView.EnsureCoreWebView2Async(_webViewEnvironment);
+            popupView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+            popupView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+            popupView.CoreWebView2.Settings.AreDevToolsEnabled = false;
+
+            popupView.CoreWebView2.NewWindowRequested += async (_, popupArgs) =>
+            {
+                var popupDeferral = popupArgs.GetDeferral();
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(popupArgs.Uri) &&
+                        Uri.TryCreate(popupArgs.Uri, UriKind.Absolute, out var requestedUri) &&
+                        requestedUri.Scheme is "http" or "https")
+                    {
+                        _lastFloatingUri = requestedUri.ToString();
+                        FloatingReopenButton.IsEnabled = true;
+                    }
+
+                    popupArgs.NewWindow = await CreateFloatingWebViewAsync(popupWindow);
+                    popupArgs.Handled = true;
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(
+                        "Não foi possível abrir outra janela flutuante.\\n\\n" + ex.Message,
+                        "LoL Idle - janela flutuante",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Warning);
+                }
+                finally
+                {
+                    popupDeferral.Complete();
+                }
+            };
+
+            popupWindow.Show();
+            return popupView.CoreWebView2;
+        }
+        catch
+        {
+            if (ReferenceEquals(_floatingWindow, popupWindow))
+            {
+                _floatingWindow = null;
+                _floatingView = null;
+            }
+            popupWindow.Close();
+            throw;
+        }
     }
 
-    // Recria uma janela flutuante usando o último endereço solicitado pelo jogo.
-    // O novo WebView2 compartilha o mesmo ambiente e, portanto, a sessão/cookies.
+    // Reabre a janela se ela foi fechada, sem reutilizar um WebView2 já descartado.
     private async void ReopenFloatingWindow_Click(object sender, RoutedEventArgs e)
     {
         try
         {
             var floatingCore = await CreateFloatingWebViewAsync(this);
-            floatingCore.Navigate(_lastFloatingUri);
+            if (floatingCore.Source == "about:blank" ||
+                string.IsNullOrWhiteSpace(floatingCore.Source))
+            {
+                var target = Uri.TryCreate(_lastFloatingUri, UriKind.Absolute, out var savedUri) &&
+                             savedUri.Scheme is "http" or "https"
+                    ? savedUri.ToString()
+                    : GameUrl;
+                floatingCore.Navigate(target);
+            }
         }
         catch (Exception ex)
         {
             MessageBox.Show(
-                "Não foi possível reabrir a janela flutuante.\n\n" + ex.Message,
+                "Não foi possível reabrir a janela flutuante.\\n\\n" + ex.Message,
                 "LoL Idle - janela flutuante",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
