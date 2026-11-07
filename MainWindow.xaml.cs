@@ -443,6 +443,16 @@ public partial class MainWindow : Window
                     FloatingReopenButton.IsEnabled = true;
                 }
 
+                // Uma solicitação anterior pode ainda estar inicializando o WebView2.
+                // Não criar várias janelas/controles enquanto o primeiro EnsureCoreWebView2Async
+                // está pendente: isso provoca inicializações concorrentes e pode congelar o app.
+                if (_floatingWindow != null && _floatingView?.CoreWebView2 == null)
+                {
+                    LogFloatingWindowEvent("Handler: já existe uma janela flutuante inicializando; solicitação duplicada ignorada.");
+                    args.Handled = true;
+                    return;
+                }
+
                 if (_floatingWindow != null && _floatingView?.CoreWebView2 != null)
                 {
                     _floatingWindow.Activate();
@@ -497,7 +507,7 @@ public partial class MainWindow : Window
             Directory.CreateDirectory(directory);
             File.AppendAllText(
                 Path.Combine(directory, "floating-window.log"),
-                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}{Environment.NewLine}");
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] [PID={Environment.ProcessId}] {message}{Environment.NewLine}");
         }
         catch
         {
@@ -649,6 +659,7 @@ public partial class MainWindow : Window
     // Reabre a janela se ela foi fechada, sem reutilizar um WebView2 já descartado.
     private async void ReopenFloatingWindow_Click(object sender, RoutedEventArgs e)
     {
+        LogFloatingWindowEvent("ReopenButton: clique recebido.");
         try
         {
             if (_floatingWindow != null && _floatingView?.CoreWebView2 != null)
