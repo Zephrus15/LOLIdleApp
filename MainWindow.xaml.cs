@@ -414,40 +414,83 @@ public partial class MainWindow : Window
             try
             {
                 var requestedUrl = args.Uri;
-                if (!Uri.TryCreate(requestedUrl, UriKind.Absolute, out var requestedUri) ||
-                    requestedUri.Scheme is not ("http" or "https"))
+                var hasHttpUri = Uri.TryCreate(
+                    requestedUrl, UriKind.Absolute, out var requestedUri) &&
+                    requestedUri!.Scheme is "http" or "https";
+                var isBlankWindow = string.IsNullOrWhiteSpace(requestedUrl) ||
+                    (Uri.TryCreate(requestedUrl, UriKind.Absolute, out var blankUri) &&
+                     blankUri!.AbsoluteUri.Equals("about:blank", StringComparison.OrdinalIgnoreCase));
+
+                LogFloatingWindowEvent(
+                    $"NewWindowRequested: blank={isBlankWindow}, http={hasHttpUri}, " +
+                    $"userInitiated={args.IsUserInitiated}");
+
+                // window.open() pode começar sem URL (ou com about:blank) e
+                // receber o conteúdo depois, via JavaScript. Isso também é válido.
+                if (!hasHttpUri && !isBlankWindow)
                 {
+                    LogFloatingWindowEvent("Solicitação ignorada: esquema de URL não permitido.");
                     args.Handled = true;
                     return;
                 }
 
-                _lastFloatingUri = requestedUri.ToString();
-                FloatingReopenButton.IsEnabled = true;
+                if (hasHttpUri)
+                {
+                    _lastFloatingUri = requestedUri!.ToString();
+                    FloatingReopenButton.IsEnabled = true;
+                }
 
-                // Se a janela já existe, direcionamos a navegação para ela.
-                // Não a entregamos novamente como args.NewWindow: o WebView2 exige
-                // uma instância nova, ainda não navegada, nesse campo.
                 if (_floatingWindow != null && _floatingView?.CoreWebView2 != null)
                 {
                     _floatingWindow.Activate();
-                    _floatingView.CoreWebView2.Navigate(requestedUri.ToString());
-                    args.Handled = true;
+                    if (hasHttpUri)
+                    {
+                        _floatingView.CoreWebView2.Navigate(requestedUri!.ToString());
+                        args.Handled = true;
+                    }
+                    else
+                    {
+                        // Não responder com WindowProxy fictício para uma abertura vazia.
+                        // O WebView2 segue o comportamento padrão se já houver popup ativo.
+                        LogFloatingWindowEvent("Popup em branco recebido com janela já aberta; tratamento padrão mantido.");
+                    }
                     return;
                 }
 
                 var newCore = await CreateFloatingWebViewAsync(owner);
                 args.NewWindow = newCore;
                 args.Handled = true;
+                LogFloatingWindowEvent("Nova instância WebView2 atribuída ao popup.");
             }
             catch (Exception ex)
             {
+                LogFloatingWindowEvent($"Falha ao criar janela: {ex}");
                 MessageBox.Show(
-                    "Não foi possível abrir a janela flutuante.\n\n" + ex.Message,
+                    "Não foi possível abrir a janela flutuante.\\n\\n" + ex.Message,
                     "LoL Idle - janela flutuante",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
                 args.Handled = true;
             }
+        }
+    }
+
+    // Log técnico mínimo, sem gravar URLs completas, cookies ou tokens.
+    private static void LogFloatingWindowEvent(string message)
+    {
+        try
+        {
+            var directory = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "LoLIdleDesktop");
+            Directory.CreateDirectory(directory);
+            File.AppendAllText(
+                Path.Combine(directory, "floating-window.log"),
+                $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}{Environment.NewLine}");
+        }
+        catch
+        {
+            // O log nunca deve interferir no funcionamento do jogo.
         }
     }
 
