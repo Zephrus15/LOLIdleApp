@@ -77,13 +77,72 @@ public partial class MainWindow : Window
         };
     })();";
 
-    // O clique pressionado no conteúdo inicia o arraste nativo da janela.
-    // O modo flutuante é voltado à automação, então qualquer ponto do jogo pode mover a janela.
+    // Controles são desenhados dentro do DOM do jogo para ficarem acima do WebView2.
+    private const string FloatingControlsScript = @"(() => {
+        if (window.__lolIdleFloatingControlsInstalled) return;
+        window.__lolIdleFloatingControlsInstalled = true;
+        const install = () => {
+            if (!document.documentElement || document.getElementById('lol-idle-floating-controls')) return;
+            const style = document.createElement('style');
+            style.textContent = `
+                #lol-idle-floating-controls { position:fixed; top:10px; right:12px; z-index:2147483647;
+                    display:flex; gap:2px; padding:3px; border-radius:9px;
+                    background:rgba(25,28,35,.88); backdrop-filter:blur(8px);
+                    opacity:.38; transition:opacity .16s ease; user-select:none; }
+                #lol-idle-floating-controls:hover { opacity:1; }
+                #lol-idle-floating-controls button { width:36px; height:34px; padding:0; border:0;
+                    border-radius:6px; color:#eceff5; background:transparent; cursor:pointer;
+                    display:grid; place-items:center; }
+                #lol-idle-floating-controls button:hover { background:rgba(255,255,255,.14); }
+                #lol-idle-floating-controls button.active { color:#e8cf8f; }
+                #lol-idle-floating-controls svg { width:19px; height:19px; fill:none; stroke:currentColor;
+                    stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; pointer-events:none; }
+            `;
+            document.head.appendChild(style);
+            const panel = document.createElement('div');
+            panel.id = 'lol-idle-floating-controls';
+            panel.innerHTML = `
+                <button id="lol-idle-audio" title="Silenciar todo o áudio" aria-label="Som">
+                    <svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+                </button>
+                <button id="lol-idle-pin" title="Ativar janela sempre no topo" aria-label="Fixar">
+                    <svg viewBox="0 0 24 24"><path d="m16 3 5 5-4 1-4 4 2 2-2 2-4-4-5 5"/><path d="m8 8 8 8"/></svg>
+                </button>
+                <button id="lol-idle-close" title="Fechar janela flutuante" aria-label="Fechar">
+                    <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                </button>`;
+            document.documentElement.appendChild(panel);
+            const send = action => window.chrome.webview.postMessage('lol-idle-control:' + action);
+            const audio = panel.querySelector('#lol-idle-audio');
+            const pin = panel.querySelector('#lol-idle-pin');
+            audio.addEventListener('click', () => {
+                audio.classList.toggle('active');
+                const muted = audio.classList.contains('active');
+                audio.title = muted ? 'Ativar todo o áudio' : 'Silenciar todo o áudio';
+                audio.innerHTML = muted
+                    ? '<svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m16 9 5 6m0-6-5 6"/></svg>'
+                    : '<svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+                send('audio');
+            });
+            pin.addEventListener('click', () => {
+                pin.classList.toggle('active');
+                const pinned = pin.classList.contains('active');
+                pin.title = pinned ? 'Desativar janela sempre no topo' : 'Ativar janela sempre no topo';
+                send('pin');
+            });
+            panel.querySelector('#lol-idle-close').addEventListener('click', () => send('close'));
+        };
+        if (document.readyState === 'loading')
+            document.addEventListener('DOMContentLoaded', install, { once:true });
+        else install();
+    })();";
+
+    // Arrastar pelo jogo, exceto quando o clique começa nos controles flutuantes.
     private const string FloatingDragScript = @"(() => {
         if (window.__lolIdleFloatingDragInstalled) return;
         window.__lolIdleFloatingDragInstalled = true;
         document.addEventListener('pointerdown', event => {
-            if (event.button !== 0) return;
+            if (event.button !== 0 || event.target.closest('#lol-idle-floating-controls')) return;
             try { window.chrome.webview.postMessage('lol-idle-begin-window-drag'); } catch (_) {}
         }, true);
     })();";
@@ -735,89 +794,6 @@ public partial class MainWindow : Window
             };
             root.Children.Add(view);
 
-            // Controles compactos sobre o próprio jogo, sem reservar uma barra superior.
-            var toolbarIconColor = new SolidColorBrush(Color.FromRgb(236, 239, 245));
-            var controls = new StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-                VerticalAlignment = VerticalAlignment.Top,
-                Margin = new Thickness(0, 10, 12, 0)
-            };
-            var controlBackground = new SolidColorBrush(Color.FromArgb(218, 25, 28, 35));
-            controls.Children.Add(new Border
-            {
-                Background = controlBackground,
-                CornerRadius = new CornerRadius(9),
-                Padding = new Thickness(3),
-                Child = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal }
-            });
-            var controlButtons = (StackPanel)((Border)controls.Children[0]).Child;
-
-            Button MakeFloatingButton(UIElement icon, string tooltip)
-            {
-                return new Button
-                {
-                    Content = icon,
-                    Foreground = toolbarIconColor,
-                    Background = Brushes.Transparent,
-                    BorderBrush = Brushes.Transparent,
-                    BorderThickness = new Thickness(0),
-                    Padding = new Thickness(0),
-                    Width = 36,
-                    Height = 34,
-                    Cursor = Cursors.Hand,
-                    ToolTip = tooltip
-                };
-            }
-
-            var audioMuteButton = MakeFloatingButton(
-                CreateToolbarIcon(_settings.MasterMuted ? "mute" : "volume",
-                    _settings.MasterMuted
-                        ? new SolidColorBrush(Color.FromRgb(232, 207, 143))
-                        : toolbarIconColor),
-                _settings.MasterMuted ? "Ativar todo o áudio" : "Silenciar todo o áudio");
-            audioMuteButton.Click += (_, _) =>
-            {
-                _settings.MasterMuted = !_settings.MasterMuted;
-                audioMuteButton.Foreground = _settings.MasterMuted
-                    ? new SolidColorBrush(Color.FromRgb(232, 207, 143))
-                    : toolbarIconColor;
-                audioMuteButton.Content = CreateToolbarIcon(
-                    _settings.MasterMuted ? "mute" : "volume",
-                    (System.Windows.Media.Brush)audioMuteButton.Foreground);
-                audioMuteButton.ToolTip = _settings.MasterMuted
-                    ? "Ativar todo o áudio"
-                    : "Silenciar todo o áudio";
-                SaveWindowSettings();
-                _ = ApplyAudioSettingsAsync();
-            };
-            controlButtons.Children.Add(audioMuteButton);
-
-            var topmostButton = MakeFloatingButton(
-                CreateToolbarIcon("pin", toolbarIconColor),
-                "Ativar janela sempre no topo");
-            topmostButton.Click += (_, _) =>
-            {
-                popupWindow.Topmost = !popupWindow.Topmost;
-                topmostButton.Foreground = popupWindow.Topmost ? Brushes.Gold : toolbarIconColor;
-                topmostButton.Content = CreateToolbarIcon(
-                    popupWindow.Topmost ? "pin-filled" : "pin",
-                    (System.Windows.Media.Brush)topmostButton.Foreground);
-                topmostButton.ToolTip = popupWindow.Topmost
-                    ? "Desativar janela sempre no topo"
-                    : "Ativar janela sempre no topo";
-            };
-            controlButtons.Children.Add(topmostButton);
-
-            var closeButton = MakeFloatingButton(
-                CreateToolbarIcon("close", toolbarIconColor),
-                "Fechar janela flutuante");
-            closeButton.Click += (_, _) => popupWindow.Close();
-            controlButtons.Children.Add(closeButton);
-
-            Panel.SetZIndex(controls, 10);
-            root.Children.Add(controls);
             popupWindow.Content = root;
 
             _preparedFloatingWindow = popupWindow;
@@ -874,17 +850,33 @@ public partial class MainWindow : Window
             LogFloatingWindowEvent("Prepare: antes de EnsureCoreWebView2Async.");
             await view.EnsureCoreWebView2Async(_webViewEnvironment);
             await view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(AudioBootstrapScript);
+            await view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(FloatingControlsScript);
             await view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(FloatingDragScript);
             view.CoreWebView2.WebMessageReceived += (_, messageArgs) =>
             {
                 try
                 {
-                    if (messageArgs.TryGetWebMessageAsString() == "lol-idle-begin-window-drag" &&
+                    var message = messageArgs.TryGetWebMessageAsString();
+                    if (message == "lol-idle-begin-window-drag" &&
                         popupWindow.IsVisible && popupWindow.WindowState == WindowState.Normal)
                     {
                         var handle = new WindowInteropHelper(popupWindow).Handle;
                         ReleaseCapture();
                         SendMessage(handle, WM_NCLBUTTONDOWN, new IntPtr(HTCAPTION), IntPtr.Zero);
+                    }
+                    else if (message == "lol-idle-control:audio")
+                    {
+                        _settings.MasterMuted = !_settings.MasterMuted;
+                        SaveWindowSettings();
+                        _ = ApplyAudioSettingsAsync();
+                    }
+                    else if (message == "lol-idle-control:pin")
+                    {
+                        popupWindow.Topmost = !popupWindow.Topmost;
+                    }
+                    else if (message == "lol-idle-control:close")
+                    {
+                        popupWindow.Close();
                     }
                 }
                 catch (InvalidOperationException)
