@@ -56,22 +56,22 @@ public sealed class AuxiliaryPanelWindow : Window
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.CanResize;
         ShowInTaskbar = true;
-        AllowsTransparency = isCharacterPanel;
-        Background = isCharacterPanel
-            ? Brushes.Transparent
-            : new SolidColorBrush(Color.FromRgb(17, 19, 24));
+        // Enquanto o painel do herói está em desenvolvimento, manter fundo sólido
+        // para facilitar a leitura e depuração dos indicadores.
+        AllowsTransparency = false;
+        Background = new SolidColorBrush(Color.FromRgb(17, 19, 24));
         Opacity = supportsOpacity ? _panelOpacity : 1.0;
 
         var root = new Grid
         {
-            Background = isCharacterPanel ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(17, 19, 24))
+            Background = new SolidColorBrush(Color.FromRgb(17, 19, 24))
         };
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(38) });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
         var header = new Grid
         {
-            Background = isCharacterPanel ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(25, 28, 35)),
+            Background = new SolidColorBrush(Color.FromRgb(25, 28, 35)),
             Margin = new Thickness(0)
         };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -95,9 +95,9 @@ public sealed class AuxiliaryPanelWindow : Window
         var tabs = new TabControl
         {
             Margin = new Thickness(8),
-            Background = isCharacterPanel ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(17, 19, 24)),
-            BorderBrush = isCharacterPanel ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(48, 52, 61)),
-            BorderThickness = isCharacterPanel ? new Thickness(0) : new Thickness(1)
+            Background = new SolidColorBrush(Color.FromRgb(17, 19, 24)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(48, 52, 61)),
+            BorderThickness = new Thickness(1)
         };
 
         var overview = new StackPanel
@@ -147,7 +147,7 @@ public sealed class AuxiliaryPanelWindow : Window
         };
         var actionContent = new StackPanel
         {
-            Background = isCharacterPanel ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(17, 19, 24))
+            Background = new SolidColorBrush(Color.FromRgb(17, 19, 24))
         };
         actionContent.Children.Add(_actionStatus);
         actionContent.Children.Add(new ScrollViewer
