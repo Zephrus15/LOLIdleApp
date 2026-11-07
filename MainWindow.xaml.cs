@@ -898,7 +898,6 @@ public partial class MainWindow : Window
                 : WindowStartupLocation.CenterOwner;
 
             LogFloatingWindowEvent("Prepare: janela flutuante pronta e oculta.");
-            FloatingReopenButton.IsEnabled = true;
         }
         catch (Exception ex)
         {
