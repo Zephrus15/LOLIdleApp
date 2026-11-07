@@ -167,9 +167,6 @@ public partial class MainWindow : Window
                 Top = Math.Clamp(settings.Top, minTop, Math.Max(minTop, maxTop));
             }
 
-            Topmost = settings.IsAlwaysOnTop;
-            UpdateAlwaysOnTopButton();
-
             if (settings.IsCompact)
                 SetCompactLayout(true);
         }
@@ -193,8 +190,7 @@ public partial class MainWindow : Window
                 NormalHeight = _normalHeight,
                 Left = Left,
                 Top = Top,
-                IsCompact = _isCompact,
-                IsAlwaysOnTop = Topmost
+                IsCompact = _isCompact
             };
 
             File.WriteAllText(SettingsPath,
@@ -373,25 +369,6 @@ public partial class MainWindow : Window
         SetCompactLayout(!_isCompact);
     }
 
-    private void AlwaysOnTop_Click(object sender, RoutedEventArgs e)
-    {
-        Topmost = !Topmost;
-        UpdateAlwaysOnTopButton();
-        SaveWindowSettings();
-    }
-
-    private void UpdateAlwaysOnTopButton()
-    {
-        AlwaysOnTopButton.Content = Topmost ? "◆" : "◇";
-        AlwaysOnTopButton.ToolTip = Topmost
-            ? "Desativar janela sempre no topo"
-            : "Ativar janela sempre no topo";
-        AlwaysOnTopButton.Foreground = Topmost
-            ? System.Windows.Media.Brushes.Gold
-            : new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(216, 220, 228));
-    }
-
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
         RestoreWindowSettings();
@@ -521,10 +498,66 @@ public partial class MainWindow : Window
                 System.Windows.Media.Color.FromRgb(17, 19, 24))
         };
 
+        popupWindow.WindowStyle = WindowStyle.SingleBorderWindow;
+
+        var popupRoot = new Grid();
+        popupRoot.RowDefinitions.Add(new RowDefinition { Height = new GridLength(36) });
+        popupRoot.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+        var popupToolbar = new Border
+        {
+            Background = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(25, 28, 35)),
+            Padding = new Thickness(8, 0, 8, 0)
+        };
+        var popupToolbarGrid = new Grid();
+        popupToolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        popupToolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
+
+        var popupTitle = new TextBlock
+        {
+            Text = "LoL Idle",
+            Foreground = System.Windows.Media.Brushes.White,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        popupToolbarGrid.Children.Add(popupTitle);
+
+        var popupTopmostButton = new Button
+        {
+            Content = "◇",
+            Foreground = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(216, 220, 228)),
+            Background = System.Windows.Media.Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            FontSize = 16,
+            Cursor = System.Windows.Input.Cursors.Hand,
+            ToolTip = "Ativar janela sempre no topo"
+        };
+        popupTopmostButton.Click += (_, _) =>
+        {
+            popupWindow.Topmost = !popupWindow.Topmost;
+            popupTopmostButton.Content = popupWindow.Topmost ? "◆" : "◇";
+            popupTopmostButton.Foreground = popupWindow.Topmost
+                ? System.Windows.Media.Brushes.Gold
+                : new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(216, 220, 228));
+            popupTopmostButton.ToolTip = popupWindow.Topmost
+                ? "Desativar janela sempre no topo"
+                : "Ativar janela sempre no topo";
+        };
+        Grid.SetColumn(popupTopmostButton, 1);
+        popupToolbarGrid.Children.Add(popupTopmostButton);
+        popupToolbar.Child = popupToolbarGrid;
+        Grid.SetRow(popupToolbar, 0);
+        popupRoot.Children.Add(popupToolbar);
+
         var popupView = new Microsoft.Web.WebView2.Wpf.WebView2
         {
             DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24)
         };
+        Grid.SetRow(popupView, 1);
+        popupRoot.Children.Add(popupView);
 
         _floatingWindow = popupWindow;
         _floatingView = popupView;
@@ -539,7 +572,7 @@ public partial class MainWindow : Window
             }
         };
 
-        popupWindow.Content = popupView;
+        popupWindow.Content = popupRoot;
 
         try
         {
