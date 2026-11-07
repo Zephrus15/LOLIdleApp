@@ -691,7 +691,6 @@ public partial class MainWindow : Window
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
-            toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.Children.Add(new TextBlock
             {
                 Text = "LoL Idle",
@@ -748,25 +747,11 @@ public partial class MainWindow : Window
                 SaveWindowSettings();
                 _ = ApplyAudioSettingsAsync();
             };
-            Grid.SetColumn(audioMuteButton, 2);
+            Grid.SetColumn(audioMuteButton, 1);
             toolbarGrid.Children.Add(audioMuteButton);
 
-            Grid.SetColumn(topmostButton, 3);
+            Grid.SetColumn(topmostButton, 2);
             toolbarGrid.Children.Add(topmostButton);
-
-            var settingsButton = new Button
-            {
-                Content = "⚙",
-                Foreground = new SolidColorBrush(Color.FromRgb(216, 220, 228)),
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                FontSize = 16,
-                Cursor = Cursors.Hand,
-                ToolTip = "Configurações dos painéis e áudio"
-            };
-            settingsButton.Click += (_, _) => ShowFloatingSettings();
-            Grid.SetColumn(settingsButton, 1);
-            toolbarGrid.Children.Add(settingsButton);
 
             var closeButton = new Button
             {
@@ -780,7 +765,7 @@ public partial class MainWindow : Window
                 ToolTip = "Fechar janela flutuante"
             };
             closeButton.Click += (_, _) => popupWindow.Close();
-            Grid.SetColumn(closeButton, 4);
+            Grid.SetColumn(closeButton, 3);
             toolbarGrid.Children.Add(closeButton);
 
             toolbar.MouseLeftButtonDown += (_, args) =>
