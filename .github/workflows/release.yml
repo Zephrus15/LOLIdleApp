@@ -22,6 +22,54 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Reconstruir tamanhos do ícone do Windows
+        shell: pwsh
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $icon = New-Object System.Drawing.Icon("Assets/lol-idle.ico", 48, 48)
+          $source = $icon.ToBitmap()
+          $sizes = @(16, 24, 32, 48, 64, 128, 256)
+          $frames = @()
+          foreach ($size in $sizes) {
+            $bitmap = New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
+            $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+            $graphics.Clear([System.Drawing.Color]::Transparent)
+            $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+            $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+            $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+            $graphics.DrawImage($source, 0, 0, $size, $size)
+            $stream = New-Object System.IO.MemoryStream
+            $bitmap.Save($stream, [System.Drawing.Imaging.ImageFormat]::Png)
+            $frames += ,@{ Size = $size; Data = $stream.ToArray() }
+            $stream.Dispose()
+            $graphics.Dispose()
+            $bitmap.Dispose()
+          }
+          $output = [System.IO.File]::Create("Assets/lol-idle.ico")
+          $writer = New-Object System.IO.BinaryWriter($output)
+          $writer.Write([UInt16]0)
+          $writer.Write([UInt16]1)
+          $writer.Write([UInt16]$frames.Count)
+          $offset = 6 + (16 * $frames.Count)
+          foreach ($frame in $frames) {
+            $dimension = if ($frame.Size -eq 256) { 0 } else { $frame.Size }
+            $writer.Write([Byte]$dimension)
+            $writer.Write([Byte]$dimension)
+            $writer.Write([Byte]0)
+            $writer.Write([Byte]0)
+            $writer.Write([UInt16]1)
+            $writer.Write([UInt16]32)
+            $writer.Write([UInt32]$frame.Data.Length)
+            $writer.Write([UInt32]$offset)
+            $offset += $frame.Data.Length
+          }
+          foreach ($frame in $frames) { $writer.Write([Byte[]]$frame.Data) }
+          $writer.Dispose()
+          $output.Dispose()
+          $source.Dispose()
+          $icon.Dispose()
+          Write-Host "Ícone reconstruído com tamanhos: $($sizes -join ', ')"
+          
       - name: Restaurar dependências
         run: dotnet restore LoLIdleDesktop.csproj
 
