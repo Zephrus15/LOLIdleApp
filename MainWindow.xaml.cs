@@ -55,19 +55,17 @@ public partial class MainWindow : Window
             Visible = true
         };
 
-        _trayIcon.DoubleClick += (_, _) => RestoreFromTray();
+        _trayIcon.MouseClick += (_, e) =>
+        {
+            if (e.Button == Forms.MouseButtons.Left)
+                RestoreFromTray();
+        };
     }
 
-    // Esconde a janela sem encerrar o jogo.
+    // Esconde a janela sem exibir notificações do Windows.
     private void HideToTray()
     {
         Hide();
-
-        _trayIcon?.ShowBalloonTip(
-            1500,
-            "LoL Idle",
-            "O jogo continua funcionando na bandeja do Windows.",
-            Forms.ToolTipIcon.Info);
     }
 
     // Restaura a janela sem recarregar o site.
@@ -207,10 +205,10 @@ public partial class MainWindow : Window
         }
     }
 
-    // Minimizar envia o aplicativo para a bandeja.
+    // Minimiza normalmente para a barra de tarefas do Windows.
     private void Minimize_Click(object sender, RoutedEventArgs e)
     {
-        HideToTray();
+        WindowState = WindowState.Minimized;
     }
 
     private void Maximize_Click(object sender, RoutedEventArgs e)
@@ -226,13 +224,14 @@ public partial class MainWindow : Window
         HideToTray();
     }
 
-    // Também evita encerrar ao fechar pelo Alt + F4.
+    // Fechamentos que não sejam pelo botão X não enviam o app à bandeja.
+    // O botão X chama HideToTray diretamente; Alt + F4 apenas minimiza.
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
         if (!_allowExit)
         {
             e.Cancel = true;
-            HideToTray();
+            WindowState = WindowState.Minimized;
         }
     }
 
