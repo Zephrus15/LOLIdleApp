@@ -8,6 +8,7 @@ using System.Windows.Media;
 using Color = System.Windows.Media.Color;
 using Brushes = System.Windows.Media.Brushes;
 using Button = System.Windows.Controls.Button;
+using TabControl = System.Windows.Controls.TabControl;
 using Cursors = System.Windows.Input.Cursors;
 
 namespace LoLIdleDesktop;
@@ -158,7 +159,7 @@ public sealed class AuxiliaryPanelWindow : Window
             {
                 Content = action.Label,
                 Tag = action,
-                HorizontalContentAlignment = HorizontalAlignment.Left,
+                HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left,
                 Padding = new Thickness(10, 7, 10, 7),
                 Margin = new Thickness(0, 0, 0, 6),
                 Background = new SolidColorBrush(Color.FromRgb(34, 39, 49)),
