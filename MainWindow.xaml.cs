@@ -702,6 +702,7 @@ public partial class MainWindow : Window
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(66) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
+            toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.Children.Add(new TextBlock
             {
                 Text = "LoL Idle",
@@ -733,7 +734,35 @@ public partial class MainWindow : Window
                     ? "Desativar janela sempre no topo"
                     : "Ativar janela sempre no topo";
             };
-            Grid.SetColumn(topmostButton, 5);
+            var audioMuteButton = new Button
+            {
+                Content = _settings.MasterMuted ? "🔇" : "🔊",
+                Foreground = _settings.MasterMuted
+                    ? new SolidColorBrush(Color.FromRgb(232, 207, 143))
+                    : new SolidColorBrush(Color.FromRgb(216, 220, 228)),
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                FontSize = 15,
+                Cursor = Cursors.Hand,
+                ToolTip = _settings.MasterMuted ? "Ativar todo o áudio" : "Silenciar todo o áudio"
+            };
+            audioMuteButton.Click += (_, _) =>
+            {
+                _settings.MasterMuted = !_settings.MasterMuted;
+                audioMuteButton.Content = _settings.MasterMuted ? "🔇" : "🔊";
+                audioMuteButton.Foreground = _settings.MasterMuted
+                    ? new SolidColorBrush(Color.FromRgb(232, 207, 143))
+                    : new SolidColorBrush(Color.FromRgb(216, 220, 228));
+                audioMuteButton.ToolTip = _settings.MasterMuted
+                    ? "Ativar todo o áudio"
+                    : "Silenciar todo o áudio";
+                SaveWindowSettings();
+                _ = ApplyAudioSettingsAsync();
+            };
+            Grid.SetColumn(audioMuteButton, 5);
+            toolbarGrid.Children.Add(audioMuteButton);
+
+            Grid.SetColumn(topmostButton, 6);
             toolbarGrid.Children.Add(topmostButton);
 
             var settingsButton = new Button
@@ -769,7 +798,7 @@ public partial class MainWindow : Window
                 ToolTip = "Fechar janela flutuante"
             };
             closeButton.Click += (_, _) => popupWindow.Close();
-            Grid.SetColumn(closeButton, 6);
+            Grid.SetColumn(closeButton, 7);
             toolbarGrid.Children.Add(closeButton);
 
             toolbar.MouseLeftButtonDown += (_, args) =>
