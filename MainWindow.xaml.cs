@@ -27,6 +27,54 @@ public partial class MainWindow : Window
     private const string GameUrl = "https://lolidle.com/jogar";
     private const string GameHost = "lolidle.com";
 
+    // Instalado antes dos scripts do jogo para acompanhar AudioContext desde sua criação.
+    private const string AudioBootstrapScript = @"(() => {
+        if (window.__lolIdleAudioControlInstalled) return;
+        window.__lolIdleAudioControlInstalled = true;
+        const contexts = new Set();
+        const pausedByUs = new WeakSet();
+        const NativeAudioContext = window.AudioContext || window.webkitAudioContext;
+        if (NativeAudioContext) {
+            const WrappedAudioContext = new Proxy(NativeAudioContext, {
+                construct(target, args, newTarget) {
+                    const context = Reflect.construct(target, args, newTarget);
+                    contexts.add(context);
+                    return context;
+                }
+            });
+            try {
+                if (window.AudioContext) window.AudioContext = WrappedAudioContext;
+                if (window.webkitAudioContext) window.webkitAudioContext = WrappedAudioContext;
+            } catch (_) {}
+        }
+        window.__lolIdleSetAudioPrefs = async (prefs) => {
+            document.querySelectorAll('audio,video').forEach(el => {
+                if (!el.__lolIdleOriginalMutedSaved) {
+                    el.__lolIdleOriginalMuted = el.muted;
+                    el.__lolIdleOriginalMutedSaved = true;
+                }
+                const hint = [el.currentSrc, el.src, el.id, el.className,
+                    el.getAttribute('aria-label'), el.getAttribute('data-name')]
+                    .filter(Boolean).join(' ').toLowerCase();
+                const isMusic = /(music|bgm|background|theme|trilha)/.test(hint);
+                const isEffect = /(sfx|effect|effects|sound|click|attack|hit)/.test(hint);
+                const channelMuted = isMusic ? prefs.musicMuted : isEffect ? prefs.effectsMuted : false;
+                el.muted = !!(prefs.masterMuted || channelMuted || el.__lolIdleOriginalMuted);
+            });
+            for (const context of contexts) {
+                try {
+                    if (prefs.masterMuted && context.state === 'running') {
+                        pausedByUs.add(context);
+                        await context.suspend();
+                    } else if (!prefs.masterMuted && pausedByUs.has(context)) {
+                        pausedByUs.delete(context);
+                        await context.resume();
+                    }
+                } catch (_) {}
+            }
+        };
+    })();";
+
     private Forms.NotifyIcon? _trayIcon;
     private bool _allowExit;
     private bool _settingsReady;
@@ -392,6 +440,7 @@ public partial class MainWindow : Window
                 userDataFolder: userData);
 
             await GameView.EnsureCoreWebView2Async(_webViewEnvironment);
+            await GameView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(AudioBootstrapScript);
             FloatingReopenButton.IsEnabled = true;
 
             GameView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
@@ -787,7 +836,8 @@ public partial class MainWindow : Window
 
             LogFloatingWindowEvent("Prepare: antes de EnsureCoreWebView2Async.");
             await view.EnsureCoreWebView2Async(_webViewEnvironment);
-            LogFloatingWindowEvent("Prepare: EnsureCoreWebView2Async concluído.");
+            await view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(AudioBootstrapScript);
+            LogFloatingWindowEvent("Prepare: EnsureCoreWebView2Async concluído e controle de áudio instalado.");
 
             view.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
             view.CoreWebView2.Settings.IsStatusBarEnabled = false;
@@ -1158,51 +1208,44 @@ public partial class MainWindow : Window
 
         var script = @"(() => {
             const prefs = " + preferences + @";
-            const classify = (el) => {
-                const hint = [el.currentSrc, el.src, el.id, el.className,
-                    el.getAttribute('aria-label'), el.getAttribute('data-name')]
-                    .filter(Boolean).join(' ').toLowerCase();
-                if (/(music|bgm|background|theme|trilha)/.test(hint)) return 'music';
-                if (/(sfx|effect|effects|sound|click|attack|hit)/.test(hint)) return 'effects';
-                return 'unknown';
-            };
-            const apply = (el) => {
-                if (!el || !('muted' in el)) return;
-                if (!el.__lolIdleOriginalMutedSaved) {
-                    el.__lolIdleOriginalMuted = el.muted;
-                    el.__lolIdleOriginalMutedSaved = true;
-                }
-                const type = classify(el);
-                const channelMuted = type === 'music' ? prefs.musicMuted :
-                    type === 'effects' ? prefs.effectsMuted : false;
-                el.muted = prefs.masterMuted || channelMuted || el.__lolIdleOriginalMuted;
-            };
-            document.querySelectorAll('audio,video').forEach(apply);
+            if (typeof window.__lolIdleSetAudioPrefs === 'function') {
+                window.__lolIdleSetAudioPrefs(prefs);
+            } else {
+                document.querySelectorAll('audio,video').forEach(el => {
+                    if (!el.__lolIdleOriginalMutedSaved) {
+                        el.__lolIdleOriginalMuted = el.muted;
+                        el.__lolIdleOriginalMutedSaved = true;
+                    }
+                    const hint = [el.currentSrc, el.src, el.id, el.className,
+                        el.getAttribute('aria-label'), el.getAttribute('data-name')]
+                        .filter(Boolean).join(' ').toLowerCase();
+                    const isMusic = /(music|bgm|background|theme|trilha)/.test(hint);
+                    const isEffect = /(sfx|effect|effects|sound|click|attack|hit)/.test(hint);
+                    const channelMuted = isMusic ? prefs.musicMuted : isEffect ? prefs.effectsMuted : false;
+                    el.muted = !!(prefs.masterMuted || channelMuted || el.__lolIdleOriginalMuted);
+                });
+            }
             if (!window.__lolIdleAudioObserver) {
                 window.__lolIdleAudioObserver = new MutationObserver(() => {
-                    document.querySelectorAll('audio,video').forEach(apply);
+                    if (typeof window.__lolIdleSetAudioPrefs === 'function')
+                        window.__lolIdleSetAudioPrefs(prefs);
                 });
                 window.__lolIdleAudioObserver.observe(document.documentElement, {
                     childList: true, subtree: true, attributes: true,
                     attributeFilter: ['src', 'id', 'class', 'data-name', 'aria-label']
                 });
             }
-            return { mediaElements: document.querySelectorAll('audio,video').length };
+            return { mediaElements: document.querySelectorAll('audio,video').length,
+                webAudioControl: typeof window.__lolIdleSetAudioPrefs === 'function' };
         })();";
 
-        try
+        foreach (var core in new[] { GameView?.CoreWebView2, _floatingView?.CoreWebView2 })
         {
-            if (GameView?.CoreWebView2 != null)
-                await GameView.CoreWebView2.ExecuteScriptAsync(script);
+            if (core == null)
+                continue;
+            try { await core.ExecuteScriptAsync(script); }
+            catch (Exception ex) { LogFloatingWindowEvent($"Audio: não foi possível aplicar preferências: {ex.Message}"); }
         }
-        catch { }
-
-        try
-        {
-            if (_floatingView?.CoreWebView2 != null)
-                await _floatingView.CoreWebView2.ExecuteScriptAsync(script);
-        }
-        catch { }
     }
 
     // Abre a janela já preparada sem inicializar WebView2 durante o clique.
