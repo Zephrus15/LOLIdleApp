@@ -481,6 +481,7 @@ public partial class MainWindow : Window
         window.WindowStyle = WindowStyle.SingleBorderWindow;
         window.ResizeMode = ResizeMode.CanResize;
         window.ShowInTaskbar = true;
+        window.ShowActivated = true;
         window.Opacity = 1;
         window.Width = Math.Min(width, workWidth);
         window.Height = Math.Min(height, workHeight);
@@ -491,7 +492,14 @@ public partial class MainWindow : Window
         if (!window.IsVisible)
             window.Show();
 
+        // Garante que a janela recém-revelada fique acima do jogo e receba foco.
+        window.Topmost = true;
         window.Activate();
+        window.Dispatcher.BeginInvoke(new Action(() =>
+        {
+            window.Topmost = false;
+            window.Activate();
+        }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
     }
 
     // Log técnico mínimo, sem gravar URLs completas, cookies ou tokens.
@@ -675,7 +683,7 @@ public partial class MainWindow : Window
         {
             if (_floatingWindow != null)
             {
-                _floatingWindow.Activate();
+                ShowFloatingWindow(_floatingWindow);
                 return;
             }
 
