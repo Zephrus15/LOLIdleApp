@@ -442,7 +442,6 @@ public partial class MainWindow : Window
 
             await GameView.EnsureCoreWebView2Async(_webViewEnvironment);
             await GameView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(AudioBootstrapScript);
-            FloatingReopenButton.IsEnabled = true;
 
             GameView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
             GameView.CoreWebView2.Settings.IsStatusBarEnabled = false;
