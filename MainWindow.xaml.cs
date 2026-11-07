@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Web.WebView2.Core;
 using System;
 using System.IO;
@@ -779,7 +780,7 @@ public partial class MainWindow : Window
             toolbarGrid.Children.Add(settingsButton);
 
             var questToggleButton = CreatePanelToggleButton("Missões", "quest", 2);
-            var sidebarToggleButton = CreatePanelToggleButton("Itens", "sidebar", 3);
+            var sidebarToggleButton = CreatePanelToggleButton("Barra lateral", "sidebar", 3);
             var characterToggleButton = CreatePanelToggleButton("Herói", "character", 4);
             toolbarGrid.Children.Add(questToggleButton);
             toolbarGrid.Children.Add(sidebarToggleButton);
@@ -1151,6 +1152,7 @@ public partial class MainWindow : Window
         public string Quest { get; set; } = "";
         public string Sidebar { get; set; } = "";
         public string Character { get; set; } = "";
+        public List<PanelActionItem> Actions { get; set; } = new();
     }
 
     // Lê somente texto presente no DOM do jogo. Não estima nem inventa atributos.
@@ -1169,7 +1171,7 @@ public partial class MainWindow : Window
 
         const string script = @"(() => {
             const lines = (document.body?.innerText || '')
-                .split(/\n+/).map(x => x.trim()).filter(Boolean);
+                .split(/\\n+/).map(x => x.trim()).filter(Boolean);
             const collect = (pattern) => {
                 const found = [];
                 for (let i = 0; i < lines.length; i++) {
@@ -1178,12 +1180,51 @@ public partial class MainWindow : Window
                             found.push(lines[j]);
                     }
                 }
-                return [...new Set(found)].slice(0, 28).join('\n');
+                return [...new Set(found)].slice(0, 28).join('\\n');
             };
+            const visible = (el) => {
+                const r = el.getBoundingClientRect();
+                const st = getComputedStyle(el);
+                return r.width > 0 && r.height > 0 && st.display !== 'none' &&
+                    st.visibility !== 'hidden' && Number(st.opacity || 1) > 0;
+            };
+            let nextId = Number(window.__lolIdleNextActionId || 0);
+            const actions = [];
+            const candidates = document.querySelectorAll('button,[role=""button""],a,[onclick],summary');
+            for (const el of candidates) {
+                if (!visible(el)) continue;
+                const label = (el.innerText || el.getAttribute('aria-label') ||
+                    el.getAttribute('title') || el.getAttribute('alt') ||
+                    el.getAttribute('data-tooltip') || el.value || '')
+                    .replace(/\\s+/g, ' ').trim().slice(0, 90);
+                if (!label) continue;
+                const region = el.closest('aside,section,article,[role=""dialog""],li') || el.parentElement;
+                const context = (region?.innerText || '').replace(/\\s+/g, ' ').trim().slice(0, 180);
+                const hay = (label + ' ' + context + ' ' + (el.getAttribute('class') || '')).toLowerCase();
+                let category = 'sidebar';
+                if (/quest|mission|miss[aã]o|objetivo|recompensa|daily|weekly|claim reward/.test(hay))
+                    category = 'quest';
+                else if (/skill|ability|habilidade|personagem|character|hero|mana|health|vida|atributo|level|nível/.test(hay))
+                    category = 'character';
+                else if (/item|invent[aá]rio|mochila|equip|po[cç][aã]o|shop|loja|craft|upgrade|comprar|vender|usar/.test(hay))
+                    category = 'sidebar';
+                if (!el.hasAttribute('data-lolidle-action-id')) {
+                    nextId++;
+                    el.setAttribute('data-lolidle-action-id', String(nextId));
+                }
+                actions.push({
+                    id: el.getAttribute('data-lolidle-action-id'),
+                    label,
+                    category,
+                    context
+                });
+            }
+            window.__lolIdleNextActionId = nextId;
             return {
                 quest: collect(/missões|missao|quest|progresso|objetivo|recompensa/i),
-                sidebar: collect(/mochila|equipamento|itens|poções|pocões|poção|runas|cartas/i),
-                character: collect(/nível|nivel|experiência|experiencia|habilidades|atributos|dano|armadura|poder|mana|crítico|critico|esquiva|abates|mortes/i)
+                sidebar: collect(/mochila|equipamento|itens|poções|pocões|poção|runas|cartas|loja|inventário/i),
+                character: collect(/nível|nivel|experiência|experiencia|habilidades|atributos|dano|armadura|poder|mana|crítico|critico|esquiva|abates|mortes|vida|saúde/i),
+                actions
             };
         })();";
 
@@ -1196,15 +1237,67 @@ public partial class MainWindow : Window
                 return;
 
             if (_panelWindows.TryGetValue("quest", out var quest) && quest.IsVisible)
+            {
                 quest.SetPanelContent(snapshot.Quest);
+                quest.SetPanelActions(snapshot.Actions.Where(x => x.Category == "quest"),
+                    action => _ = ExecutePanelActionAsync(action));
+            }
             if (_panelWindows.TryGetValue("sidebar", out var sidebar) && sidebar.IsVisible)
+            {
                 sidebar.SetPanelContent(snapshot.Sidebar);
+                sidebar.SetPanelActions(snapshot.Actions.Where(x => x.Category == "sidebar"),
+                    action => _ = ExecutePanelActionAsync(action));
+            }
             if (_panelWindows.TryGetValue("character", out var character) && character.IsVisible)
+            {
                 character.SetPanelContent(snapshot.Character);
+                character.SetPanelActions(snapshot.Actions.Where(x => x.Category == "character"),
+                    action => _ = ExecutePanelActionAsync(action));
+            }
         }
         catch
         {
             // Uma leitura indisponível não deve interromper o jogo.
+        }
+    }
+
+    private async Task ExecutePanelActionAsync(PanelActionItem action)
+    {
+        if (Regex.IsMatch(action.Label,
+            @"buy|purchase|upgrade|sell|claim|collect|use|equip|enhance|unlock|comprar|vender|coletar|resgatar|usar|equipar|melhorar|desbloquear|forjar|gastar",
+            RegexOptions.IgnoreCase))
+        {
+            var answer = MessageBox.Show(
+                $"Deseja executar esta ação dentro do LoL Idle?\\n\\n{action.Label}",
+                "Confirmar ação do jogo",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question);
+            if (answer != MessageBoxResult.Yes)
+                return;
+        }
+
+        var source = _floatingView?.CoreWebView2 ??
+            GameView?.CoreWebView2;
+        if (source == null)
+            return;
+
+        try
+        {
+            var id = JsonSerializer.Serialize(action.Id);
+            var result = await source.ExecuteScriptAsync(
+                $"(() => {{ const el = document.querySelector('[data-lolidle-action-id=' + {id} + ']'); if (!el || !el.isConnected) return false; el.click(); return true; }})()");
+            var executed = string.Equals(result, "true", StringComparison.OrdinalIgnoreCase);
+            if (_panelWindows.TryGetValue(action.Category, out var panel))
+                panel.SetActionStatus(executed
+                    ? $"Ação enviada ao jogo: {action.Label}"
+                    : "Esse controle mudou ou não está mais disponível. Atualizando a lista...");
+            await Task.Delay(180);
+            await RefreshPanelDataAsync();
+        }
+        catch (Exception ex)
+        {
+            if (_panelWindows.TryGetValue(action.Category, out var panel))
+                panel.SetActionStatus($"Não foi possível executar a ação: {ex.Message}");
         }
     }
 
@@ -1216,11 +1309,11 @@ public partial class MainWindow : Window
         var (title, description, opacity) = key switch
         {
             "quest" => ("Missões", "Aguardando informações visíveis na interface do jogo.", _settings.QuestPanelOpacity),
-            "sidebar" => ("Itens", "Aguardando informações visíveis na interface do jogo.", _settings.SidebarPanelOpacity),
+            "sidebar" => ("Barra lateral", "Aguardando informações visíveis na interface do jogo.", _settings.SidebarPanelOpacity),
             _ => ("Herói", "Aguardando informações visíveis na interface do jogo.", _settings.CharacterPanelOpacity)
         };
 
-        var panel = new AuxiliaryPanelWindow(title, description, true, opacity);
+        var panel = new AuxiliaryPanelWindow(title, description, key != "character", opacity);
         panel.Closed += (_, _) => _panelWindows.Remove(key);
         _panelWindows[key] = panel;
         return panel;
