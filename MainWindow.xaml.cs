@@ -81,7 +81,6 @@ public partial class MainWindow : Window
     private bool _allowExit;
     private bool _settingsReady;
     private System.Windows.Threading.DispatcherTimer? _settingsSaveTimer;
-    private System.Windows.Threading.DispatcherTimer? _panelRefreshTimer;
     private System.Drawing.Icon? _appIcon;
     private CoreWebView2Environment? _webViewEnvironment;
     private string _lastFloatingUri = GameUrl;
@@ -766,7 +765,7 @@ public partial class MainWindow : Window
                 economyButton.IsEnabled = false;
                 try
                 {
-                    await ActivateGameEconomyModeAsync(view.CoreWebView2);
+                    await ActivateGameEconomyModeAsync(_floatingView?.CoreWebView2 ?? _preparedFloatingView?.CoreWebView2);
                 }
                 finally
                 {
