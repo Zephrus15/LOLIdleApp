@@ -343,6 +343,7 @@ public partial class MainWindow : Window
                 userDataFolder: userData);
 
             await GameView.EnsureCoreWebView2Async(_webViewEnvironment);
+            FloatingReopenButton.IsEnabled = true;
 
             GameView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
             GameView.CoreWebView2.Settings.IsStatusBarEnabled = false;
