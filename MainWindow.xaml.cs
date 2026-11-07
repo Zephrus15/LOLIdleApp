@@ -655,7 +655,7 @@ public partial class MainWindow : Window
 
                     // Notifica ao WebView2 que o popup foi realmente fechado,
                     // para que o jogo atualize o estado de window.closed.
-                    try { closedView?.CoreWebView2?.Close(); } catch { }
+                    // O controle WPF implementa Dispose; CoreWebView2 não expõe Close().
                     try { closedView?.Dispose(); } catch { }
 
                     LogFloatingWindowEvent("FloatingWindow: janela fechada; referências liberadas e popup encerrado.");
