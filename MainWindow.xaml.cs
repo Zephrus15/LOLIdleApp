@@ -1,6 +1,7 @@
 using Microsoft.Web.WebView2.Core;
 using System;
 using System.IO;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Text.Json;
 using System.Windows;
@@ -31,6 +32,9 @@ public partial class MainWindow : Window
     private Window? _preparedFloatingWindow;
     private Microsoft.Web.WebView2.Wpf.WebView2? _preparedFloatingView;
     private bool _isPreparingFloatingView;
+    private Window? _floatingSettingsWindow;
+    private readonly Dictionary<string, AuxiliaryPanelWindow> _panelWindows = new();
+    private WindowSettings _settings = new();
     private string SettingsPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "LoLIdleDesktop", "window-settings.json");
@@ -48,6 +52,15 @@ public partial class MainWindow : Window
         public double Left { get; set; } = 100;
         public double Top { get; set; } = 100;
         public bool IsAlwaysOnTop { get; set; }
+        public bool ShowQuestPanel { get; set; }
+        public bool ShowSidebarPanel { get; set; }
+        public bool ShowCharacterPanel { get; set; }
+        public double QuestPanelOpacity { get; set; } = 0.30;
+        public double SidebarPanelOpacity { get; set; } = 0.60;
+        public double CharacterPanelOpacity { get; set; } = 0.80;
+        public bool MusicMuted { get; set; }
+        public bool EffectsMuted { get; set; }
+        public bool MasterMuted { get; set; }
     }
 
     public MainWindow()
@@ -148,6 +161,7 @@ public partial class MainWindow : Window
 
         if (settings != null)
         {
+            _settings = settings;
             if (settings.NormalWidth >= 480 && settings.NormalWidth <= 10000)
                 _normalWidth = settings.NormalWidth;
 
@@ -183,16 +197,13 @@ public partial class MainWindow : Window
         {
             Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
 
-            var settings = new WindowSettings
-            {
-                NormalWidth = _normalWidth,
-                NormalHeight = _normalHeight,
-                Left = Left,
-                Top = Top,
-            };
+            _settings.NormalWidth = _normalWidth;
+            _settings.NormalHeight = _normalHeight;
+            _settings.Left = Left;
+            _settings.Top = Top;
 
             File.WriteAllText(SettingsPath,
-                JsonSerializer.Serialize(settings, new JsonSerializerOptions
+                JsonSerializer.Serialize(_settings, new JsonSerializerOptions
                 {
                     WriteIndented = true
                 }));
@@ -389,6 +400,8 @@ public partial class MainWindow : Window
                 StatusText.Text = args.IsSuccess
                     ? "LoL Idle pronto  •  Sua sessão fica salva neste computador"
                     : "Não foi possível carregar. Verifique sua conexão e tente atualizar.";
+                if (args.IsSuccess)
+                    _ = ApplyAudioSettingsAsync();
             };
 
             GameView.CoreWebView2.NewWindowRequested += (_, args) =>
@@ -567,6 +580,7 @@ public partial class MainWindow : Window
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
+            toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             toolbarGrid.Children.Add(new TextBlock
             {
                 Text = "LoL Idle",
@@ -598,8 +612,22 @@ public partial class MainWindow : Window
                     ? "Desativar janela sempre no topo"
                     : "Ativar janela sempre no topo";
             };
-            Grid.SetColumn(topmostButton, 1);
+            Grid.SetColumn(topmostButton, 2);
             toolbarGrid.Children.Add(topmostButton);
+
+            var settingsButton = new Button
+            {
+                Content = "⚙",
+                Foreground = new SolidColorBrush(Color.FromRgb(216, 220, 228)),
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                FontSize = 16,
+                Cursor = Cursors.Hand,
+                ToolTip = "Configurações dos painéis e áudio"
+            };
+            settingsButton.Click += (_, _) => ShowFloatingSettings();
+            Grid.SetColumn(settingsButton, 1);
+            toolbarGrid.Children.Add(settingsButton);
 
             var closeButton = new Button
             {
@@ -613,7 +641,7 @@ public partial class MainWindow : Window
                 ToolTip = "Fechar janela flutuante"
             };
             closeButton.Click += (_, _) => popupWindow.Close();
-            Grid.SetColumn(closeButton, 2);
+            Grid.SetColumn(closeButton, 3);
             toolbarGrid.Children.Add(closeButton);
 
             toolbar.MouseLeftButtonDown += (_, args) =>
@@ -686,6 +714,11 @@ public partial class MainWindow : Window
             view.CoreWebView2.Settings.AreDevToolsEnabled = false;
             view.CoreWebView2.NewWindowRequested += (_, popupArgs) =>
                 HandleNewWindowRequested(popupArgs);
+            view.CoreWebView2.NavigationCompleted += (_, navArgs) =>
+            {
+                if (navArgs.IsSuccess)
+                    _ = ApplyAudioSettingsAsync();
+            };
 
             popupWindow.Hide();
             popupWindow.Opacity = 1;
@@ -717,6 +750,261 @@ public partial class MainWindow : Window
         {
             _isPreparingFloatingView = false;
         }
+    }
+
+
+    // Abre o centro de controle dos painéis independentes e do áudio.
+    private void ShowFloatingSettings()
+    {
+        if (_floatingSettingsWindow != null)
+        {
+            _floatingSettingsWindow.Activate();
+            return;
+        }
+
+        var window = new Window
+        {
+            Title = "LoL Idle - Configurações",
+            Width = 430,
+            Height = 650,
+            MinWidth = 380,
+            MinHeight = 500,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Owner = _floatingWindow ?? this,
+            ShowInTaskbar = false,
+            Background = new SolidColorBrush(Color.FromRgb(17, 19, 24)),
+            Foreground = Brushes.White
+        };
+        _floatingSettingsWindow = window;
+        window.Closed += (_, _) => _floatingSettingsWindow = null;
+
+        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
+        var stack = new StackPanel { Margin = new Thickness(18) };
+        scroll.Content = stack;
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = "PAINÉIS INDEPENDENTES",
+            Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143)),
+            FontWeight = FontWeights.Bold,
+            FontSize = 13,
+            Margin = new Thickness(0, 0, 0, 12)
+        });
+
+        AddPanelSetting(stack, "Missões", "quest", _settings.ShowQuestPanel, _settings.QuestPanelOpacity);
+        AddPanelSetting(stack, "Barra lateral", "sidebar", _settings.ShowSidebarPanel, _settings.SidebarPanelOpacity);
+        AddPanelSetting(stack, "Personagem", "character", _settings.ShowCharacterPanel, _settings.CharacterPanelOpacity);
+
+        stack.Children.Add(new Separator { Margin = new Thickness(0, 18, 0, 16), Background = new SolidColorBrush(Color.FromRgb(55, 61, 72)) });
+        stack.Children.Add(new TextBlock
+        {
+            Text = "ÁUDIO",
+            Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143)),
+            FontWeight = FontWeights.Bold,
+            FontSize = 13,
+            Margin = new Thickness(0, 0, 0, 10)
+        });
+
+        AddAudioSetting(stack, "Silenciar música", _settings.MusicMuted, value =>
+        {
+            _settings.MusicMuted = value;
+            SaveWindowSettings();
+            _ = ApplyAudioSettingsAsync();
+        });
+        AddAudioSetting(stack, "Silenciar efeitos sonoros", _settings.EffectsMuted, value =>
+        {
+            _settings.EffectsMuted = value;
+            SaveWindowSettings();
+            _ = ApplyAudioSettingsAsync();
+        });
+        AddAudioSetting(stack, "Silenciar todo o áudio", _settings.MasterMuted, value =>
+        {
+            _settings.MasterMuted = value;
+            SaveWindowSettings();
+            _ = ApplyAudioSettingsAsync();
+        });
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = "A separação entre música e efeitos depende de como o jogo identifica cada som. O controle geral atua sobre os elementos de áudio e vídeo HTML; sons gerados diretamente por Web Audio podem não responder.",
+            Foreground = new SolidColorBrush(Color.FromRgb(145, 153, 168)),
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 14, 0, 0)
+        });
+
+        window.Content = scroll;
+        window.Show();
+        window.Activate();
+    }
+
+    private void AddPanelSetting(Panel parent, string title, string key, bool visible, double opacity)
+    {
+        var group = new StackPanel { Margin = new Thickness(0, 0, 0, 14) };
+        var toggle = new CheckBox
+        {
+            Content = "Ativar " + title,
+            IsChecked = visible,
+            Foreground = Brushes.White,
+            FontSize = 13,
+            Margin = new Thickness(0, 0, 0, 7)
+        };
+        toggle.Checked += (_, _) => SetPanelVisibility(key, true);
+        toggle.Unchecked += (_, _) => SetPanelVisibility(key, false);
+        group.Children.Add(toggle);
+
+        var slider = new Slider
+        {
+            Minimum = 15,
+            Maximum = 100,
+            Value = Math.Clamp(opacity * 100, 15, 100),
+            TickFrequency = 5,
+            IsSnapToTickEnabled = false,
+            IsEnabled = key != "character" || true
+        };
+        var valueText = new TextBlock
+        {
+            Text = $"Opacidade: {Math.Round(slider.Value)}%",
+            Foreground = new SolidColorBrush(Color.FromRgb(155, 164, 178)),
+            FontSize = 11,
+            Margin = new Thickness(0, 3, 0, 0)
+        };
+        slider.ValueChanged += (_, _) =>
+        {
+            valueText.Text = $"Opacidade: {Math.Round(slider.Value)}% (ao passar o mouse: 100%)";
+            SetPanelOpacity(key, slider.Value / 100.0);
+        };
+        group.Children.Add(slider);
+        group.Children.Add(valueText);
+        parent.Children.Add(group);
+    }
+
+    private static void AddAudioSetting(Panel parent, string title, bool initialValue, Action<bool> changed)
+    {
+        var check = new CheckBox
+        {
+            Content = title,
+            IsChecked = initialValue,
+            Foreground = Brushes.White,
+            FontSize = 13,
+            Margin = new Thickness(0, 5, 0, 8)
+        };
+        check.Checked += (_, _) => changed(true);
+        check.Unchecked += (_, _) => changed(false);
+        parent.Children.Add(check);
+    }
+
+    private void SetPanelVisibility(string key, bool visible)
+    {
+        switch (key)
+        {
+            case "quest": _settings.ShowQuestPanel = visible; break;
+            case "sidebar": _settings.ShowSidebarPanel = visible; break;
+            case "character": _settings.ShowCharacterPanel = visible; break;
+        }
+
+        if (visible)
+        {
+            var panel = GetOrCreatePanel(key);
+            panel.SetPanelVisible(true);
+        }
+        else if (_panelWindows.TryGetValue(key, out var panel))
+        {
+            panel.SetPanelVisible(false);
+        }
+
+        SaveWindowSettings();
+    }
+
+    private void SetPanelOpacity(string key, double opacity)
+    {
+        switch (key)
+        {
+            case "quest": _settings.QuestPanelOpacity = opacity; break;
+            case "sidebar": _settings.SidebarPanelOpacity = opacity; break;
+            case "character": _settings.CharacterPanelOpacity = opacity; break;
+        }
+
+        if (_panelWindows.TryGetValue(key, out var panel))
+            panel.SetPanelOpacity(opacity);
+
+        SaveWindowSettings();
+    }
+
+    private AuxiliaryPanelWindow GetOrCreatePanel(string key)
+    {
+        if (_panelWindows.TryGetValue(key, out var existing))
+            return existing;
+
+        var (title, description, opacity) = key switch
+        {
+            "quest" => ("Missões", "Janela independente reservada para as missões do LoL Idle. A leitura dos dados reais do jogo será conectada na próxima etapa.", _settings.QuestPanelOpacity),
+            "sidebar" => ("Barra lateral", "Janela independente para os indicadores e atalhos laterais do jogo. Os dados serão conectados sem inventar valores.", _settings.SidebarPanelOpacity),
+            _ => ("Personagem", "Janela independente para as informações do personagem. Nome, nível, experiência e habilidades dependem da leitura da interface real do jogo.", _settings.CharacterPanelOpacity)
+        };
+
+        var panel = new AuxiliaryPanelWindow(title, description, true, opacity);
+        panel.Closed += (_, _) => _panelWindows.Remove(key);
+        _panelWindows[key] = panel;
+        return panel;
+    }
+
+    private async Task ApplyAudioSettingsAsync()
+    {
+        var preferences = JsonSerializer.Serialize(new
+        {
+            musicMuted = _settings.MusicMuted,
+            effectsMuted = _settings.EffectsMuted,
+            masterMuted = _settings.MasterMuted
+        });
+
+        var script = @"(() => {
+            const prefs = " + preferences + @";
+            const classify = (el) => {
+                const hint = [el.currentSrc, el.src, el.id, el.className,
+                    el.getAttribute('aria-label'), el.getAttribute('data-name')]
+                    .filter(Boolean).join(' ').toLowerCase();
+                if (/(music|bgm|background|theme|trilha)/.test(hint)) return 'music';
+                if (/(sfx|effect|effects|sound|click|attack|hit)/.test(hint)) return 'effects';
+                return 'unknown';
+            };
+            const apply = (el) => {
+                if (!el || !('muted' in el)) return;
+                if (!el.__lolIdleOriginalMutedSaved) {
+                    el.__lolIdleOriginalMuted = el.muted;
+                    el.__lolIdleOriginalMutedSaved = true;
+                }
+                const type = classify(el);
+                const channelMuted = type === 'music' ? prefs.musicMuted :
+                    type === 'effects' ? prefs.effectsMuted : false;
+                el.muted = prefs.masterMuted || channelMuted || el.__lolIdleOriginalMuted;
+            };
+            document.querySelectorAll('audio,video').forEach(apply);
+            if (!window.__lolIdleAudioObserver) {
+                window.__lolIdleAudioObserver = new MutationObserver(() => {
+                    document.querySelectorAll('audio,video').forEach(apply);
+                });
+                window.__lolIdleAudioObserver.observe(document.documentElement, {
+                    childList: true, subtree: true, attributes: true,
+                    attributeFilter: ['src', 'id', 'class', 'data-name', 'aria-label']
+                });
+            }
+            return { mediaElements: document.querySelectorAll('audio,video').length };
+        })();";
+
+        try
+        {
+            if (GameView?.CoreWebView2 != null)
+                await GameView.CoreWebView2.ExecuteScriptAsync(script);
+        }
+        catch { }
+
+        try
+        {
+            if (_floatingView?.CoreWebView2 != null)
+                await _floatingView.CoreWebView2.ExecuteScriptAsync(script);
+        }
+        catch { }
     }
 
     // Abre a janela já preparada sem inicializar WebView2 durante o clique.
