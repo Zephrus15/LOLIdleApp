@@ -118,6 +118,8 @@ public partial class MainWindow : Window
 
     private sealed class WindowSettings
     {
+        public WindowSettings() { }
+
         public double Left { get; set; } = 100;
         public double Top { get; set; } = 100;
         public double NormalWidth { get; set; } = 1280;
