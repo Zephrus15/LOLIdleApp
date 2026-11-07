@@ -460,7 +460,11 @@ public partial class MainWindow : Window
                 var newCore = await CreateFloatingWebViewAsync(owner);
                 args.NewWindow = newCore;
                 args.Handled = true;
-                LogFloatingWindowEvent("Nova instância WebView2 atribuída ao popup.");
+
+                // Só exibe a janela depois que o CoreWebView2 foi entregue ao evento.
+                // Assim o popup não aparece antes de o WebView2 assumir a solicitação.
+                _floatingWindow?.Show();
+                LogFloatingWindowEvent("Nova instância WebView2 atribuída ao popup e janela exibida.");
             }
             catch (Exception ex)
             {
@@ -612,7 +616,8 @@ public partial class MainWindow : Window
                 _ = HandleNewWindowRequestedAsync(popupArgs, popupWindow);
             };
 
-            popupWindow.Show();
+            // A janela será exibida pelo chamador depois que args.NewWindow
+            // receber esta instância, ou imediatamente no fluxo de abertura manual.
             return popupView.CoreWebView2;
         }
         catch
@@ -639,6 +644,8 @@ public partial class MainWindow : Window
             }
 
             var floatingCore = await CreateFloatingWebViewAsync(this);
+            _floatingWindow?.Show();
+
             var target = Uri.TryCreate(_lastFloatingUri, UriKind.Absolute, out var savedUri) &&
                          savedUri.Scheme is "http" or "https"
                 ? savedUri.ToString()
