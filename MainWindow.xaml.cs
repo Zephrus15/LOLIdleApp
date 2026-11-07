@@ -1,8 +1,8 @@
-
 using Microsoft.Web.WebView2.Core;
 using System;
 using System.IO;
 using System.ComponentModel;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
 using System.Runtime.InteropServices;
@@ -16,17 +16,33 @@ public partial class MainWindow : Window
 {
     private const string GameUrl = "https://lolidle.com/jogar";
     private const string GameHost = "lolidle.com";
+    private const double CompactWidth = 720;
+    private const double CompactHeight = 480;
 
     private Forms.NotifyIcon? _trayIcon;
     private bool _allowExit;
     private bool _isCompact;
+    private bool _settingsReady;
     private System.Drawing.Icon? _appIcon;
+    private string SettingsPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "LoLIdleDesktop", "window-settings.json");
 
     private const int WM_GETMINMAXINFO = 0x0024;
     private const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
 
     private double _normalWidth = 1280;
     private double _normalHeight = 800;
+
+    private sealed class WindowSettings
+    {
+        public double NormalWidth { get; set; } = 1280;
+        public double NormalHeight { get; set; } = 800;
+        public double Left { get; set; } = 100;
+        public double Top { get; set; } = 100;
+        public bool IsCompact { get; set; }
+        public bool IsAlwaysOnTop { get; set; }
+    }
 
     public MainWindow()
     {
@@ -97,6 +113,104 @@ public partial class MainWindow : Window
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
 
+    // Lê as preferências e recupera a posição/tamanho usados anteriormente.
+    private void RestoreWindowSettings()
+    {
+        WindowSettings? settings = null;
+
+        try
+        {
+            if (File.Exists(SettingsPath))
+            {
+                settings = JsonSerializer.Deserialize<WindowSettings>(
+                    File.ReadAllText(SettingsPath));
+            }
+        }
+        catch
+        {
+            // Um arquivo de preferências inválido não impede o jogo de abrir.
+        }
+
+        if (settings != null)
+        {
+            if (settings.NormalWidth >= 480 && settings.NormalWidth <= 10000)
+                _normalWidth = settings.NormalWidth;
+
+            if (settings.NormalHeight >= 320 && settings.NormalHeight <= 10000)
+                _normalHeight = settings.NormalHeight;
+
+            Width = _normalWidth;
+            Height = _normalHeight;
+
+            double minLeft = SystemParameters.VirtualScreenLeft;
+            double minTop = SystemParameters.VirtualScreenTop;
+            double maxLeft = minLeft + SystemParameters.VirtualScreenWidth - 120;
+            double maxTop = minTop + SystemParameters.VirtualScreenHeight - 80;
+
+            if (double.IsFinite(settings.Left) && double.IsFinite(settings.Top))
+            {
+                Left = Math.Clamp(settings.Left, minLeft, Math.Max(minLeft, maxLeft));
+                Top = Math.Clamp(settings.Top, minTop, Math.Max(minTop, maxTop));
+            }
+
+            Topmost = settings.IsAlwaysOnTop;
+            UpdateAlwaysOnTopButton();
+
+            if (settings.IsCompact)
+                SetCompactLayout(true);
+        }
+
+        _settingsReady = true;
+    }
+
+    // Salva as preferências no perfil local do Windows.
+    private void SaveWindowSettings()
+    {
+        if (!_settingsReady || WindowState == WindowState.Minimized)
+            return;
+
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
+
+            var settings = new WindowSettings
+            {
+                NormalWidth = _normalWidth,
+                NormalHeight = _normalHeight,
+                Left = Left,
+                Top = Top,
+                IsCompact = _isCompact,
+                IsAlwaysOnTop = Topmost
+            };
+
+            File.WriteAllText(SettingsPath,
+                JsonSerializer.Serialize(settings, new JsonSerializerOptions
+                {
+                    WriteIndented = true
+                }));
+        }
+        catch
+        {
+            // Falha ao salvar preferências não deve interromper o aplicativo.
+        }
+    }
+
+    private void Window_LocationChanged(object? sender, EventArgs e)
+    {
+        SaveWindowSettings();
+    }
+
+    private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (_settingsReady && !_isCompact && WindowState == WindowState.Normal)
+        {
+            _normalWidth = Width;
+            _normalHeight = Height;
+        }
+
+        SaveWindowSettings();
+    }
+
     // Configuração do ícone e menu da bandeja do Windows.
     private void InitializeTrayIcon()
     {
@@ -116,8 +230,6 @@ public partial class MainWindow : Window
                 null,
                 (_, _) => ExitApplication()));
 
-        // O carregamento do ícone é opcional: uma falha nunca deve impedir
-        // a abertura da janela. O XAML não carrega ICO como ImageSource.
         try
         {
             var iconResource = System.Windows.Application.GetResourceStream(
@@ -151,22 +263,20 @@ public partial class MainWindow : Window
         };
     }
 
-    // Esconde a janela sem exibir notificações do Windows.
     private void HideToTray()
     {
+        SaveWindowSettings();
+
         if (_trayIcon != null)
             _trayIcon.Visible = true;
 
         Hide();
     }
 
-    // Restaura a janela sem recarregar o site.
     private void RestoreFromTray()
     {
         Show();
 
-        // O ícone só aparece na área de notificação enquanto a janela
-        // estiver realmente escondida na bandeja.
         if (_trayIcon != null)
             _trayIcon.Visible = false;
 
@@ -176,9 +286,9 @@ public partial class MainWindow : Window
         Activate();
     }
 
-    // Encerra realmente o aplicativo.
     private void ExitApplication()
     {
+        SaveWindowSettings();
         _allowExit = true;
 
         if (_trayIcon != null)
@@ -194,33 +304,66 @@ public partial class MainWindow : Window
         Close();
     }
 
-    // Alterna entre tamanho normal e compacto.
-    private void Compact_Click(object sender, RoutedEventArgs e)
+    // Aplica o layout compacto ou restaura as dimensões normais.
+    private void SetCompactLayout(bool compact)
     {
-        if (!_isCompact)
+        if (compact)
         {
             if (WindowState == WindowState.Maximized)
                 WindowState = WindowState.Normal;
 
-            _normalWidth = Width;
-            _normalHeight = Height;
+            if (!_isCompact)
+            {
+                _normalWidth = Width;
+                _normalHeight = Height;
+            }
 
-            Width = 720;
-            Height = 480;
-
+            MinWidth = 360;
+            MinHeight = 260;
+            Width = CompactWidth;
+            Height = CompactHeight;
             _isCompact = true;
         }
         else
         {
+            MinWidth = 480;
+            MinHeight = 320;
             Width = _normalWidth;
             Height = _normalHeight;
-
             _isCompact = false;
         }
+
+        SaveWindowSettings();
+    }
+
+    private void Compact_Click(object sender, RoutedEventArgs e)
+    {
+        SetCompactLayout(!_isCompact);
+    }
+
+    private void AlwaysOnTop_Click(object sender, RoutedEventArgs e)
+    {
+        Topmost = !Topmost;
+        UpdateAlwaysOnTopButton();
+        SaveWindowSettings();
+    }
+
+    private void UpdateAlwaysOnTopButton()
+    {
+        AlwaysOnTopButton.Content = Topmost ? "◆" : "◇";
+        AlwaysOnTopButton.ToolTip = Topmost
+            ? "Desativar janela sempre no topo"
+            : "Ativar janela sempre no topo";
+        AlwaysOnTopButton.Foreground = Topmost
+            ? System.Windows.Media.Brushes.Gold
+            : new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(216, 220, 228));
     }
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        RestoreWindowSettings();
+
         try
         {
             string userData = Path.Combine(
@@ -305,9 +448,9 @@ public partial class MainWindow : Window
         }
     }
 
-    // Minimiza normalmente para a barra de tarefas do Windows.
     private void Minimize_Click(object sender, RoutedEventArgs e)
     {
+        SaveWindowSettings();
         WindowState = WindowState.Minimized;
     }
 
@@ -318,16 +461,15 @@ public partial class MainWindow : Window
             : WindowState.Maximized;
     }
 
-    // O X esconde o aplicativo, não encerra o jogo.
     private void Close_Click(object sender, RoutedEventArgs e)
     {
         HideToTray();
     }
 
-    // Fechamentos que não sejam pelo botão X não enviam o app à bandeja.
-    // O botão X chama HideToTray diretamente; Alt + F4 apenas minimiza.
     private void Window_Closing(object? sender, CancelEventArgs e)
     {
+        SaveWindowSettings();
+
         if (!_allowExit)
         {
             e.Cancel = true;
