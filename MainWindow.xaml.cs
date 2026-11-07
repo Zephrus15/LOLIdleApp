@@ -763,9 +763,23 @@ public partial class MainWindow : Window
             economyButton.Click += async (_, _) =>
             {
                 economyButton.IsEnabled = false;
+                economyButton.Content = "…";
                 try
                 {
-                    await ActivateGameEconomyModeAsync(_floatingView?.CoreWebView2 ?? _preparedFloatingView?.CoreWebView2);
+                    var status = await ActivateGameEconomyModeAsync(
+                        _floatingView?.CoreWebView2 ?? _preparedFloatingView?.CoreWebView2);
+                    economyButton.Content = status is "economy_enabled" or "economy_already_enabled"
+                        ? "⚡✓" : "⚡!";
+                    economyButton.ToolTip = status switch
+                    {
+                        "economy_enabled" => "Modo economia ativado",
+                        "economy_already_enabled" => "Modo economia já estava ativado",
+                        "economy_option_not_found" => "Não encontrei 'Modo economia'. Abra a aba Desempenho nas configurações do jogo e tente novamente.",
+                        "economy_control_not_found" => "Encontrei o texto, mas não identifiquei a caixa de seleção.",
+                        "settings_button_not_found" => "Não encontrei o botão de configurações do jogo.",
+                        "game_not_ready" => "O jogo ainda não terminou de carregar.",
+                        _ => "Não foi possível ativar: " + status
+                    };
                 }
                 finally
                 {
@@ -1364,85 +1378,111 @@ public partial class MainWindow : Window
     }
 
     // Ativa a opção nativa de economia de bateria sem alterná-la quando já estiver ligada.
-    private async Task ActivateGameEconomyModeAsync(CoreWebView2? core = null)
+    private async Task<string> ActivateGameEconomyModeAsync(CoreWebView2? core = null)
     {
         core ??= _floatingView?.CoreWebView2;
         if (core == null || string.Equals(core.Source, "about:blank", StringComparison.OrdinalIgnoreCase))
-            return;
+            return "game_not_ready";
 
-        const string openSettingsScript = @"(() => {
+        const string script = @"(async () => {
+            const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
             const visible = el => {
                 if (!el || !el.isConnected) return false;
                 const r = el.getBoundingClientRect(), s = getComputedStyle(el);
                 return r.width > 0 && r.height > 0 && s.display !== 'none' &&
-                    s.visibility !== 'hidden' && Number(s.opacity) !== 0;
+                    s.visibility !== 'hidden' && Number(s.opacity || 1) > 0;
             };
-            const pattern = /economia\s*(de\s*)?(bateria|energia)|modo\s+econ[oô]mico|modo\s+economia/i;
-            if ([...document.querySelectorAll('body *')].some(el =>
-                visible(el) && el.children.length === 0 &&
-                pattern.test((el.innerText || el.getAttribute('aria-label') || el.getAttribute('title') || '').trim())))
-                return 'settings_already_open';
-            const controls = [...document.querySelectorAll('button,[role=""button""],[aria-label],[title]')].filter(visible);
-            const gear = controls.find(el => {
-                const hint = [el.innerText, el.getAttribute('aria-label'), el.getAttribute('title'),
-                    el.getAttribute('data-tooltip')].filter(Boolean).join(' ').trim().toLowerCase();
-                return hint === '⚙' || hint === 'configurações' || hint === 'configuracoes' ||
-                    hint.includes('configurações') || hint.includes('configuracoes');
-            });
-            if (!gear) return 'settings_button_not_found';
-            gear.click();
-            return 'settings_opened';
+            const normalize = value => String(value || '').replace(/\\s+/g, ' ').trim().toLowerCase();
+            const hasEconomyText = () => [...document.querySelectorAll('body *')].some(el =>
+                visible(el) && normalize(el.innerText || el.getAttribute('aria-label') || el.getAttribute('title')) === 'modo economia');
+            if (!hasEconomyText()) {
+                const gearCandidates = [...document.querySelectorAll('button,[role=""button""],[aria-label],[title],[data-tooltip]')]
+                    .filter(visible);
+                const gear = gearCandidates.find(el => {
+                    const hint = normalize([el.innerText, el.getAttribute('aria-label'),
+                        el.getAttribute('title'), el.getAttribute('data-tooltip')].filter(Boolean).join(' '));
+                    return hint === '⚙' || hint.includes('configurações') || hint.includes('configuracoes');
+                });
+                if (!gear) return 'settings_button_not_found';
+                gear.click();
+                await sleep(650);
+            }
+
+            const findEconomyControl = () => {
+                const textNodes = [...document.querySelectorAll('body *')].filter(el =>
+                    visible(el) && el.children.length === 0 &&
+                    normalize(el.innerText || el.getAttribute('aria-label') || el.getAttribute('title')) === 'modo economia');
+                for (const text of textNodes) {
+                    let node = text;
+                    for (let depth = 0; depth < 6 && node; depth++, node = node.parentElement) {
+                        const label = node.matches?.('label') ? node : node.querySelector?.('label');
+                        const checkbox = node.matches?.('input[type=""checkbox""]') ? node :
+                            node.querySelector?.('input[type=""checkbox""]');
+                        if (checkbox) return { control: checkbox, container: node };
+                        if (label?.control) return { control: label.control, container: node };
+                        const roleControl = node.matches?.('[role=""checkbox""],[role=""switch""]')
+                            ? node : node.querySelector?.('[role=""checkbox""],[role=""switch""]');
+                        if (roleControl) return { control: roleControl, container: node };
+                        const button = node.matches?.('button,[role=""button""]')
+                            ? node : node.querySelector?.('button,[role=""button""]');
+                        if (button && normalize(node.innerText).includes('modo economia'))
+                            return { control: button, container: node };
+                    }
+                }
+                return null;
+            };
+
+            let found = findEconomyControl();
+            if (!found) {
+                const performanceEntry = [...document.querySelectorAll('body *')].find(el =>
+                    visible(el) && el.children.length === 0 && normalize(el.innerText) === 'desempenho');
+                if (performanceEntry) {
+                    const clickable = performanceEntry.closest('button,[role=""button""],a,[role=""tab""]') || performanceEntry;
+                    clickable.click();
+                    await sleep(350);
+                    found = findEconomyControl();
+                }
+            }
+            if (!found) return 'economy_option_not_found';
+
+            const control = found.control;
+            let state = null;
+            if (control.matches?.('input[type=""checkbox""]')) state = !!control.checked;
+            else {
+                const aria = control.getAttribute('aria-checked') ?? control.getAttribute('aria-pressed');
+                if (aria === 'true' || aria === 'false') state = aria === 'true';
+                const dataState = control.getAttribute('data-state');
+                if (state === null && (dataState === 'checked' || dataState === 'unchecked'))
+                    state = dataState === 'checked';
+                if (state === null && control.querySelector?.('input[type=""checkbox""]'))
+                    state = !!control.querySelector('input[type=""checkbox""]').checked;
+            }
+            if (state === true) return 'economy_already_enabled';
+            if (state === null) return 'economy_state_unclear';
+            control.click();
+            await sleep(180);
+            if (control.matches?.('input[type=""checkbox""]') && control.checked)
+                return 'economy_enabled';
+            const after = control.getAttribute('aria-checked') ?? control.getAttribute('aria-pressed');
+            if (after === 'true' || control.getAttribute('data-state') === 'checked')
+                return 'economy_enabled';
+            return 'economy_click_sent';
         })();";
 
         try
         {
-            var openResult = await core.ExecuteScriptAsync(openSettingsScript);
-            await Task.Delay(500);
-
-            const string enableScript = @"(() => {
-                const visible = el => {
-                    if (!el || !el.isConnected) return false;
-                    const r = el.getBoundingClientRect(), s = getComputedStyle(el);
-                    return r.width > 0 && r.height > 0 && s.display !== 'none' &&
-                        s.visibility !== 'hidden' && Number(s.opacity) !== 0;
-                };
-                const pattern = /economia\s*(de\s*)?(bateria|energia)|modo\s+econ[oô]mico|modo\s+economia/i;
-                const labels = [...document.querySelectorAll('body *')]
-                    .filter(el => visible(el) && el.children.length === 0 &&
-                        pattern.test((el.innerText || el.getAttribute('aria-label') || el.getAttribute('title') || '').trim()))
-                    .sort((a,b) => (a.innerText || '').length - (b.innerText || '').length);
-                if (!labels.length) return 'economy_option_not_found';
-                const label = labels[0], roots = [label, label.closest('label'), label.parentElement, label.parentElement?.parentElement].filter(Boolean);
-                const controls = [];
-                for (const root of roots) {
-                    if (root.matches?.('input[type=checkbox],[role=switch],[role=checkbox],button,[role=button]')) controls.push(root);
-                    controls.push(...root.querySelectorAll?.('input[type=checkbox],[role=switch],[role=checkbox],button,[role=button]') || []);
-                }
-                const control = controls.find(visible);
-                if (!control) return 'economy_control_not_found';
-                let state = null;
-                if (control.matches('input[type=checkbox]')) state = control.checked;
-                else {
-                    const aria = control.getAttribute('aria-checked') ?? control.getAttribute('aria-pressed');
-                    if (aria === 'true' || aria === 'false') state = aria === 'true';
-                    const ds = control.getAttribute('data-state');
-                    if (state === null && (ds === 'checked' || ds === 'unchecked')) state = ds === 'checked';
-                    const cls = String(control.className || '').toLowerCase();
-                    if (state === null && /(^|\s)(active|enabled|checked|on)(\s|$)/.test(cls)) state = true;
-                    if (state === null && /(^|\s)(inactive|disabled|unchecked|off)(\s|$)/.test(cls)) state = false;
-                }
-                if (state === true) return 'economy_already_enabled';
-                if (state === null) return 'economy_state_unclear_no_click';
-                control.click();
-                return 'economy_enabled';
-            })();";
-
-            var result = await core.ExecuteScriptAsync(enableScript);
-            LogFloatingWindowEvent($"Economia nativa: abrir={openResult}; resultado={result}");
+            var raw = await core.ExecuteScriptAsync(script);
+            using var document = JsonDocument.Parse(raw);
+            var result = document.RootElement.ValueKind == JsonValueKind.String
+                ? document.RootElement.GetString() ?? "unknown_result"
+                : document.RootElement.ToString();
+            LogFloatingWindowEvent($"Economia nativa: resultado={result}");
+            return result;
         }
         catch (Exception ex)
         {
             LogFloatingWindowEvent($"Economia nativa: falha ao ativar: {ex.Message}");
+            return "script_error";
         }
     }
 
