@@ -2,7 +2,7 @@ name: Build Windows release
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'feature/compact-mode-v1.1.0']
   workflow_dispatch:
   release:
     types: [published]
@@ -92,7 +92,11 @@ jobs:
           if (!(Test-Path "$publish/LoL Idle.exe")) {
             throw "Executável não encontrado em $publish"
           }
-          Compress-Archive -Path "$publish/*" -DestinationPath "LoLIdleDesktop-win-x64.zip" -Force
+          # Cria uma pasta raiz dentro do ZIP para que "Extrair aqui" mantenha tudo organizado.
+          $packageRoot = "package/LoLIdleDesktop"
+          New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
+          Copy-Item -Path "$publish/*" -Destination $packageRoot -Recurse -Force
+          Compress-Archive -Path "package/LoLIdleDesktop" -DestinationPath "LoLIdleDesktop-win-x64.zip" -Force
 
       - name: Anexar ZIP à Release
         if: github.event_name == 'release'
