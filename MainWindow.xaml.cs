@@ -466,7 +466,7 @@ public partial class MainWindow : Window
             {
                 LogFloatingWindowEvent($"Falha ao criar janela: {ex}");
                 MessageBox.Show(
-                    "Não foi possível abrir a janela flutuante.\\n\\n" + ex.Message,
+                    "Não foi possível abrir a janela flutuante.\n\n" + ex.Message,
                     "LoL Idle - janela flutuante",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
