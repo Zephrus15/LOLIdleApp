@@ -23,6 +23,7 @@ public partial class MainWindow : Window
     private bool _allowExit;
     private bool _isCompact;
     private bool _settingsReady;
+    private System.Windows.Threading.DispatcherTimer? _settingsSaveTimer;
     private System.Drawing.Icon? _appIcon;
     private string SettingsPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -47,6 +48,15 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         InitializeComponent();
+        _settingsSaveTimer = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(500)
+        };
+        _settingsSaveTimer.Tick += (_, _) =>
+        {
+            _settingsSaveTimer.Stop();
+            SaveWindowSettings();
+        };
         InitializeTrayIcon();
         SourceInitialized += Window_SourceInitialized;
     }
@@ -195,9 +205,18 @@ public partial class MainWindow : Window
         }
     }
 
+    private void QueueWindowSettingsSave()
+    {
+        if (!_settingsReady || _settingsSaveTimer == null)
+            return;
+
+        _settingsSaveTimer.Stop();
+        _settingsSaveTimer.Start();
+    }
+
     private void Window_LocationChanged(object? sender, EventArgs e)
     {
-        SaveWindowSettings();
+        QueueWindowSettingsSave();
     }
 
     private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -208,7 +227,7 @@ public partial class MainWindow : Window
             _normalHeight = Height;
         }
 
-        SaveWindowSettings();
+        QueueWindowSettingsSave();
     }
 
     // Configuração do ícone e menu da bandeja do Windows.
