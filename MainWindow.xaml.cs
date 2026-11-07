@@ -116,11 +116,25 @@ public partial class MainWindow : Window
                 null,
                 (_, _) => ExitApplication()));
 
-        var iconResource = System.Windows.Application.GetResourceStream(
-            new Uri("pack://application:,,,/Assets/lol-idle.ico"));
-        _appIcon = iconResource != null
-            ? new System.Drawing.Icon(iconResource.Stream)
-            : (System.Drawing.Icon)System.Drawing.SystemIcons.Application.Clone();
+        // O carregamento do ícone é opcional: uma falha nunca deve impedir
+        // a abertura da janela. O XAML não carrega ICO como ImageSource.
+        try
+        {
+            var iconResource = System.Windows.Application.GetResourceStream(
+                new Uri("pack://application:,,,/Assets/lol-idle.ico"));
+            if (iconResource != null)
+            {
+                using (iconResource.Stream)
+                    _appIcon = new System.Drawing.Icon(iconResource.Stream);
+            }
+        }
+        catch
+        {
+            _appIcon?.Dispose();
+            _appIcon = null;
+        }
+
+        _appIcon ??= (System.Drawing.Icon)System.Drawing.SystemIcons.Application.Clone();
 
         _trayIcon = new Forms.NotifyIcon
         {
