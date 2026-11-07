@@ -168,7 +168,6 @@ public partial class MainWindow : Window
 
         _appIcon?.Dispose();
         _appIcon = null;
-        }
 
         Close();
     }
