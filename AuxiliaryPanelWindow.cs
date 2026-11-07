@@ -43,7 +43,6 @@ public sealed class AuxiliaryPanelWindow : Window
             Margin = new Thickness(0)
         };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(38) });
 
         var titleText = new TextBlock
         {
@@ -60,19 +59,6 @@ public sealed class AuxiliaryPanelWindow : Window
                 DragMove();
         };
 
-        var close = new Button
-        {
-            Content = "×",
-            Foreground = Brushes.White,
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            FontSize = 20,
-            Cursor = Cursors.Hand,
-            ToolTip = "Fechar painel"
-        };
-        close.Click += (_, _) => Hide();
-        Grid.SetColumn(close, 1);
-        header.Children.Add(close);
         Grid.SetRow(header, 0);
         root.Children.Add(header);
 
