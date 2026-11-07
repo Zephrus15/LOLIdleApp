@@ -638,15 +638,36 @@ public partial class MainWindow : Window
             _preparedFloatingView = view;
             popupWindow.Closed += (_, _) =>
             {
-                if (ReferenceEquals(_preparedFloatingWindow, popupWindow))
+                var wasActiveFloatingWindow = ReferenceEquals(_floatingWindow, popupWindow);
+                var wasPreparedWindow = ReferenceEquals(_preparedFloatingWindow, popupWindow);
+
+                if (wasPreparedWindow)
                 {
                     _preparedFloatingWindow = null;
                     _preparedFloatingView = null;
                 }
-                if (ReferenceEquals(_floatingWindow, popupWindow))
+
+                if (wasActiveFloatingWindow)
                 {
+                    var closedView = _floatingView;
                     _floatingWindow = null;
                     _floatingView = null;
+
+                    // Notifica ao WebView2 que o popup foi realmente fechado,
+                    // para que o jogo atualize o estado de window.closed.
+                    try { closedView?.CoreWebView2?.Close(); } catch { }
+                    try { closedView?.Dispose(); } catch { }
+
+                    LogFloatingWindowEvent("FloatingWindow: janela fechada; referências liberadas e popup encerrado.");
+                    _ = Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        if (!_allowExit && _floatingWindow == null)
+                            _ = PrepareFloatingWebViewAsync(this);
+                    }), System.Windows.Threading.DispatcherPriority.Background);
+                }
+                else if (wasPreparedWindow)
+                {
+                    LogFloatingWindowEvent("FloatingWindow: host preparado fechado; referências liberadas.");
                 }
             };
 
