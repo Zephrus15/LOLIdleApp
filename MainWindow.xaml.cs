@@ -102,14 +102,14 @@ public partial class MainWindow : Window
             const panel = document.createElement('div');
             panel.id = 'lol-idle-floating-controls';
             panel.innerHTML = `
-                <button id="lol-idle-audio" title="Silenciar todo o áudio" aria-label="Som">
-                    <svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+                <button id='lol-idle-audio' title='Silenciar todo o áudio' aria-label='Som'>
+                    <svg viewBox='0 0 24 24'><path d='M11 5 6 9H3v6h3l5 4z'/><path d='M15.5 8.5a5 5 0 0 1 0 7'/><path d='M18.5 5.5a9 9 0 0 1 0 13'/></svg>
                 </button>
-                <button id="lol-idle-pin" title="Ativar janela sempre no topo" aria-label="Fixar">
-                    <svg viewBox="0 0 24 24"><path d="m16 3 5 5-4 1-4 4 2 2-2 2-4-4-5 5"/><path d="m8 8 8 8"/></svg>
+                <button id='lol-idle-pin' title='Ativar janela sempre no topo' aria-label='Fixar'>
+                    <svg viewBox='0 0 24 24'><path d='m16 3 5 5-4 1-4 4 2 2-2 2-4-4-5 5'/><path d='m8 8 8 8'/></svg>
                 </button>
-                <button id="lol-idle-close" title="Fechar janela flutuante" aria-label="Fechar">
-                    <svg viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                <button id='lol-idle-close' title='Fechar janela flutuante' aria-label='Fechar'>
+                    <svg viewBox='0 0 24 24'><path d='M18 6 6 18M6 6l12 12'/></svg>
                 </button>`;
             document.documentElement.appendChild(panel);
             const send = action => window.chrome.webview.postMessage('lol-idle-control:' + action);
