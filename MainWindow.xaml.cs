@@ -95,7 +95,7 @@ public partial class MainWindow : Window
                     display:grid; place-items:center; }
                 #lol-idle-floating-controls button:hover { background:rgba(255,255,255,.14); }
                 #lol-idle-floating-controls button.active { color:#e8cf8f; }
-                #lol-idle-floating-controls svg { width:19px; height:19px; fill:none; stroke:currentColor;
+                #lol-idle-floating-controls svg { width:15px; height:15px; fill:none; stroke:currentColor;
                     stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; pointer-events:none; }
             `;
             document.head.appendChild(style);
