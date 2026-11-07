@@ -98,7 +98,7 @@
                 <Button x:Name="FloatingReopenButton"
                         Grid.Column="1"
                         Content="↗"
-                        IsEnabled="True"
+                        IsEnabled="False"
                         Click="ReopenFloatingWindow_Click"
                         Style="{StaticResource WindowButton}"
                         ToolTip="Abrir janela flutuante"/>
