@@ -177,7 +177,7 @@ public sealed class AuxiliaryPanelWindow : Window
                 HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left,
                 Padding = new Thickness(10, 7, 10, 7),
                 Margin = new Thickness(0, 0, 0, 6),
-                Background = isCharacterPanel ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(34, 39, 49)),
+                Background = new SolidColorBrush(Color.FromRgb(34, 39, 49)),
                 Foreground = Brushes.White,
                 BorderBrush = new SolidColorBrush(Color.FromRgb(64, 71, 84)),
                 Cursor = Cursors.Hand,
