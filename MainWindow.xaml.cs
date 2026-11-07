@@ -1177,6 +1177,7 @@ public partial class MainWindow : Window
         public string Quest { get; set; } = "";
         public string Sidebar { get; set; } = "";
         public string Character { get; set; } = "";
+        public CharacterPanelStats CharacterStats { get; set; } = new();
         public List<PanelActionItem> Actions { get; set; } = new();
     }
 
@@ -1244,11 +1245,66 @@ public partial class MainWindow : Window
                     context
                 });
             }
+            const statElements = [...document.querySelectorAll('body *')].filter(el =>
+                visible(el) && (el.children.length === 0 || el.matches('progress,[role=""progressbar""]')));
+            const parseStat = (kind, words) => {
+                const re = new RegExp(words, 'i');
+                for (const el of statElements) {
+                    const hint = [el.innerText, el.getAttribute('aria-label'), el.getAttribute('title'),
+                        el.getAttribute('data-tooltip'), el.id, el.className,
+                        el.getAttribute('role')].filter(Boolean).join(' ').replace(/\\s+/g, ' ').trim();
+                    if (!re.test(hint)) continue;
+                    const nearby = (el.innerText || el.parentElement?.innerText ||
+                        el.parentElement?.parentElement?.innerText || '').replace(/\\s+/g, ' ').trim();
+                    const raw = el.getAttribute('aria-valuenow') ?? el.value;
+                    const maxRaw = el.getAttribute('aria-valuemax') ?? el.max;
+                    const number = v => {
+                        if (v == null || v === '') return null;
+                        const n = Number(String(v).replace(',', '.').replace(/[^0-9.%-]/g, '').replace('%',''));
+                        return Number.isFinite(n) ? n : null;
+                    };
+                    let current = number(raw), maximum = number(maxRaw), percent = null;
+                    const pair = nearby.match(/(\\d[\\d.,]*)\\s*(?:\\/|de)\\s*(\\d[\\d.,]*)/);
+                    if (pair) { current ??= number(pair[1]); maximum ??= number(pair[2]); }
+                    if (current != null && maximum != null && maximum > 0)
+                        percent = Math.max(0, Math.min(100, current / maximum * 100));
+                    else if (el.tagName === 'PROGRESS' && maximum > 0)
+                        percent = Math.max(0, Math.min(100, current / maximum * 100));
+                    else {
+                        const width = (el.getAttribute('style') || '').match(/width\\s*:\\s*([\\d.]+)%/i);
+                        if (width) percent = Math.max(0, Math.min(100, Number(width[1])));
+                    }
+                    if (current != null || percent != null) {
+                        return { label: kind, current: current == null ? '' : String(current),
+                            maximum: maximum == null ? '' : String(maximum), percent };
+                    }
+                }
+                return null;
+            };
+            const levelLine = lines.find(x => /(?:nível|nivel|level)\\s*[:#-]?\\s*\\d+/i.test(x)) || '';
+            const skillNames = [];
+            for (const el of statElements) {
+                const hint = [el.getAttribute('aria-label'), el.getAttribute('title'),
+                    el.getAttribute('alt'), el.getAttribute('data-tooltip'), el.className, el.id]
+                    .filter(Boolean).join(' ');
+                if (!/skill|ability|spell|habilidade|passiva/i.test(hint)) continue;
+                const name = (el.getAttribute('aria-label') || el.getAttribute('title') ||
+                    el.getAttribute('alt') || el.innerText || '').replace(/\\s+/g, ' ').trim();
+                if (name && !skillNames.includes(name)) skillNames.push(name.slice(0, 70));
+                if (skillNames.length >= 8) break;
+            }
             window.__lolIdleNextActionId = nextId;
             return {
                 quest: collect(/missões|missao|quest|progresso|objetivo|recompensa/i),
                 sidebar: collect(/mochila|equipamento|itens|poções|pocões|poção|runas|cartas|loja|inventário/i),
                 character: collect(/nível|nivel|experiência|experiencia|habilidades|atributos|dano|armadura|poder|mana|crítico|critico|esquiva|abates|mortes|vida|saúde/i),
+                characterStats: {
+                    hp: parseStat('Vida', 'hp|health|vida|saúde'),
+                    mp: parseStat('Mana', 'mp|mana'),
+                    xp: parseStat('XP', 'xp|experience|experiência|experiencia'),
+                    level: levelLine,
+                    skills: skillNames
+                },
                 actions
             };
         })();";
@@ -1276,6 +1332,7 @@ public partial class MainWindow : Window
             if (_panelWindows.TryGetValue("character", out var character) && character.IsVisible)
             {
                 character.SetPanelContent(snapshot.Character);
+                character.SetCharacterStats(snapshot.CharacterStats);
                 character.SetPanelActions(snapshot.Actions.Where(x => x.Category == "character"),
                     action => _ = ExecutePanelActionAsync(action));
             }
