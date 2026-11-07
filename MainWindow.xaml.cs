@@ -1086,7 +1086,7 @@ public partial class MainWindow : Window
 
         const string script = @"(() => {
             const lines = (document.body?.innerText || '')
-                .split(/\\n+/).map(x => x.trim()).filter(Boolean);
+                .split(/\n+/).map(x => x.trim()).filter(Boolean);
             const collect = (pattern) => {
                 const found = [];
                 for (let i = 0; i < lines.length; i++) {
@@ -1095,7 +1095,7 @@ public partial class MainWindow : Window
                             found.push(lines[j]);
                     }
                 }
-                return [...new Set(found)].slice(0, 28).join('\\n');
+                return [...new Set(found)].slice(0, 28).join('\n');
             };
             return {
                 quest: collect(/missões|missao|quest|progresso|objetivo|recompensa/i),
