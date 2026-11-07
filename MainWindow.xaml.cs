@@ -1080,7 +1080,11 @@ public partial class MainWindow : Window
         if (!_panelWindows.Values.Any(panel => panel.IsVisible))
             return;
 
-        var source = _floatingView?.CoreWebView2 ?? GameView?.CoreWebView2;
+        var floatingCore = _floatingView?.CoreWebView2;
+        var source = floatingCore != null &&
+            !string.Equals(floatingCore.Source, "about:blank", StringComparison.OrdinalIgnoreCase)
+                ? floatingCore
+                : GameView?.CoreWebView2;
         if (source == null)
             return;
 
@@ -1107,7 +1111,8 @@ public partial class MainWindow : Window
         try
         {
             var json = await source.ExecuteScriptAsync(script);
-            var snapshot = JsonSerializer.Deserialize<PanelSnapshot>(json);
+            var snapshot = JsonSerializer.Deserialize<PanelSnapshot>(json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             if (snapshot == null)
                 return;
 
@@ -1136,7 +1141,7 @@ public partial class MainWindow : Window
             _ => ("Herói", "Aguardando informações visíveis na interface do jogo.", _settings.CharacterPanelOpacity)
         };
 
-        var panel = new AuxiliaryPanelWindow(title, description, key != "character", opacity);
+        var panel = new AuxiliaryPanelWindow(title, description, true, opacity);
         panel.Closed += (_, _) => _panelWindows.Remove(key);
         _panelWindows[key] = panel;
         return panel;
