@@ -426,19 +426,9 @@ public partial class MainWindow : Window
 
             GameView.CoreWebView2.NewWindowRequested += (_, args) =>
             {
-                // Responde imediatamente ao WebView2. A criação do segundo navegador
-                // acontece depois, fora do evento, para não prender a janela principal.
-                args.Handled = true;
-
-                var requestedUrl = args.Uri;
-                if (Uri.TryCreate(requestedUrl, UriKind.Absolute, out var requestedUri) &&
-                    requestedUri.Scheme is "http" or "https")
-                {
-                    _lastFloatingUri = requestedUri.ToString();
-                    FloatingReopenButton.IsEnabled = true;
-                }
-
-                _ = OpenFloatingWindowSafelyAsync(requestedUrl, this);
+                // Usa o deferral oficial do WebView2: a solicitação permanece válida
+                // enquanto inicializamos o novo controle, sem bloquear a interface.
+                _ = HandleNewWindowRequestedAsync(args, this);
             };
 
             GameView.Source = new Uri(GameUrl);
@@ -457,21 +447,30 @@ public partial class MainWindow : Window
         }
     }
 
-    // Abre a janela flutuante sem bloquear o evento NewWindowRequested do WebView2.
-    private async Task OpenFloatingWindowSafelyAsync(string? requestedUrl, Window? owner)
+    // Atende a solicitação de pop-up usando o mecanismo oficial do WebView2.
+    // O deferral permite inicializar o novo WebView2 sem bloquear a janela principal.
+    private async Task HandleNewWindowRequestedAsync(
+        CoreWebView2NewWindowRequestedEventArgs args,
+        Window? owner)
     {
+        using var deferral = args.GetDeferral();
+
         try
         {
+            var requestedUrl = args.Uri;
+            if (Uri.TryCreate(requestedUrl, UriKind.Absolute, out var requestedUri) &&
+                requestedUri.Scheme is "http" or "https")
+            {
+                _lastFloatingUri = requestedUri.ToString();
+                FloatingReopenButton.IsEnabled = true;
+            }
+
             var core = await CreateFloatingWebViewAsync(owner);
-            if (Uri.TryCreate(requestedUrl, UriKind.Absolute, out var target) &&
-                target.Scheme is "http" or "https")
-            {
-                core.Navigate(target.ToString());
-            }
-            else if (core.Source == "about:blank" || string.IsNullOrWhiteSpace(core.Source))
-            {
-                core.Navigate(GameUrl);
-            }
+
+            // Sem NewWindow, o site entende que o navegador bloqueou o pop-up.
+            // Ao fornecer o CoreWebView2, o próprio WebView2 conclui a navegação.
+            args.NewWindow = core;
+            args.Handled = true;
         }
         catch (Exception ex)
         {
@@ -480,6 +479,10 @@ public partial class MainWindow : Window
                 "LoL Idle - janela flutuante",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
+        }
+        finally
+        {
+            deferral.Complete();
         }
     }
 
@@ -598,18 +601,7 @@ public partial class MainWindow : Window
 
             popupView.CoreWebView2.NewWindowRequested += (_, popupArgs) =>
             {
-                // Também não aguardamos a inicialização de outro WebView2 neste evento.
-                popupArgs.Handled = true;
-                var requestedUrl = popupArgs.Uri;
-
-                if (Uri.TryCreate(requestedUrl, UriKind.Absolute, out var requestedUri) &&
-                    requestedUri.Scheme is "http" or "https")
-                {
-                    _lastFloatingUri = requestedUri.ToString();
-                    FloatingReopenButton.IsEnabled = true;
-                }
-
-                _ = OpenFloatingWindowSafelyAsync(requestedUrl, popupWindow);
+                _ = HandleNewWindowRequestedAsync(popupArgs, popupWindow);
             };
 
             popupWindow.Show();
