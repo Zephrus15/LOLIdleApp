@@ -77,28 +77,15 @@ public partial class MainWindow : Window
         };
     })();";
 
-    // Permite mover a janela flutuante arrastando o próprio conteúdo do jogo.
-    // Cliques simples continuam funcionando; o movimento só começa após ultrapassar o limite.
+    // O clique pressionado no conteúdo inicia o arraste nativo da janela.
+    // O modo flutuante é voltado à automação, então qualquer ponto do jogo pode mover a janela.
     private const string FloatingDragScript = @"(() => {
         if (window.__lolIdleFloatingDragInstalled) return;
         window.__lolIdleFloatingDragInstalled = true;
-        let startX = 0, startY = 0, dragging = false;
         document.addEventListener('pointerdown', event => {
             if (event.button !== 0) return;
-            startX = event.screenX;
-            startY = event.screenY;
-            dragging = false;
+            try { window.chrome.webview.postMessage('lol-idle-begin-window-drag'); } catch (_) {}
         }, true);
-        document.addEventListener('pointermove', event => {
-            if (!event.buttons || !(event.buttons & 1) || dragging) return;
-            const dx = event.screenX - startX;
-            const dy = event.screenY - startY;
-            if (Math.hypot(dx, dy) < 7) return;
-            dragging = true;
-            try { window.chrome.webview.postMessage('lol-idle-drag-window'); } catch (_) {}
-        }, true);
-        document.addEventListener('pointerup', () => { dragging = false; }, true);
-        document.addEventListener('pointercancel', () => { dragging = false; }, true);
     })();";
 
     private Forms.NotifyIcon? _trayIcon;
@@ -122,6 +109,14 @@ public partial class MainWindow : Window
 
     private const int WM_GETMINMAXINFO = 0x0024;
     private const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
+    private const int WM_NCLBUTTONDOWN = 0x00A1;
+    private const int HTCAPTION = 0x0002;
+
+    [DllImport("user32.dll")]
+    private static extern bool ReleaseCapture();
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SendMessage(IntPtr hWnd, int message, IntPtr wParam, IntPtr lParam);
 
     private double _normalWidth = 1280;
     private double _normalHeight = 800;
@@ -733,64 +728,55 @@ public partial class MainWindow : Window
             };
 
             var root = new Grid();
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(36) });
-            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
-            var toolbar = new Border
+            var view = new Microsoft.Web.WebView2.Wpf.WebView2
             {
-                Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(25, 28, 35)),
-                Padding = new Thickness(8, 0, 8, 0)
+                DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24)
             };
-            var toolbarGrid = new Grid();
-            toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
-            toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
-            toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
-            var toolbarIconColor = new SolidColorBrush(Color.FromRgb(216, 220, 228));
-            var topmostButton = new Button
+            root.Children.Add(view);
+
+            // Controles compactos sobre o próprio jogo, sem reservar uma barra superior.
+            var toolbarIconColor = new SolidColorBrush(Color.FromRgb(236, 239, 245));
+            var controls = new StackPanel
             {
-                Content = CreateToolbarIcon("pin", toolbarIconColor),
-                Foreground = toolbarIconColor,
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Padding = new Thickness(0),
-                Width = 36,
-                Height = 32,
-                Cursor = Cursors.Hand,
-                ToolTip = "Ativar janela sempre no topo"
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                Margin = new Thickness(0, 10, 12, 0)
             };
-            topmostButton.Click += (_, _) =>
+            var controlBackground = new SolidColorBrush(Color.FromArgb(218, 25, 28, 35));
+            controls.Children.Add(new Border
             {
-                popupWindow.Topmost = !popupWindow.Topmost;
-                topmostButton.Foreground = popupWindow.Topmost
-                    ? Brushes.Gold
-                    : toolbarIconColor;
-                topmostButton.Content = CreateToolbarIcon(
-                    popupWindow.Topmost ? "pin-filled" : "pin",
-                    (System.Windows.Media.Brush)topmostButton.Foreground);
-                topmostButton.ToolTip = popupWindow.Topmost
-                    ? "Desativar janela sempre no topo"
-                    : "Ativar janela sempre no topo";
-            };
-            var audioMuteButton = new Button
+                Background = controlBackground,
+                CornerRadius = new CornerRadius(9),
+                Padding = new Thickness(3),
+                Child = new StackPanel { Orientation = Orientation.Horizontal }
+            });
+            var controlButtons = (StackPanel)((Border)controls.Children[0]).Child;
+
+            Button MakeFloatingButton(UIElement icon, string tooltip)
             {
-                Content = CreateToolbarIcon(
-                    _settings.MasterMuted ? "mute" : "volume",
+                return new Button
+                {
+                    Content = icon,
+                    Foreground = toolbarIconColor,
+                    Background = Brushes.Transparent,
+                    BorderBrush = Brushes.Transparent,
+                    BorderThickness = new Thickness(0),
+                    Padding = new Thickness(0),
+                    Width = 36,
+                    Height = 34,
+                    Cursor = Cursors.Hand,
+                    ToolTip = tooltip
+                };
+            }
+
+            var audioMuteButton = MakeFloatingButton(
+                CreateToolbarIcon(_settings.MasterMuted ? "mute" : "volume",
                     _settings.MasterMuted
                         ? new SolidColorBrush(Color.FromRgb(232, 207, 143))
                         : toolbarIconColor),
-                Foreground = _settings.MasterMuted
-                    ? new SolidColorBrush(Color.FromRgb(232, 207, 143))
-                    : toolbarIconColor,
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Padding = new Thickness(0),
-                Width = 36,
-                Height = 32,
-                Cursor = Cursors.Hand,
-                ToolTip = _settings.MasterMuted ? "Ativar todo o áudio" : "Silenciar todo o áudio"
-            };
+                _settings.MasterMuted ? "Ativar todo o áudio" : "Silenciar todo o áudio");
             audioMuteButton.Click += (_, _) =>
             {
                 _settings.MasterMuted = !_settings.MasterMuted;
@@ -806,49 +792,32 @@ public partial class MainWindow : Window
                 SaveWindowSettings();
                 _ = ApplyAudioSettingsAsync();
             };
-            Grid.SetColumn(audioMuteButton, 1);
-            toolbarGrid.Children.Add(audioMuteButton);
+            controlButtons.Children.Add(audioMuteButton);
 
-            Grid.SetColumn(topmostButton, 2);
-            toolbarGrid.Children.Add(topmostButton);
-
-            var closeButton = new Button
+            var topmostButton = MakeFloatingButton(
+                CreateToolbarIcon("pin", toolbarIconColor),
+                "Ativar janela sempre no topo");
+            topmostButton.Click += (_, _) =>
             {
-                Content = CreateToolbarIcon("close", toolbarIconColor),
-                Foreground = toolbarIconColor,
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Padding = new Thickness(0),
-                Width = 36,
-                Height = 32,
-                Cursor = Cursors.Hand,
-                ToolTip = "Fechar janela flutuante"
+                popupWindow.Topmost = !popupWindow.Topmost;
+                topmostButton.Foreground = popupWindow.Topmost ? Brushes.Gold : toolbarIconColor;
+                topmostButton.Content = CreateToolbarIcon(
+                    popupWindow.Topmost ? "pin-filled" : "pin",
+                    (System.Windows.Media.Brush)topmostButton.Foreground);
+                topmostButton.ToolTip = popupWindow.Topmost
+                    ? "Desativar janela sempre no topo"
+                    : "Ativar janela sempre no topo";
             };
+            controlButtons.Children.Add(topmostButton);
+
+            var closeButton = MakeFloatingButton(
+                CreateToolbarIcon("close", toolbarIconColor),
+                "Fechar janela flutuante");
             closeButton.Click += (_, _) => popupWindow.Close();
-            Grid.SetColumn(closeButton, 3);
-            toolbarGrid.Children.Add(closeButton);
+            controlButtons.Children.Add(closeButton);
 
-            toolbar.MouseLeftButtonDown += (_, args) =>
-            {
-                // O clique nos botões percorre a árvore visual até o Border.
-                // Não iniciar DragMove nesses casos, senão o botão perde o clique.
-                if (IsInsideButton(args.OriginalSource as DependencyObject))
-                    return;
-
-                if (args.LeftButton == MouseButtonState.Pressed)
-                    popupWindow.DragMove();
-            };
-
-            toolbar.Child = toolbarGrid;
-            Grid.SetRow(toolbar, 0);
-            root.Children.Add(toolbar);
-
-            var view = new Microsoft.Web.WebView2.Wpf.WebView2
-            {
-                DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24)
-            };
-            Grid.SetRow(view, 1);
-            root.Children.Add(view);
+            Panel.SetZIndex(controls, 10);
+            root.Children.Add(controls);
             popupWindow.Content = root;
 
             _preparedFloatingWindow = popupWindow;
@@ -910,10 +879,12 @@ public partial class MainWindow : Window
             {
                 try
                 {
-                    if (messageArgs.TryGetWebMessageAsString() == "lol-idle-drag-window" &&
+                    if (messageArgs.TryGetWebMessageAsString() == "lol-idle-begin-window-drag" &&
                         popupWindow.IsVisible && popupWindow.WindowState == WindowState.Normal)
                     {
-                        popupWindow.DragMove();
+                        var handle = new WindowInteropHelper(popupWindow).Handle;
+                        ReleaseCapture();
+                        SendMessage(handle, WM_NCLBUTTONDOWN, new IntPtr(HTCAPTION), IntPtr.Zero);
                     }
                 }
                 catch (InvalidOperationException)
