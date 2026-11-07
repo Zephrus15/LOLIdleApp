@@ -11,6 +11,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Color = System.Windows.Media.Color;
 using Brushes = System.Windows.Media.Brushes;
+using Panel = System.Windows.Controls.Panel;
 using CheckBox = System.Windows.Controls.CheckBox;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
