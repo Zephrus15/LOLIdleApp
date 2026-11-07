@@ -70,7 +70,6 @@
                     <ColumnDefinition Width="44"/>
                     <ColumnDefinition Width="44"/>
                     <ColumnDefinition Width="44"/>
-                    <ColumnDefinition Width="44"/>
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal"
@@ -95,35 +94,28 @@
                                VerticalAlignment="Center"/>
                 </StackPanel>
 
-                <!-- Reabrir a última janela flutuante fechada -->
+                <!-- Abrir ou trazer para frente a janela flutuante -->
                 <Button x:Name="FloatingReopenButton"
                         Grid.Column="1"
                         Content="↗"
-                        IsEnabled="False"
+                        IsEnabled="True"
                         Click="ReopenFloatingWindow_Click"
                         Style="{StaticResource WindowButton}"
-                        ToolTip="Reabrir a última janela flutuante"/>
+                        ToolTip="Abrir janela flutuante"/>
 
-                <!-- Alternar tamanho normal e compacto -->
                 <Button Grid.Column="2"
-                        Content="▣"
-                        Click="Compact_Click"
-                        Style="{StaticResource WindowButton}"
-                        ToolTip="Alternar modo compacto"/>
-
-                <Button Grid.Column="3"
                         Content="—"
                         Click="Minimize_Click"
                         Style="{StaticResource WindowButton}"
                         ToolTip="Minimizar para a barra de tarefas"/>
 
-                <Button Grid.Column="4"
+                <Button Grid.Column="3"
                         Content="□"
                         Click="Maximize_Click"
                         Style="{StaticResource WindowButton}"
                         ToolTip="Maximizar"/>
 
-                <Button Grid.Column="5"
+                <Button Grid.Column="4"
                         Content="×"
                         Click="Close_Click"
                         Style="{StaticResource CloseButton}"
