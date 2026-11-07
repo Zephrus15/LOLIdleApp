@@ -28,6 +28,9 @@ public partial class MainWindow : Window
     private string _lastFloatingUri = GameUrl;
     private Window? _floatingWindow;
     private Microsoft.Web.WebView2.Wpf.WebView2? _floatingView;
+    private Window? _preparedFloatingWindow;
+    private Microsoft.Web.WebView2.Wpf.WebView2? _preparedFloatingView;
+    private bool _isPreparingFloatingView;
     private string SettingsPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "LoLIdleDesktop", "window-settings.json");
@@ -313,6 +316,13 @@ public partial class MainWindow : Window
             _floatingView = null;
             floating.Close();
         }
+        if (_preparedFloatingWindow != null)
+        {
+            var prepared = _preparedFloatingWindow;
+            _preparedFloatingWindow = null;
+            _preparedFloatingView = null;
+            prepared.Close();
+        }
 
         if (_trayIcon != null)
         {
@@ -383,12 +393,11 @@ public partial class MainWindow : Window
 
             GameView.CoreWebView2.NewWindowRequested += (_, args) =>
             {
-                // Usa o deferral oficial do WebView2: a solicitação permanece válida
-                // enquanto inicializamos o novo controle, sem bloquear a interface.
-                _ = HandleNewWindowRequestedAsync(args, this);
+                HandleNewWindowRequested(args);
             };
 
             GameView.Source = new Uri(GameUrl);
+            _ = PrepareFloatingWebViewAsync(this);
         }
         catch (Exception ex)
         {
@@ -404,95 +413,65 @@ public partial class MainWindow : Window
         }
     }
 
-    // Atende pop-ups sem reutilizar um CoreWebView2 que já recebeu navegação.
-    private async Task HandleNewWindowRequestedAsync(
-        CoreWebView2NewWindowRequestedEventArgs args,
-        Window? owner)
+    // Usa um WebView2 previamente inicializado. Nenhum EnsureCoreWebView2Async
+    // é executado dentro do evento NewWindowRequested.
+    private void HandleNewWindowRequested(CoreWebView2NewWindowRequestedEventArgs args)
     {
-        LogFloatingWindowEvent("Handler: evento recebido.");
-        using (args.GetDeferral())
+        try
         {
-            LogFloatingWindowEvent("Handler: deferral obtido.");
-            try
+            var requestedUrl = args.Uri;
+            var hasHttpUri = Uri.TryCreate(requestedUrl, UriKind.Absolute, out var requestedUri) &&
+                requestedUri!.Scheme is "http" or "https";
+            var isBlankWindow = string.IsNullOrWhiteSpace(requestedUrl) ||
+                (Uri.TryCreate(requestedUrl, UriKind.Absolute, out var blankUri) &&
+                 blankUri!.AbsoluteUri.Equals("about:blank", StringComparison.OrdinalIgnoreCase));
+
+            LogFloatingWindowEvent($"NewWindowRequested: blank={isBlankWindow}, http={hasHttpUri}, userInitiated={args.IsUserInitiated}");
+
+            if (!hasHttpUri && !isBlankWindow)
             {
-                var requestedUrl = args.Uri;
-                LogFloatingWindowEvent("Handler: argumentos lidos.");
-                var hasHttpUri = Uri.TryCreate(
-                    requestedUrl, UriKind.Absolute, out var requestedUri) &&
-                    requestedUri!.Scheme is "http" or "https";
-                var isBlankWindow = string.IsNullOrWhiteSpace(requestedUrl) ||
-                    (Uri.TryCreate(requestedUrl, UriKind.Absolute, out var blankUri) &&
-                     blankUri!.AbsoluteUri.Equals("about:blank", StringComparison.OrdinalIgnoreCase));
-
-                LogFloatingWindowEvent(
-                    $"NewWindowRequested: blank={isBlankWindow}, http={hasHttpUri}, " +
-                    $"userInitiated={args.IsUserInitiated}");
-
-                // window.open() pode começar sem URL (ou com about:blank) e
-                // receber o conteúdo depois, via JavaScript. Isso também é válido.
-                if (!hasHttpUri && !isBlankWindow)
-                {
-                    LogFloatingWindowEvent("Solicitação ignorada: esquema de URL não permitido.");
-                    args.Handled = true;
-                    return;
-                }
-
-                if (hasHttpUri)
-                {
-                    _lastFloatingUri = requestedUri!.ToString();
-                    FloatingReopenButton.IsEnabled = true;
-                }
-
-                // Uma solicitação anterior pode ainda estar inicializando o WebView2.
-                // Não criar várias janelas/controles enquanto o primeiro EnsureCoreWebView2Async
-                // está pendente: isso provoca inicializações concorrentes e pode congelar o app.
-                if (_floatingWindow != null && _floatingView?.CoreWebView2 == null)
-                {
-                    LogFloatingWindowEvent("Handler: já existe uma janela flutuante inicializando; solicitação duplicada ignorada.");
-                    args.Handled = true;
-                    return;
-                }
-
-                if (_floatingWindow != null && _floatingView?.CoreWebView2 != null)
-                {
-                    _floatingWindow.Activate();
-                    if (hasHttpUri)
-                    {
-                        _floatingView.CoreWebView2.Navigate(requestedUri!.ToString());
-                        args.Handled = true;
-                    }
-                    else
-                    {
-                        // Não responder com WindowProxy fictício para uma abertura vazia.
-                        // O WebView2 segue o comportamento padrão se já houver popup ativo.
-                        LogFloatingWindowEvent("Popup em branco recebido com janela já aberta; tratamento padrão mantido.");
-                    }
-                    return;
-                }
-
-                LogFloatingWindowEvent("Handler: antes de criar WebView flutuante.");
-                var newCore = await CreateFloatingWebViewAsync(owner);
-                LogFloatingWindowEvent("Handler: WebView flutuante criado.");
-                args.NewWindow = newCore;
-                LogFloatingWindowEvent("Handler: CoreWebView2 atribuído a NewWindow.");
                 args.Handled = true;
-
-                // Só exibe a janela depois que o CoreWebView2 foi entregue ao evento.
-                // Assim o popup não aparece antes de o WebView2 assumir a solicitação.
-                LogFloatingWindowEvent("Handler: antes de exibir janela.");
-                _floatingWindow?.Show();
-                LogFloatingWindowEvent("Handler: janela exibida.");
+                return;
             }
-            catch (Exception ex)
+
+            if (hasHttpUri)
+                _lastFloatingUri = requestedUri!.ToString();
+
+            if (_preparedFloatingWindow == null || _preparedFloatingView?.CoreWebView2 == null)
             {
-                LogFloatingWindowEvent($"Falha ao criar janela: {ex}");
-                MessageBox.Show(
-                    "Não foi possível abrir a janela flutuante.\n\n" + ex.Message,
-                    "LoL Idle - janela flutuante",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
-                args.Handled = true;
+                LogFloatingWindowEvent("Popup: WebView pré-inicializado indisponível; mantendo comportamento padrão do WebView2.");
+                return;
             }
+
+            var window = _preparedFloatingWindow;
+            var view = _preparedFloatingView;
+            var core = view.CoreWebView2;
+
+            _preparedFloatingWindow = null;
+            _preparedFloatingView = null;
+            _floatingWindow = window;
+            _floatingView = view;
+
+            args.NewWindow = core;
+            args.Handled = true;
+            LogFloatingWindowEvent("Popup: Core pré-inicializado entregue ao jogo.");
+
+            window.Opacity = 1;
+            window.ShowInTaskbar = true;
+            window.WindowStyle = WindowStyle.SingleBorderWindow;
+            window.ResizeMode = ResizeMode.CanResize;
+            window.Width = 900;
+            window.Height = 650;
+            window.WindowStartupLocation = WindowStartupLocation.CenterOwner;
+            window.Show();
+            window.Activate();
+            LogFloatingWindowEvent("Popup: janela exibida.");
+
+            _ = PrepareFloatingWebViewAsync(this);
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"Popup: erro ao entregar WebView preparado: {ex}");
         }
     }
 
@@ -515,179 +494,207 @@ public partial class MainWindow : Window
         }
     }
 
-    // Mantém uma única janela flutuante e limpa a referência quando ela é fechada.
-    // O WebView2 compartilha o mesmo ambiente para preservar cookies e sessão.
-    private async Task<CoreWebView2> CreateFloatingWebViewAsync(Window? owner)
+    // Prepara uma janela invisível antes de qualquer pedido do jogo.
+    private async Task PrepareFloatingWebViewAsync(Window? owner)
     {
-        if (_webViewEnvironment == null)
-            throw new InvalidOperationException("O ambiente WebView2 ainda não foi inicializado.");
+        if (_webViewEnvironment == null || _isPreparingFloatingView ||
+            (_preparedFloatingWindow != null && _preparedFloatingView?.CoreWebView2 != null))
+            return;
 
-        if (_floatingWindow != null && _floatingView?.CoreWebView2 != null)
-        {
-            _floatingWindow.Activate();
-            return _floatingView.CoreWebView2;
-        }
-
-        LogFloatingWindowEvent("CreateFloating: iniciando criação da janela WPF.");
-        var popupWindow = new Window
-        {
-            Title = "LoL Idle - Janela flutuante",
-            Width = 900,
-            Height = 650,
-            MinWidth = 360,
-            MinHeight = 240,
-            WindowStartupLocation = owner == null
-                ? WindowStartupLocation.CenterScreen
-                : WindowStartupLocation.CenterOwner,
-            Owner = owner,
-            Background = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(17, 19, 24))
-        };
-
-        popupWindow.WindowStyle = WindowStyle.SingleBorderWindow;
-
-        LogFloatingWindowEvent("CreateFloating: janela WPF criada.");
-        var popupRoot = new Grid();
-        popupRoot.RowDefinitions.Add(new RowDefinition { Height = new GridLength(36) });
-        popupRoot.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-
-        var popupToolbar = new Border
-        {
-            Background = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(25, 28, 35)),
-            Padding = new Thickness(8, 0, 8, 0)
-        };
-        var popupToolbarGrid = new Grid();
-        popupToolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        popupToolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
-
-        var popupTitle = new TextBlock
-        {
-            Text = "LoL Idle",
-            Foreground = System.Windows.Media.Brushes.White,
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center
-        };
-        popupToolbarGrid.Children.Add(popupTitle);
-
-        var popupTopmostButton = new Button
-        {
-            Content = "◇",
-            Foreground = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(216, 220, 228)),
-            Background = System.Windows.Media.Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            FontSize = 16,
-            Cursor = System.Windows.Input.Cursors.Hand,
-            ToolTip = "Ativar janela sempre no topo"
-        };
-        popupTopmostButton.Click += (_, _) =>
-        {
-            popupWindow.Topmost = !popupWindow.Topmost;
-            popupTopmostButton.Content = popupWindow.Topmost ? "◆" : "◇";
-            popupTopmostButton.Foreground = popupWindow.Topmost
-                ? System.Windows.Media.Brushes.Gold
-                : new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(216, 220, 228));
-            popupTopmostButton.ToolTip = popupWindow.Topmost
-                ? "Desativar janela sempre no topo"
-                : "Ativar janela sempre no topo";
-        };
-        Grid.SetColumn(popupTopmostButton, 1);
-        popupToolbarGrid.Children.Add(popupTopmostButton);
-        popupToolbar.Child = popupToolbarGrid;
-        Grid.SetRow(popupToolbar, 0);
-        popupRoot.Children.Add(popupToolbar);
-
-        LogFloatingWindowEvent("CreateFloating: antes de criar controle WebView2.");
-        var popupView = new Microsoft.Web.WebView2.Wpf.WebView2
-        {
-            DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24)
-        };
-        Grid.SetRow(popupView, 1);
-        popupRoot.Children.Add(popupView);
-
-        _floatingWindow = popupWindow;
-        _floatingView = popupView;
-
-        popupWindow.Closed += (_, _) =>
-        {
-            // Não deixar uma referência morta bloquear a próxima abertura.
-            if (ReferenceEquals(_floatingWindow, popupWindow))
-            {
-                _floatingWindow = null;
-                _floatingView = null;
-            }
-        };
-
-        popupWindow.Content = popupRoot;
-        LogFloatingWindowEvent("CreateFloating: conteúdo da janela configurado.");
-
+        _isPreparingFloatingView = true;
+        Window? popupWindow = null;
         try
         {
-            // Inicializa o controle antes de exibir a janela, evitando a janela preta
-            // causada por entregar ao WebView2 um CoreWebView2 ainda não pronto.
-            LogFloatingWindowEvent("CreateFloating: antes de EnsureCoreWebView2Async.");
-            await popupView.EnsureCoreWebView2Async(_webViewEnvironment);
-            LogFloatingWindowEvent("CreateFloating: EnsureCoreWebView2Async concluído.");
-            popupView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
-            popupView.CoreWebView2.Settings.IsStatusBarEnabled = false;
-            popupView.CoreWebView2.Settings.AreDevToolsEnabled = false;
-
-            popupView.CoreWebView2.NewWindowRequested += (_, popupArgs) =>
+            LogFloatingWindowEvent("Prepare: iniciando criação do host oculto.");
+            popupWindow = new Window
             {
-                _ = HandleNewWindowRequestedAsync(popupArgs, popupWindow);
+                Title = "LoL Idle - Janela flutuante",
+                Width = 2,
+                Height = 2,
+                Left = -32000,
+                Top = -32000,
+                MinWidth = 360,
+                MinHeight = 240,
+                WindowStartupLocation = WindowStartupLocation.Manual,
+                Owner = owner,
+                Opacity = 0,
+                ShowInTaskbar = false,
+                ShowActivated = false,
+                WindowStyle = WindowStyle.None,
+                ResizeMode = ResizeMode.NoResize,
+                Background = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(17, 19, 24))
             };
-            LogFloatingWindowEvent("CreateFloating: configurações e eventos aplicados.");
 
-            // A janela será exibida pelo chamador depois que args.NewWindow
-            // receber esta instância, ou imediatamente no fluxo de abertura manual.
-            return popupView.CoreWebView2;
-        }
-        catch
-        {
-            if (ReferenceEquals(_floatingWindow, popupWindow))
+            var root = new Grid();
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(36) });
+            root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+            var toolbar = new Border
             {
-                _floatingWindow = null;
-                _floatingView = null;
+                Background = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(25, 28, 35)),
+                Padding = new Thickness(8, 0, 8, 0)
+            };
+            var toolbarGrid = new Grid();
+            toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            toolbarGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
+            toolbarGrid.Children.Add(new TextBlock
+            {
+                Text = "LoL Idle",
+                Foreground = System.Windows.Media.Brushes.White,
+                FontWeight = FontWeights.SemiBold,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+
+            var topmostButton = new Button
+            {
+                Content = "◇",
+                Foreground = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(216, 220, 228)),
+                Background = System.Windows.Media.Brushes.Transparent,
+                BorderThickness = new Thickness(0),
+                FontSize = 16,
+                Cursor = Cursors.Hand,
+                ToolTip = "Ativar janela sempre no topo"
+            };
+            topmostButton.Click += (_, _) =>
+            {
+                popupWindow.Topmost = !popupWindow.Topmost;
+                topmostButton.Content = popupWindow.Topmost ? "◆" : "◇";
+                topmostButton.Foreground = popupWindow.Topmost
+                    ? System.Windows.Media.Brushes.Gold
+                    : new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromRgb(216, 220, 228));
+                topmostButton.ToolTip = popupWindow.Topmost
+                    ? "Desativar janela sempre no topo"
+                    : "Ativar janela sempre no topo";
+            };
+            Grid.SetColumn(topmostButton, 1);
+            toolbarGrid.Children.Add(topmostButton);
+            toolbar.Child = toolbarGrid;
+            Grid.SetRow(toolbar, 0);
+            root.Children.Add(toolbar);
+
+            var view = new Microsoft.Web.WebView2.Wpf.WebView2
+            {
+                DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24)
+            };
+            Grid.SetRow(view, 1);
+            root.Children.Add(view);
+            popupWindow.Content = root;
+
+            _preparedFloatingWindow = popupWindow;
+            _preparedFloatingView = view;
+            popupWindow.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_preparedFloatingWindow, popupWindow))
+                {
+                    _preparedFloatingWindow = null;
+                    _preparedFloatingView = null;
+                }
+                if (ReferenceEquals(_floatingWindow, popupWindow))
+                {
+                    _floatingWindow = null;
+                    _floatingView = null;
+                }
+            };
+
+            // Criar e mostrar o host invisível garante que o controle WPF tenha
+            // seu HWND antes de inicializar o runtime do WebView2.
+            popupWindow.Show();
+            await popupWindow.Dispatcher.InvokeAsync(() => { },
+                System.Windows.Threading.DispatcherPriority.Loaded);
+
+            LogFloatingWindowEvent("Prepare: antes de EnsureCoreWebView2Async.");
+            await view.EnsureCoreWebView2Async(_webViewEnvironment);
+            LogFloatingWindowEvent("Prepare: EnsureCoreWebView2Async concluído.");
+
+            view.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+            view.CoreWebView2.Settings.IsStatusBarEnabled = false;
+            view.CoreWebView2.Settings.AreDevToolsEnabled = false;
+            view.CoreWebView2.NewWindowRequested += (_, popupArgs) =>
+                HandleNewWindowRequested(popupArgs);
+
+            popupWindow.Hide();
+            popupWindow.Opacity = 1;
+            popupWindow.ShowInTaskbar = true;
+            popupWindow.WindowStyle = WindowStyle.SingleBorderWindow;
+            popupWindow.ResizeMode = ResizeMode.CanResize;
+            popupWindow.Width = 900;
+            popupWindow.Height = 650;
+            popupWindow.MinWidth = 360;
+            popupWindow.MinHeight = 240;
+            popupWindow.WindowStartupLocation = owner == null
+                ? WindowStartupLocation.CenterScreen
+                : WindowStartupLocation.CenterOwner;
+
+            LogFloatingWindowEvent("Prepare: janela flutuante pronta e oculta.");
+            FloatingReopenButton.IsEnabled = true;
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"Prepare: falha ao inicializar WebView flutuante: {ex}");
+            if (ReferenceEquals(_preparedFloatingWindow, popupWindow))
+            {
+                _preparedFloatingWindow = null;
+                _preparedFloatingView = null;
             }
-            popupWindow.Close();
-            throw;
+            popupWindow?.Close();
+        }
+        finally
+        {
+            _isPreparingFloatingView = false;
         }
     }
 
-    // Reabre a janela se ela foi fechada, sem reutilizar um WebView2 já descartado.
+    // Abre a janela já preparada sem inicializar WebView2 durante o clique.
     private async void ReopenFloatingWindow_Click(object sender, RoutedEventArgs e)
     {
         LogFloatingWindowEvent("ReopenButton: clique recebido.");
         try
         {
-            if (_floatingWindow != null && _floatingView?.CoreWebView2 != null)
+            if (_floatingWindow != null)
             {
                 _floatingWindow.Activate();
                 return;
             }
 
-            var floatingCore = await CreateFloatingWebViewAsync(this);
-            _floatingWindow?.Show();
+            if (_preparedFloatingWindow == null || _preparedFloatingView?.CoreWebView2 == null)
+                await PrepareFloatingWebViewAsync(this);
+
+            if (_preparedFloatingWindow == null || _preparedFloatingView?.CoreWebView2 == null)
+            {
+                LogFloatingWindowEvent("ReopenButton: WebView preparado indisponível.");
+                return;
+            }
+
+            var window = _preparedFloatingWindow;
+            var view = _preparedFloatingView;
+            var core = view.CoreWebView2;
+            _preparedFloatingWindow = null;
+            _preparedFloatingView = null;
+            _floatingWindow = window;
+            _floatingView = view;
+
+            window.Opacity = 1;
+            window.Show();
+            window.Activate();
 
             var target = Uri.TryCreate(_lastFloatingUri, UriKind.Absolute, out var savedUri) &&
                          savedUri.Scheme is "http" or "https"
                 ? savedUri.ToString()
                 : GameUrl;
+            if (string.IsNullOrWhiteSpace(core.Source) || core.Source == "about:blank")
+                core.Navigate(target);
 
-            // O botão é uma abertura explícita, então a nova janela recebe o jogo
-            // somente depois que o WebView2 terminou sua inicialização.
-            if (floatingCore.Source == "about:blank" ||
-                string.IsNullOrWhiteSpace(floatingCore.Source))
-            {
-                floatingCore.Navigate(target);
-            }
+            _ = PrepareFloatingWebViewAsync(this);
         }
         catch (Exception ex)
         {
+            LogFloatingWindowEvent($"ReopenButton: falha: {ex}");
             MessageBox.Show(
-                "Não foi possível abrir a janela flutuante.\n\n" + ex.Message,
+                "Não foi possível abrir a janela flutuante.\\n\\n" + ex.Message,
                 "LoL Idle - janela flutuante",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
