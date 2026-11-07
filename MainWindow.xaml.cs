@@ -1312,10 +1312,27 @@ public partial class MainWindow : Window
         try
         {
             var json = await source.ExecuteScriptAsync(script);
-            var snapshot = JsonSerializer.Deserialize<PanelSnapshot>(json,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
+            // WebView2 pode devolver o resultado como objeto JSON ou como uma string
+            // contendo JSON, dependendo do tipo retornado pelo script.
+            using var resultDocument = JsonDocument.Parse(json);
+            var payload = resultDocument.RootElement.ValueKind == JsonValueKind.String
+                ? resultDocument.RootElement.GetString()
+                : resultDocument.RootElement.GetRawText();
+            var snapshot = string.IsNullOrWhiteSpace(payload)
+                ? null
+                : JsonSerializer.Deserialize<PanelSnapshot>(payload,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
             if (snapshot == null)
+            {
+                foreach (var panel in _panelWindows.Values.Where(x => x.IsVisible))
+                {
+                    panel.SetPanelContent("A leitura da interface não retornou dados. Vou tentar novamente automaticamente.");
+                    panel.SetActionStatus("Aguardando uma resposta válida do jogo...");
+                }
                 return;
+            }
 
             if (_panelWindows.TryGetValue("quest", out var quest) && quest.IsVisible)
             {
@@ -1337,9 +1354,15 @@ public partial class MainWindow : Window
                     action => _ = ExecutePanelActionAsync(action));
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Uma leitura indisponível não deve interromper o jogo.
+            // Não interrompe o jogo, mas deixa o problema visível nos painéis.
+            var detail = ex.Message.Length > 180 ? ex.Message[..180] : ex.Message;
+            foreach (var panel in _panelWindows.Values.Where(x => x.IsVisible))
+            {
+                panel.SetPanelContent($"Falha ao ler a interface do jogo: {detail}");
+                panel.SetActionStatus("A leitura será tentada novamente automaticamente.");
+            }
         }
     }
 
