@@ -1294,7 +1294,7 @@ public partial class MainWindow : Window
                 if (skillNames.length >= 8) break;
             }
             window.__lolIdleNextActionId = nextId;
-            return {
+            return JSON.stringify({
                 quest: collect(/missões|missao|quest|progresso|objetivo|recompensa/i),
                 sidebar: collect(/mochila|equipamento|itens|poções|pocões|poção|runas|cartas|loja|inventário/i),
                 character: collect(/nível|nivel|experiência|experiencia|habilidades|atributos|dano|armadura|poder|mana|crítico|critico|esquiva|abates|mortes|vida|saúde/i),
@@ -1306,7 +1306,7 @@ public partial class MainWindow : Window
                     skills: skillNames
                 },
                 actions
-            };
+            });
         })();";
 
         try
