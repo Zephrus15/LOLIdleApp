@@ -768,7 +768,7 @@ public partial class MainWindow : Window
                     : toolbarIconColor;
                 topmostButton.Content = CreateToolbarIcon(
                     popupWindow.Topmost ? "pin-filled" : "pin",
-                    (Brush)topmostButton.Foreground);
+                    (System.Windows.Media.Brush)topmostButton.Foreground);
                 topmostButton.ToolTip = popupWindow.Topmost
                     ? "Desativar janela sempre no topo"
                     : "Ativar janela sempre no topo";
@@ -799,7 +799,7 @@ public partial class MainWindow : Window
                     : toolbarIconColor;
                 audioMuteButton.Content = CreateToolbarIcon(
                     _settings.MasterMuted ? "mute" : "volume",
-                    (Brush)audioMuteButton.Foreground);
+                    (System.Windows.Media.Brush)audioMuteButton.Foreground);
                 audioMuteButton.ToolTip = _settings.MasterMuted
                     ? "Ativar todo o áudio"
                     : "Silenciar todo o áudio";
