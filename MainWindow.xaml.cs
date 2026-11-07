@@ -545,6 +545,11 @@ public partial class MainWindow : Window
             ShowFloatingWindow(window);
             LogFloatingWindowEvent("Popup: janela exibida.");
 
+            // Ao entrar no modo flutuante, esconde a janela principal e mantém
+            // o aplicativo acessível pelo ícone da bandeja do Windows.
+            HideToTray();
+            LogFloatingWindowEvent("Popup: janela principal ocultada na bandeja.");
+
             _ = PrepareFloatingWebViewAsync(this);
         }
         catch (Exception ex)
@@ -1397,6 +1402,8 @@ public partial class MainWindow : Window
             if (_floatingWindow != null)
             {
                 ShowFloatingWindow(_floatingWindow);
+                HideToTray();
+                LogFloatingWindowEvent("ReopenButton: janela principal ocultada na bandeja.");
                 return;
             }
 
@@ -1418,6 +1425,8 @@ public partial class MainWindow : Window
             _floatingView = view;
 
             ShowFloatingWindow(window);
+            HideToTray();
+            LogFloatingWindowEvent("ReopenButton: janela principal ocultada na bandeja.");
 
             var target = Uri.TryCreate(_lastFloatingUri, UriKind.Absolute, out var savedUri) &&
                          savedUri.Scheme is "http" or "https"
