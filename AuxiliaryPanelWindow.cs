@@ -28,6 +28,7 @@ public sealed class AuxiliaryPanelWindow : Window
     {
         _supportsOpacity = supportsOpacity;
         _panelOpacity = Math.Clamp(opacity, 0.15, 1.0);
+        var isCharacterPanel = string.Equals(title, "Herói", StringComparison.Ordinal);
 
         Title = title;
         Width = 380;
@@ -37,16 +38,22 @@ public sealed class AuxiliaryPanelWindow : Window
         WindowStyle = WindowStyle.None;
         ResizeMode = ResizeMode.CanResize;
         ShowInTaskbar = true;
-        Background = new SolidColorBrush(Color.FromRgb(17, 19, 24));
+        AllowsTransparency = isCharacterPanel;
+        Background = isCharacterPanel
+            ? Brushes.Transparent
+            : new SolidColorBrush(Color.FromRgb(17, 19, 24));
         Opacity = supportsOpacity ? _panelOpacity : 1.0;
 
-        var root = new Grid();
+        var root = new Grid
+        {
+            Background = isCharacterPanel ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(17, 19, 24))
+        };
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(38) });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
 
         var header = new Grid
         {
-            Background = new SolidColorBrush(Color.FromRgb(25, 28, 35)),
+            Background = isCharacterPanel ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(25, 28, 35)),
             Margin = new Thickness(0)
         };
         header.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -70,11 +77,16 @@ public sealed class AuxiliaryPanelWindow : Window
         var tabs = new TabControl
         {
             Margin = new Thickness(8),
-            Background = new SolidColorBrush(Color.FromRgb(17, 19, 24)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(48, 52, 61))
+            Background = isCharacterPanel ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(17, 19, 24)),
+            BorderBrush = isCharacterPanel ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(48, 52, 61)),
+            BorderThickness = isCharacterPanel ? new Thickness(0) : new Thickness(1)
         };
 
-        var overview = new StackPanel { Margin = new Thickness(12) };
+        var overview = new StackPanel
+        {
+            Margin = isCharacterPanel ? new Thickness(12, 4, 12, 12) : new Thickness(12),
+            Background = Brushes.Transparent
+        };
         overview.Children.Add(new TextBlock
         {
             Text = "INFORMAÇÕES DO JOGO",
@@ -112,7 +124,10 @@ public sealed class AuxiliaryPanelWindow : Window
             FontSize = 11,
             Margin = new Thickness(4, 4, 4, 10)
         };
-        var actionContent = new StackPanel();
+        var actionContent = new StackPanel
+        {
+            Background = isCharacterPanel ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(17, 19, 24))
+        };
         actionContent.Children.Add(_actionStatus);
         actionContent.Children.Add(new ScrollViewer
         {
@@ -162,7 +177,7 @@ public sealed class AuxiliaryPanelWindow : Window
                 HorizontalContentAlignment = System.Windows.HorizontalAlignment.Left,
                 Padding = new Thickness(10, 7, 10, 7),
                 Margin = new Thickness(0, 0, 0, 6),
-                Background = new SolidColorBrush(Color.FromRgb(34, 39, 49)),
+                Background = isCharacterPanel ? Brushes.Transparent : new SolidColorBrush(Color.FromRgb(34, 39, 49)),
                 Foreground = Brushes.White,
                 BorderBrush = new SolidColorBrush(Color.FromRgb(64, 71, 84)),
                 Cursor = Cursors.Hand,
