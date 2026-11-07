@@ -1,9 +1,6 @@
-using System.Text.RegularExpressions;
 using Microsoft.Web.WebView2.Core;
 using System;
 using System.IO;
-using System.Collections.Generic;
-using System.Linq;
 using System.ComponentModel;
 using System.Text.Json;
 using System.Windows;
@@ -14,7 +11,6 @@ using System.Windows.Input;
 using System.Windows.Media;
 using Color = System.Windows.Media.Color;
 using Brushes = System.Windows.Media.Brushes;
-using Panel = System.Windows.Controls.Panel;
 using CheckBox = System.Windows.Controls.CheckBox;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
@@ -160,7 +156,6 @@ public partial class MainWindow : Window
     private Microsoft.Web.WebView2.Wpf.WebView2? _preparedFloatingView;
     private bool _isPreparingFloatingView;
     private Window? _floatingSettingsWindow;
-    private readonly Dictionary<string, AuxiliaryPanelWindow> _panelWindows = new();
     private WindowSettings _settings = new();
     private string SettingsPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -192,12 +187,6 @@ public partial class MainWindow : Window
         public double FloatingHeight { get; set; } = 650;
         public double FloatingLeft { get; set; } = 100;
         public double FloatingTop { get; set; } = 100;
-        public bool ShowQuestPanel { get; set; }
-        public bool ShowSidebarPanel { get; set; }
-        public bool ShowCharacterPanel { get; set; }
-        public double QuestPanelOpacity { get; set; } = 0.30;
-        public double SidebarPanelOpacity { get; set; } = 0.60;
-        public double CharacterPanelOpacity { get; set; } = 0.80;
         public bool MusicMuted { get; set; }
         public bool EffectsMuted { get; set; }
         public bool MasterMuted { get; set; }
@@ -464,9 +453,6 @@ public partial class MainWindow : Window
         _allowExit = true;
 
         _floatingSettingsWindow?.Close();
-        foreach (var panel in new List<AuxiliaryPanelWindow>(_panelWindows.Values))
-            panel.Close();
-        _panelWindows.Clear();
 
         // Fecha a janela flutuante junto com o processo quando o usuário escolhe Sair.
         if (_floatingWindow != null)
@@ -952,49 +938,6 @@ public partial class MainWindow : Window
         return false;
     }
 
-    private Button CreatePanelToggleButton(string label, string key, int column)
-    {
-        var isEnabled = key switch
-        {
-            "quest" => _settings.ShowQuestPanel,
-            "sidebar" => _settings.ShowSidebarPanel,
-            _ => _settings.ShowCharacterPanel
-        };
-
-        var button = new Button
-        {
-            Content = isEnabled ? label + " ✓" : label,
-            Foreground = isEnabled
-                ? new SolidColorBrush(Color.FromRgb(232, 207, 143))
-                : new SolidColorBrush(Color.FromRgb(155, 164, 178)),
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            FontSize = 11,
-            Padding = new Thickness(2, 0, 2, 0),
-            Cursor = Cursors.Hand,
-            ToolTip = isEnabled ? "Desativar painel " + label : "Ativar painel " + label
-        };
-        button.Click += (_, _) =>
-        {
-            var currentlyEnabled = key switch
-            {
-                "quest" => _settings.ShowQuestPanel,
-                "sidebar" => _settings.ShowSidebarPanel,
-                _ => _settings.ShowCharacterPanel
-            };
-            SetPanelVisibility(key, !currentlyEnabled);
-            button.Content = !currentlyEnabled ? label + " ✓" : label;
-            button.Foreground = !currentlyEnabled
-                ? new SolidColorBrush(Color.FromRgb(232, 207, 143))
-                : new SolidColorBrush(Color.FromRgb(155, 164, 178));
-            button.ToolTip = !currentlyEnabled
-                ? "Desativar painel " + label
-                : "Ativar painel " + label;
-        };
-        Grid.SetColumn(button, column);
-        return button;
-    }
-
     // Abre o centro de controle dos painéis independentes e do áudio.
     private void ShowFloatingSettings()
     {
@@ -1079,308 +1022,6 @@ public partial class MainWindow : Window
         check.Checked += (_, _) => changed(true);
         check.Unchecked += (_, _) => changed(false);
         parent.Children.Add(check);
-    }
-
-    private void SetPanelVisibility(string key, bool visible)
-    {
-        switch (key)
-        {
-            case "quest": _settings.ShowQuestPanel = visible; break;
-            case "sidebar": _settings.ShowSidebarPanel = visible; break;
-            case "character": _settings.ShowCharacterPanel = visible; break;
-        }
-
-        if (visible)
-        {
-            var panel = GetOrCreatePanel(key);
-            panel.SetPanelVisible(true);
-        }
-        else if (_panelWindows.TryGetValue(key, out var panel))
-        {
-            panel.SetPanelVisible(false);
-        }
-
-        SaveWindowSettings();
-    }
-
-    private void SetPanelOpacity(string key, double opacity)
-    {
-        switch (key)
-        {
-            case "quest": _settings.QuestPanelOpacity = opacity; break;
-            case "sidebar": _settings.SidebarPanelOpacity = opacity; break;
-            case "character": _settings.CharacterPanelOpacity = opacity; break;
-        }
-
-        if (_panelWindows.TryGetValue(key, out var panel))
-            panel.SetPanelOpacity(opacity);
-
-        QueueWindowSettingsSave();
-    }
-
-    private void RestorePanelWindows()
-    {
-        if (_settings.ShowQuestPanel)
-            GetOrCreatePanel("quest").SetPanelVisible(true);
-        if (_settings.ShowSidebarPanel)
-            GetOrCreatePanel("sidebar").SetPanelVisible(true);
-        if (_settings.ShowCharacterPanel)
-            GetOrCreatePanel("character").SetPanelVisible(true);
-    }
-
-    private sealed class PanelSnapshot
-    {
-        public string Quest { get; set; } = "";
-        public string Sidebar { get; set; } = "";
-        public string Character { get; set; } = "";
-        public CharacterPanelStats CharacterStats { get; set; } = new();
-        public List<PanelActionItem> Actions { get; set; } = new();
-    }
-
-    // Lê somente texto presente no DOM do jogo. Não estima nem inventa atributos.
-    private async Task RefreshPanelDataAsync()
-    {
-        if (!_panelWindows.Values.Any(panel => panel.IsVisible))
-            return;
-
-        var floatingCore = _floatingView?.CoreWebView2;
-        var source = floatingCore != null &&
-            !string.Equals(floatingCore.Source, "about:blank", StringComparison.OrdinalIgnoreCase)
-                ? floatingCore
-                : GameView?.CoreWebView2;
-        if (source == null)
-            return;
-
-        const string script = @"(() => {
-            const lines = (document.body?.innerText || '')
-                .split(/\n+/).map(x => x.trim()).filter(Boolean);
-            const collect = (pattern) => {
-                const found = [];
-                for (let i = 0; i < lines.length; i++) {
-                    if (pattern.test(lines[i])) {
-                        for (let j = Math.max(0, i - 1); j <= Math.min(lines.length - 1, i + 2); j++)
-                            found.push(lines[j]);
-                    }
-                }
-                return [...new Set(found)].slice(0, 28).join('\n');
-            };
-            const visible = (el) => {
-                const r = el.getBoundingClientRect();
-                const st = getComputedStyle(el);
-                return r.width > 0 && r.height > 0 && st.display !== 'none' &&
-                    st.visibility !== 'hidden' && Number(st.opacity || 1) > 0;
-            };
-            let nextId = Number(window.__lolIdleNextActionId || 0);
-            const actions = [];
-            const candidates = document.querySelectorAll('button,[role=""button""],a,[onclick],summary');
-            for (const el of candidates) {
-                if (!visible(el)) continue;
-                const label = (el.innerText || el.getAttribute('aria-label') ||
-                    el.getAttribute('title') || el.getAttribute('alt') ||
-                    el.getAttribute('data-tooltip') || el.value || '')
-                    .replace(/\s+/g, ' ').trim().slice(0, 90);
-                if (!label) continue;
-                const region = el.closest('aside,section,article,[role=""dialog""],li') || el.parentElement;
-                const context = (region?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 180);
-                const hay = (label + ' ' + context + ' ' + (el.getAttribute('class') || '')).toLowerCase();
-                let category = 'sidebar';
-                if (/quest|mission|miss[aã]o|objetivo|recompensa|daily|weekly|claim reward/.test(hay))
-                    category = 'quest';
-                else if (/skill|ability|habilidade|personagem|character|hero|mana|health|vida|atributo|level|nível/.test(hay))
-                    category = 'character';
-                else if (/item|invent[aá]rio|mochila|equip|po[cç][aã]o|shop|loja|craft|upgrade|comprar|vender|usar/.test(hay))
-                    category = 'sidebar';
-                if (!el.hasAttribute('data-lolidle-action-id')) {
-                    nextId++;
-                    el.setAttribute('data-lolidle-action-id', String(nextId));
-                }
-                actions.push({
-                    id: el.getAttribute('data-lolidle-action-id'),
-                    label,
-                    category,
-                    context
-                });
-            }
-            const statElements = [...document.querySelectorAll('body *')].filter(el =>
-                visible(el) && (el.children.length === 0 || el.matches('progress,[role=""progressbar""]')));
-            const parseStat = (kind, words) => {
-                const re = new RegExp(words, 'i');
-                for (const el of statElements) {
-                    const hint = [el.innerText, el.getAttribute('aria-label'), el.getAttribute('title'),
-                        el.getAttribute('data-tooltip'), el.id, el.className,
-                        el.getAttribute('role')].filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
-                    if (!re.test(hint)) continue;
-                    const nearby = (el.innerText || el.parentElement?.innerText ||
-                        el.parentElement?.parentElement?.innerText || '').replace(/\\s+/g, ' ').trim();
-                    const raw = el.getAttribute('aria-valuenow') ?? el.value;
-                    const maxRaw = el.getAttribute('aria-valuemax') ?? el.max;
-                    const number = v => {
-                        if (v == null || v === '') return null;
-                        const n = Number(String(v).replace(',', '.').replace(/[^0-9.%-]/g, '').replace('%',''));
-                        return Number.isFinite(n) ? n : null;
-                    };
-                    let current = number(raw), maximum = number(maxRaw), percent = null;
-                    const pair = nearby.match(/(\\d[\\d.,]*)\\s*(?:\\/|de)\\s*(\\d[\\d.,]*)/);
-                    if (pair) { current ??= number(pair[1]); maximum ??= number(pair[2]); }
-                    if (current != null && maximum != null && maximum > 0)
-                        percent = Math.max(0, Math.min(100, current / maximum * 100));
-                    else if (el.tagName === 'PROGRESS' && maximum > 0)
-                        percent = Math.max(0, Math.min(100, current / maximum * 100));
-                    else {
-                        const width = (el.getAttribute('style') || '').match(/width\\s*:\\s*([\\d.]+)%/i);
-                        if (width) percent = Math.max(0, Math.min(100, Number(width[1])));
-                    }
-                    if (current != null || percent != null) {
-                        return { label: kind, current: current == null ? '' : String(current),
-                            maximum: maximum == null ? '' : String(maximum), percent };
-                    }
-                }
-                return null;
-            };
-            const levelLine = lines.find(x => /(?:nível|nivel|level)\\s*[:#-]?\\s*\\d+/i.test(x)) || '';
-            const skillNames = [];
-            for (const el of statElements) {
-                const hint = [el.getAttribute('aria-label'), el.getAttribute('title'),
-                    el.getAttribute('alt'), el.getAttribute('data-tooltip'), el.className, el.id]
-                    .filter(Boolean).join(' ');
-                if (!/skill|ability|spell|habilidade|passiva/i.test(hint)) continue;
-                const name = (el.getAttribute('aria-label') || el.getAttribute('title') ||
-                    el.getAttribute('alt') || el.innerText || '').replace(/\\s+/g, ' ').trim();
-                if (name && !skillNames.includes(name)) skillNames.push(name.slice(0, 70));
-                if (skillNames.length >= 8) break;
-            }
-            window.__lolIdleNextActionId = nextId;
-            return JSON.stringify({
-                quest: collect(/missões|missao|quest|progresso|objetivo|recompensa/i),
-                sidebar: collect(/mochila|equipamento|itens|poções|pocões|poção|runas|cartas|loja|inventário/i),
-                character: collect(/nível|nivel|experiência|experiencia|habilidades|atributos|dano|armadura|poder|mana|crítico|critico|esquiva|abates|mortes|vida|saúde/i),
-                characterStats: {
-                    hp: parseStat('Vida', 'hp|health|vida|saúde'),
-                    mp: parseStat('Mana', 'mp|mana'),
-                    xp: parseStat('XP', 'xp|experience|experiência|experiencia'),
-                    level: levelLine,
-                    skills: skillNames
-                },
-                actions
-            });
-        })();";
-
-        try
-        {
-            var json = await source.ExecuteScriptAsync(script);
-
-            // WebView2 pode devolver o resultado como objeto JSON ou como uma string
-            // contendo JSON, dependendo do tipo retornado pelo script.
-            using var resultDocument = JsonDocument.Parse(json);
-            var payload = resultDocument.RootElement.ValueKind == JsonValueKind.String
-                ? resultDocument.RootElement.GetString()
-                : resultDocument.RootElement.GetRawText();
-            var snapshot = string.IsNullOrWhiteSpace(payload)
-                ? null
-                : JsonSerializer.Deserialize<PanelSnapshot>(payload,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-
-            if (snapshot == null)
-            {
-                foreach (var panel in _panelWindows.Values.Where(x => x.IsVisible))
-                {
-                    panel.SetPanelContent("A leitura da interface não retornou dados. Vou tentar novamente automaticamente.");
-                    panel.SetActionStatus("Aguardando uma resposta válida do jogo...");
-                }
-                return;
-            }
-
-            if (_panelWindows.TryGetValue("quest", out var quest) && quest.IsVisible)
-            {
-                quest.SetPanelContent(snapshot.Quest);
-                quest.SetPanelActions(snapshot.Actions.Where(x => x.Category == "quest"),
-                    action => _ = ExecutePanelActionAsync(action));
-            }
-            if (_panelWindows.TryGetValue("sidebar", out var sidebar) && sidebar.IsVisible)
-            {
-                sidebar.SetPanelContent(snapshot.Sidebar);
-                sidebar.SetPanelActions(snapshot.Actions.Where(x => x.Category == "sidebar"),
-                    action => _ = ExecutePanelActionAsync(action));
-            }
-            if (_panelWindows.TryGetValue("character", out var character) && character.IsVisible)
-            {
-                character.SetPanelContent(snapshot.Character);
-                character.SetCharacterStats(snapshot.CharacterStats);
-                character.SetPanelActions(snapshot.Actions.Where(x => x.Category == "character"),
-                    action => _ = ExecutePanelActionAsync(action));
-            }
-        }
-        catch (Exception ex)
-        {
-            // Não interrompe o jogo, mas deixa o problema visível nos painéis.
-            var detail = ex.Message.Length > 180 ? ex.Message[..180] : ex.Message;
-            foreach (var panel in _panelWindows.Values.Where(x => x.IsVisible))
-            {
-                panel.SetPanelContent($"Falha ao ler a interface do jogo: {detail}");
-                panel.SetActionStatus("A leitura será tentada novamente automaticamente.");
-            }
-        }
-    }
-
-    private async Task ExecutePanelActionAsync(PanelActionItem action)
-    {
-        if (Regex.IsMatch(action.Label,
-            @"buy|purchase|upgrade|sell|claim|collect|use|equip|enhance|unlock|comprar|vender|coletar|resgatar|usar|equipar|melhorar|desbloquear|forjar|gastar",
-            RegexOptions.IgnoreCase))
-        {
-            var answer = MessageBox.Show(
-                $"Deseja executar esta ação dentro do LoL Idle?\n\n{action.Label}",
-                "Confirmar ação do jogo",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Question);
-            if (answer != MessageBoxResult.Yes)
-                return;
-        }
-
-        var floatingCore = _floatingView?.CoreWebView2;
-        var source = floatingCore != null &&
-            !string.Equals(floatingCore.Source, "about:blank", StringComparison.OrdinalIgnoreCase)
-                ? floatingCore
-                : GameView?.CoreWebView2;
-        if (source == null)
-            return;
-
-        try
-        {
-            var id = JsonSerializer.Serialize(action.Id);
-            var result = await source.ExecuteScriptAsync(
-                $"(() => {{ const el = document.querySelector('[data-lolidle-action-id=' + {id} + ']'); if (!el || !el.isConnected) return false; el.click(); return true; }})()");
-            var executed = string.Equals(result, "true", StringComparison.OrdinalIgnoreCase);
-            if (_panelWindows.TryGetValue(action.Category, out var panel))
-                panel.SetActionStatus(executed
-                    ? $"Ação enviada ao jogo: {action.Label}"
-                    : "Esse controle mudou ou não está mais disponível. Atualizando a lista...");
-            await Task.Delay(180);
-            await RefreshPanelDataAsync();
-        }
-        catch (Exception ex)
-        {
-            if (_panelWindows.TryGetValue(action.Category, out var panel))
-                panel.SetActionStatus($"Não foi possível executar a ação: {ex.Message}");
-        }
-    }
-
-    private AuxiliaryPanelWindow GetOrCreatePanel(string key)
-    {
-        if (_panelWindows.TryGetValue(key, out var existing))
-            return existing;
-
-        var (title, description, opacity) = key switch
-        {
-            "quest" => ("Missões", "Aguardando informações visíveis na interface do jogo.", _settings.QuestPanelOpacity),
-            "sidebar" => ("Barra lateral", "Aguardando informações visíveis na interface do jogo.", _settings.SidebarPanelOpacity),
-            _ => ("Herói", "Aguardando informações visíveis na interface do jogo.", _settings.CharacterPanelOpacity)
-        };
-
-        var panel = new AuxiliaryPanelWindow(title, description, key != "character", opacity);
-        panel.Closed += (_, _) => _panelWindows.Remove(key);
-        _panelWindows[key] = panel;
-        return panel;
     }
 
     private async Task ApplyAudioSettingsAsync()
