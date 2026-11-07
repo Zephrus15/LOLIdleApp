@@ -269,7 +269,7 @@ public sealed class AuxiliaryPanelWindow : Window
             Text = value,
             Foreground = new SolidColorBrush(Color.FromRgb(205, 211, 221)),
             FontSize = 10,
-            HorizontalAlignment = HorizontalAlignment.Right
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
         };
         Grid.SetColumn(valueText, 1);
         heading.Children.Add(valueText);
@@ -287,7 +287,7 @@ public sealed class AuxiliaryPanelWindow : Window
             };
             var fill = new Border
             {
-                HorizontalAlignment = HorizontalAlignment.Left,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
                 Width = Math.Clamp(stat.Percent.Value, 0, 100) * 2.5,
                 Background = new SolidColorBrush(color),
                 CornerRadius = new CornerRadius(4)
