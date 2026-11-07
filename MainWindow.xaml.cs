@@ -739,8 +739,8 @@ public partial class MainWindow : Window
             var toolbarIconColor = new SolidColorBrush(Color.FromRgb(236, 239, 245));
             var controls = new StackPanel
             {
-                Orientation = Orientation.Horizontal,
-                HorizontalAlignment = HorizontalAlignment.Right,
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
                 VerticalAlignment = VerticalAlignment.Top,
                 Margin = new Thickness(0, 10, 12, 0)
             };
@@ -750,7 +750,7 @@ public partial class MainWindow : Window
                 Background = controlBackground,
                 CornerRadius = new CornerRadius(9),
                 Padding = new Thickness(3),
-                Child = new StackPanel { Orientation = Orientation.Horizontal }
+                Child = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal }
             });
             var controlButtons = (StackPanel)((Border)controls.Children[0]).Child;
 
