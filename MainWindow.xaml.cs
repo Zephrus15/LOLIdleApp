@@ -409,11 +409,14 @@ public partial class MainWindow : Window
         CoreWebView2NewWindowRequestedEventArgs args,
         Window? owner)
     {
+        LogFloatingWindowEvent("Handler: evento recebido.");
         using (args.GetDeferral())
         {
+            LogFloatingWindowEvent("Handler: deferral obtido.");
             try
             {
                 var requestedUrl = args.Uri;
+                LogFloatingWindowEvent("Handler: argumentos lidos.");
                 var hasHttpUri = Uri.TryCreate(
                     requestedUrl, UriKind.Absolute, out var requestedUri) &&
                     requestedUri!.Scheme is "http" or "https";
@@ -457,14 +460,18 @@ public partial class MainWindow : Window
                     return;
                 }
 
+                LogFloatingWindowEvent("Handler: antes de criar WebView flutuante.");
                 var newCore = await CreateFloatingWebViewAsync(owner);
+                LogFloatingWindowEvent("Handler: WebView flutuante criado.");
                 args.NewWindow = newCore;
+                LogFloatingWindowEvent("Handler: CoreWebView2 atribuído a NewWindow.");
                 args.Handled = true;
 
                 // Só exibe a janela depois que o CoreWebView2 foi entregue ao evento.
                 // Assim o popup não aparece antes de o WebView2 assumir a solicitação.
+                LogFloatingWindowEvent("Handler: antes de exibir janela.");
                 _floatingWindow?.Show();
-                LogFloatingWindowEvent("Nova instância WebView2 atribuída ao popup e janela exibida.");
+                LogFloatingWindowEvent("Handler: janela exibida.");
             }
             catch (Exception ex)
             {
@@ -511,6 +518,7 @@ public partial class MainWindow : Window
             return _floatingView.CoreWebView2;
         }
 
+        LogFloatingWindowEvent("CreateFloating: iniciando criação da janela WPF.");
         var popupWindow = new Window
         {
             Title = "LoL Idle - Janela flutuante",
@@ -528,6 +536,7 @@ public partial class MainWindow : Window
 
         popupWindow.WindowStyle = WindowStyle.SingleBorderWindow;
 
+        LogFloatingWindowEvent("CreateFloating: janela WPF criada.");
         var popupRoot = new Grid();
         popupRoot.RowDefinitions.Add(new RowDefinition { Height = new GridLength(36) });
         popupRoot.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
@@ -580,6 +589,7 @@ public partial class MainWindow : Window
         Grid.SetRow(popupToolbar, 0);
         popupRoot.Children.Add(popupToolbar);
 
+        LogFloatingWindowEvent("CreateFloating: antes de criar controle WebView2.");
         var popupView = new Microsoft.Web.WebView2.Wpf.WebView2
         {
             DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24)
@@ -601,12 +611,15 @@ public partial class MainWindow : Window
         };
 
         popupWindow.Content = popupRoot;
+        LogFloatingWindowEvent("CreateFloating: conteúdo da janela configurado.");
 
         try
         {
             // Inicializa o controle antes de exibir a janela, evitando a janela preta
             // causada por entregar ao WebView2 um CoreWebView2 ainda não pronto.
+            LogFloatingWindowEvent("CreateFloating: antes de EnsureCoreWebView2Async.");
             await popupView.EnsureCoreWebView2Async(_webViewEnvironment);
+            LogFloatingWindowEvent("CreateFloating: EnsureCoreWebView2Async concluído.");
             popupView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
             popupView.CoreWebView2.Settings.IsStatusBarEnabled = false;
             popupView.CoreWebView2.Settings.AreDevToolsEnabled = false;
@@ -615,6 +628,7 @@ public partial class MainWindow : Window
             {
                 _ = HandleNewWindowRequestedAsync(popupArgs, popupWindow);
             };
+            LogFloatingWindowEvent("CreateFloating: configurações e eventos aplicados.");
 
             // A janela será exibida pelo chamador depois que args.NewWindow
             // receber esta instância, ou imediatamente no fluxo de abertura manual.
