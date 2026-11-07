@@ -2,7 +2,7 @@ name: Build Windows release
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'feature/compact-mode-v1.1.0']
   workflow_dispatch:
   release:
     types: [published]
