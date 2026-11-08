@@ -45,8 +45,21 @@ public partial class MainWindow : Window
                 if (window.webkitAudioContext) window.webkitAudioContext = WrappedAudioContext;
             } catch (_) {}
         }
+        const syncGameButtons = (prefs) => {
+            const sync = (id, muted) => {
+                try {
+                    const b = document.getElementById(id);
+                    if (!b) return;
+                    const curMuted = b.getAttribute('aria-pressed') === 'false';
+                    if (curMuted !== !!muted) b.click();
+                } catch (_) {}
+            };
+            sync('bt-musica', prefs.musicMuted);
+            sync('bt-efeitos', prefs.effectsMuted);
+        };
         window.__lolIdleSetAudioPrefs = async (prefs) => {
             window.__lolIdleAudioPrefs = prefs;
+            syncGameButtons(prefs);
             document.querySelectorAll('audio,video').forEach(el => {
                 if (!el.__lolIdleOriginalMutedSaved) {
                     el.__lolIdleOriginalMuted = el.muted;
@@ -65,13 +78,23 @@ public partial class MainWindow : Window
                     if (prefs.masterMuted && context.state === 'running') {
                         pausedByUs.add(context);
                         await context.suspend();
-                    } else if (!prefs.masterMuted && pausedByUs.has(context)) {
+                    } else if (!prefs.masterMuted && context.state === 'suspended') {
                         pausedByUs.delete(context);
-                        await context.resume();
+                        await context.resume().catch(() => {});
                     }
                 } catch (_) {}
             }
         };
+        const resumeAfterGesture = () => {
+            const prefs = window.__lolIdleAudioPrefs;
+            if (prefs && !prefs.masterMuted) {
+                for (const context of contexts) {
+                    if (context.state === 'suspended') context.resume().catch(() => {});
+                }
+            }
+        };
+        document.addEventListener('pointerdown', resumeAfterGesture, true);
+        document.addEventListener('keydown', resumeAfterGesture, true);
     })();";
 
     // Controles são desenhados dentro do DOM do jogo para ficarem acima do WebView2.
@@ -83,17 +106,16 @@ public partial class MainWindow : Window
             const style = document.createElement('style');
             style.textContent = `
                 #lol-idle-floating-controls { position:fixed; top:10px; right:12px; z-index:2147483647;
-                    display:flex; gap:2px; padding:3px; border-radius:9px;
-                    background:rgba(25,28,35,.88); backdrop-filter:blur(8px);
-                    opacity:.38; transition:opacity .16s ease; user-select:none; }
-                #lol-idle-floating-controls:hover { opacity:1; }
-                #lol-idle-floating-controls button { width:36px; height:34px; padding:0; border:0;
-                    border-radius:6px; color:#eceff5; background:transparent; cursor:pointer;
+                    display:flex; gap:6px; padding:0; user-select:none; }
+                #lol-idle-floating-controls button { width:30px; height:30px; padding:0;
+                    border:none; border-radius:50%;
+                    color:#fff; background:#191c23; cursor:pointer;
                     display:grid; place-items:center; }
-                #lol-idle-floating-controls button:hover { background:rgba(255,255,255,.14); }
+                #lol-idle-floating-controls button:hover { background:#2a2e38; }
                 #lol-idle-floating-controls button.active { color:#e8cf8f; }
-                #lol-idle-floating-controls svg { width:15px; height:15px; fill:none; stroke:currentColor;
+                #lol-idle-floating-controls svg { width:16px; height:16px; fill:#fff; stroke:#fff;
                     stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; pointer-events:none; }
+                #lol-idle-floating-controls button.active svg { fill:#e8cf8f; stroke:#e8cf8f; }
             `;
             document.head.appendChild(style);
             const panel = document.createElement('div');
@@ -144,8 +166,91 @@ public partial class MainWindow : Window
         }, true);
     })();";
 
+    // Observa #avisos-saque (loot real do jogo) + #log (missões) para notificar na bandeja.
+    private const string TrayNotifyScript = @"(() => {
+        if (window.__lolIdleTrayNotifyInstalled) return;
+        window.__lolIdleTrayNotifyInstalled = true;
+        const missionRe = /(miss[aã]o.*(conclu|complet)|mission.*(complete|conclu)|quest.*(complete|conclu)|conclu.*miss[aã]o|tarefa.*(conclu|complet))/i;
+        const inventoryRe = /(mochila.*chei|invent[áa]rio.*(cheio|lotado|cheia)|inventory.*(full|lotado)|bolsa.*(cheia|lotada)|sem espa[cç]o|no space|not enough space|bag.*full)/i;
+        const last = { legendary: 0, mission: 0, inventory: 0, level: 0 };
+        let prevLevel = null;
+        const send = (kind) => {
+            const now = Date.now();
+            if (now - last[kind] < 3000) return;
+            last[kind] = now;
+            try { window.chrome.webview.postMessage('lol-idle-notify:' + kind); } catch (_) {}
+        };
+        const checkSaqueNode = (n) => {
+            let el = n;
+            if (n.nodeType !== 1) return;
+            // Sobem até o bloco .saque (o jogo faz prepend em #avisos-saque)
+            while (el && el !== document.documentElement) {
+                if (el.matches && el.matches('.saque')) break;
+                el = el.parentElement;
+            }
+            if (!el || el === n.parentElement && !n.matches?.('.saque')) {
+                // Fallback: se o nó é um filho direto de #avisos-saque, considera ele mesmo
+                if (!n.parentElement?.matches?.('#avisos-saque')) return;
+                el = n;
+            }
+            const cls = (el.className || '').toString().toLowerCase();
+            const txtSaque = (el.textContent || '').toLowerCase();
+            // So drops: ignora avisos do Arsenal (Nova estrela no Arsenal) que tambem usam classe lendario mas sem imagem do item
+            if (txtSaque.includes('arsenal')) return;
+            if ((cls.includes('lendario') || cls.includes('mitico')) && el.querySelector('img')) { send('legendary'); return; }
+            if (cls.includes('alerta') || inventoryRe.test(txtSaque)) { send('inventory'); return; }
+        };
+        const checkText = (t) => {
+            const s = (t || '').toLowerCase();
+            if (!s.trim()) return;
+            if (inventoryRe.test(s)) send('inventory');
+            else if (missionRe.test(s)) send('mission');
+        };
+        const observer = new MutationObserver((mutations) => {
+            for (const m of mutations) {
+                for (const n of m.addedNodes || []) {
+                    if (n.nodeType === 1) {
+                        checkSaqueNode(n);
+                        // Log de missões (canal Servidor #log) e fallback genérico
+                        if (n.textContent) checkText(n.textContent);
+                    } else if (n.nodeType === 3) checkText(n.nodeValue);
+                }
+                if (m.type === 'characterData' && m.target) {
+                    checkText(m.target.textContent);
+                    // Nível: observa #hud-nivel (o jogo usa som 'nivel' ao upar)
+                    const pel = m.target.parentElement;
+                    const hud = (m.target.closest ? m.target.closest('#hud-nivel') : null) || (pel?.closest ? pel.closest('#hud-nivel') : null) || (pel?.id === 'hud-nivel' ? pel : null);
+                    if (hud) {
+                        const v = parseInt((m.target.textContent || '').replace(/\D/g, ''), 10);
+                        if (!isNaN(v)) {
+                            if (prevLevel == null) prevLevel = v;
+                            else if (v > prevLevel) { send('level'); prevLevel = v; }
+                            else prevLevel = v;
+                        }
+                    }
+                }
+                // Também checa mudança direta do #hud-nivel via childList (texto substituído)
+                for (const n of m.addedNodes || []) {
+                    if (n.nodeType === 1 && (n.id === 'hud-nivel' || n.querySelector?.('#hud-nivel'))) {
+                        const t = (n.textContent || '').replace(/\D/g, '');
+                        const v = parseInt(t, 10);
+                        if (!isNaN(v)) { if (prevLevel == null) prevLevel = v; else if (v > prevLevel) { send('level'); prevLevel = v; } else prevLevel = v; }
+                    }
+                }
+            }
+        });
+        const start = () => {
+            if (!document.body) { setTimeout(start, 500); return; }
+            observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+        };
+        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
+        else start();
+    })();";
+
     private Forms.NotifyIcon? _trayIcon;
+    private Forms.ToolStripMenuItem? _trayTrayMuteItem;
     private bool _allowExit;
+    private bool _isHiddenToTray;
     private bool _settingsReady;
     private System.Windows.Threading.DispatcherTimer? _settingsSaveTimer;
     private System.Drawing.Icon? _appIcon;
@@ -191,6 +296,9 @@ public partial class MainWindow : Window
         public bool MusicMuted { get; set; }
         public bool EffectsMuted { get; set; }
         public bool MasterMuted { get; set; }
+        public bool TrayMuted { get; set; } = true;
+        public bool TrayNotify { get; set; } = true;
+        public bool TrayBalloon { get; set; } = true;
     }
 
     public MainWindow()
@@ -315,6 +423,7 @@ public partial class MainWindow : Window
         }
 
         _settingsReady = true;
+        SyncTrayMenuChecks();
     }
 
     // Salva as preferências no perfil local do Windows.
@@ -373,18 +482,31 @@ public partial class MainWindow : Window
         QueueWindowSettingsSave();
     }
 
-    // Configuração do ícone e menu da bandeja do Windows.
+    // Configuração do ícone e menu da bandeja do Windows (estilo Discord).
     private void InitializeTrayIcon()
     {
         var menu = new Forms.ContextMenuStrip();
 
         menu.Items.Add(
             new Forms.ToolStripMenuItem(
-                "Abrir LoL Idle",
+                "Restaurar",
                 null,
                 (_, _) => RestoreFromTray()));
 
-        menu.Items.Add(new Forms.ToolStripSeparator());
+        var soundMenu = new Forms.ToolStripMenuItem("Som");
+
+        var trayMuteItem = new Forms.ToolStripMenuItem("Som do jogo", null, (_, _) =>
+        {
+            _settings.TrayMuted = !_settings.TrayMuted;
+            SaveWindowSettings();
+            _ = ApplyAudioSettingsAsync();
+            SyncTrayMenuChecks();
+        });
+        trayMuteItem.CheckOnClick = true;
+        soundMenu.DropDownItems.Add(trayMuteItem);
+        _trayTrayMuteItem = trayMuteItem;
+
+        menu.Items.Add(soundMenu);
 
         menu.Items.Add(
             new Forms.ToolStripMenuItem(
@@ -425,18 +547,28 @@ public partial class MainWindow : Window
         };
     }
 
+    private bool IsFloatingVisible() => _floatingWindow != null && _floatingWindow.IsVisible;
+
+    private void SyncTrayMenuChecks()
+    {
+        if (_trayTrayMuteItem != null) _trayTrayMuteItem.Checked = !_settings.TrayMuted;
+    }
+
     private void HideToTray()
     {
         SaveWindowSettings();
+        _isHiddenToTray = true;
 
         if (_trayIcon != null)
             _trayIcon.Visible = true;
 
         Hide();
+        _ = ApplyAudioSettingsAsync();
     }
 
     private void RestoreFromTray()
     {
+        _isHiddenToTray = false;
         Show();
 
         if (_trayIcon != null)
@@ -446,6 +578,7 @@ public partial class MainWindow : Window
             WindowState = WindowState.Normal;
 
         Activate();
+        _ = ApplyAudioSettingsAsync();
     }
 
     private void ExitApplication()
@@ -496,11 +629,24 @@ public partial class MainWindow : Window
 
             Directory.CreateDirectory(userData);
 
+            var envOptions = new CoreWebView2EnvironmentOptions();
+            envOptions.AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required";
             _webViewEnvironment = await CoreWebView2Environment.CreateAsync(
-                userDataFolder: userData);
+                userDataFolder: userData, options: envOptions);
 
             await GameView.EnsureCoreWebView2Async(_webViewEnvironment);
             await GameView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(AudioBootstrapScript);
+            await GameView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(TrayNotifyScript);
+            GameView.CoreWebView2.WebMessageReceived += (_, args) =>
+            {
+                try
+                {
+                    var msg = args.TryGetWebMessageAsString();
+                    if (msg != null && msg.StartsWith("lol-idle-notify:"))
+                        PlayTrayNotification(msg["lol-idle-notify:".Length..]);
+                }
+                catch { }
+            };
 
             GameView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
             GameView.CoreWebView2.Settings.IsStatusBarEnabled = false;
@@ -608,12 +754,11 @@ public partial class MainWindow : Window
             LogFloatingWindowEvent("Popup: Core pré-inicializado entregue ao jogo.");
 
             ShowFloatingWindow(window);
-            LogFloatingWindowEvent("Popup: janela exibida.");
-
-            // Ao entrar no modo flutuante, esconde a janela principal e mantém
-            // o aplicativo acessível pelo ícone da bandeja do Windows.
-            HideToTray();
-            LogFloatingWindowEvent("Popup: janela principal ocultada na bandeja.");
+            SaveWindowSettings();
+            _isHiddenToTray = true;
+            Hide();
+            _ = ApplyAudioSettingsAsync();
+            LogFloatingWindowEvent("Popup: janela exibida. Janela principal fechada (sem bandeja).");
 
             _ = PrepareFloatingWebViewAsync(this);
         }
@@ -837,6 +982,7 @@ public partial class MainWindow : Window
             LogFloatingWindowEvent("Prepare: antes de EnsureCoreWebView2Async.");
             await view.EnsureCoreWebView2Async(_webViewEnvironment);
             await view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(AudioBootstrapScript);
+            await view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(TrayNotifyScript);
             await view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(FloatingControlsScript);
             await view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(FloatingDragScript);
             view.CoreWebView2.WebMessageReceived += (_, messageArgs) =>
@@ -864,6 +1010,10 @@ public partial class MainWindow : Window
                     else if (message == "lol-idle-control:close")
                     {
                         popupWindow.Close();
+                    }
+                    else if (message != null && message.StartsWith("lol-idle-notify:"))
+                    {
+                        PlayTrayNotification(message["lol-idle-notify:".Length..]);
                     }
                 }
                 catch (InvalidOperationException)
@@ -998,6 +1148,41 @@ public partial class MainWindow : Window
 
         stack.Children.Add(new TextBlock
         {
+            Text = "BANDEJA",
+            Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143)),
+            FontWeight = FontWeights.Bold,
+            FontSize = 13,
+            Margin = new Thickness(0, 14, 0, 10)
+        });
+
+        AddAudioSetting(stack, "Mutar jogo na bandeja", _settings.TrayMuted, value =>
+        {
+            _settings.TrayMuted = value;
+            SaveWindowSettings();
+            _ = ApplyAudioSettingsAsync();
+        });
+        AddAudioSetting(stack, "Som de notificação na bandeja", _settings.TrayNotify, value =>
+        {
+            _settings.TrayNotify = value;
+            SaveWindowSettings();
+        });
+        AddAudioSetting(stack, "Balão de notificação na bandeja", _settings.TrayBalloon, value =>
+        {
+            _settings.TrayBalloon = value;
+            SaveWindowSettings();
+        });
+
+        stack.Children.Add(new TextBlock
+        {
+            Text = "Na bandeja, o jogo fica mutado e só toca um som (com balão opcional) quando: item lendário, missão concluída, inventário cheio ou up de nível.",
+            Foreground = new SolidColorBrush(Color.FromRgb(145, 153, 168)),
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Margin = new Thickness(0, 4, 0, 0)
+        });
+
+        stack.Children.Add(new TextBlock
+        {
             Text = "Música e efeitos separados só podem ser controlados quando o jogo identifica cada canal. O silenciamento geral também pausa os contextos Web Audio detectados; sons criados antes da instalação do controle ou por mecanismos externos podem ter limitações.",
             Foreground = new SolidColorBrush(Color.FromRgb(145, 153, 168)),
             FontSize = 11,
@@ -1008,6 +1193,59 @@ public partial class MainWindow : Window
         window.Content = scroll;
         window.Show();
         window.Activate();
+    }
+
+    private void PlayTrayNotification(string kind)
+    {
+        if (!_settings.TrayNotify && !_settings.TrayBalloon)
+            return;
+
+        var (title, message, sound) = kind switch
+        {
+            "legendary" => ("LoL Idle", "Item lendário obtido!", "Assets/notify_legendary.wav"),
+            "mission" => ("LoL Idle", "Missão concluída!", "Assets/notify_mission.wav"),
+            "inventory" => ("LoL Idle", "Inventário cheio!", "Assets/notify_mission.wav"),
+            "level" => ("LoL Idle", "Subiu de nível!", "Assets/notify_level.wav"),
+            _ => ("LoL Idle", "Evento importante no jogo!", "Assets/notify_mission.wav")
+        };
+
+        if (_settings.TrayNotify)
+        {
+            try
+            {
+                var resource = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,," + "/" + sound));
+                if (resource != null)
+                {
+                    // Playback síncrono via arquivo temporário (SoundPlayer.Play() assíncrono não audível quando oculto)
+                    var tmp = Path.Combine(Path.GetTempPath(), Path.GetFileNameWithoutExtension(sound) + "_" + Environment.ProcessId + ".wav");
+                    using (var fs = File.Create(tmp))
+                    using (var rs = resource.Stream)
+                        rs.CopyTo(fs);
+                    using (var player = new System.Media.SoundPlayer(tmp))
+                    {
+                        player.Load();
+                        player.PlaySync();
+                    }
+                    try { File.Delete(tmp); } catch { }
+                    LogFloatingWindowEvent($"TrayNotify: som tocado ({kind}) com {sound}");
+                }
+                else System.Media.SystemSounds.Asterisk.Play();
+            }
+            catch (Exception ex)
+            {
+                LogFloatingWindowEvent($"TrayNotify: falha no som ({kind}): {ex.Message}");
+                try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
+            }
+        }
+
+        if (_settings.TrayBalloon && _trayIcon != null)
+        {
+            try { _trayIcon.ShowBalloonTip(5000, title, message, Forms.ToolTipIcon.Info); } catch { }
+        }
+
+        if (!_isHiddenToTray)
+            return;
+        LogFloatingWindowEvent($"TrayNotify: {kind}");
     }
 
     private static void AddAudioSetting(Panel parent, string title, bool initialValue, Action<bool> changed)
@@ -1027,11 +1265,14 @@ public partial class MainWindow : Window
 
     private async Task ApplyAudioSettingsAsync()
     {
+        // Só muta de fato na bandeja (não na janela flutuante)
+        bool trulyHidden = _isHiddenToTray && !IsFloatingVisible();
+        bool effectiveMasterMuted = _settings.MasterMuted || (trulyHidden && _settings.TrayMuted);
         var preferences = JsonSerializer.Serialize(new
         {
             musicMuted = _settings.MusicMuted,
             effectsMuted = _settings.EffectsMuted,
-            masterMuted = _settings.MasterMuted
+            masterMuted = effectiveMasterMuted
         });
 
         var script = @"(() => {
@@ -1060,7 +1301,7 @@ public partial class MainWindow : Window
                 });
                 window.__lolIdleAudioObserver.observe(document.documentElement, {
                     childList: true, subtree: true, attributes: true,
-                    attributeFilter: ['src', 'id', 'class', 'data-name', 'aria-label']
+                    attributeFilter: ['src', 'id', 'class', 'data-name', 'aria-label', 'aria-pressed']
                 });
             }
             return { mediaElements: document.querySelectorAll('audio,video').length,
@@ -1085,8 +1326,11 @@ public partial class MainWindow : Window
             if (_floatingWindow != null)
             {
                 ShowFloatingWindow(_floatingWindow);
-                HideToTray();
-                LogFloatingWindowEvent("ReopenButton: janela principal ocultada na bandeja.");
+                SaveWindowSettings();
+                _isHiddenToTray = true;
+                Hide();
+                _ = ApplyAudioSettingsAsync();
+                LogFloatingWindowEvent("ReopenButton: janela flutuante reaberta. Janela principal fechada (sem bandeja).");
                 return;
             }
 
@@ -1108,8 +1352,11 @@ public partial class MainWindow : Window
             _floatingView = view;
 
             ShowFloatingWindow(window);
-            HideToTray();
-            LogFloatingWindowEvent("ReopenButton: janela principal ocultada na bandeja.");
+            SaveWindowSettings();
+            _isHiddenToTray = true;
+            Hide();
+            _ = ApplyAudioSettingsAsync();
+            LogFloatingWindowEvent("ReopenButton: janela flutuante aberta. Janela principal fechada (sem bandeja).");
 
             var target = Uri.TryCreate(_lastFloatingUri, UriKind.Absolute, out var savedUri) &&
                          savedUri.Scheme is "http" or "https"

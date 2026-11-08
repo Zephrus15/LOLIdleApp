@@ -10,14 +10,17 @@
     <AssemblyName>LoL Idle</AssemblyName>
     <ApplicationIcon>Assets\lol-idle.ico</ApplicationIcon>
     <RootNamespace>LoLIdleDesktop</RootNamespace>
-    <Version>1.1.0</Version>
-    <AssemblyVersion>1.1.0.0</AssemblyVersion>
-    <FileVersion>1.1.0.0</FileVersion>
-    <InformationalVersion>1.1.0</InformationalVersion>
+    <Version>1.2.0</Version>
+    <AssemblyVersion>1.2.0.0</AssemblyVersion>
+    <FileVersion>1.2.0.0</FileVersion>
+    <InformationalVersion>1.2.0</InformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <Resource Include="Assets\lol-idle.ico" />
+    <Resource Include="Assets\notify_legendary.wav" />
+    <Resource Include="Assets\notify_mission.wav" />
+    <Resource Include="Assets\notify_level.wav" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
   </ItemGroup>
 </Project>

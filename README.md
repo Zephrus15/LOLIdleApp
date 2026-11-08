@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.1.0](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.1.0)**
+**[Baixar LoL Idle Desktop v1.2.0](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.2.0)**
 
 ### Instalador (quando disponível na Release)
 
@@ -112,6 +112,12 @@ artifacts\installer\LoLIdleDesktop-Setup-1.1.0-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.2.0
+- Modo bandeja inteligente: jogo mutado na bandeja, com som+balão só em item lendário, missão concluída, mochila cheia e up de nível (sons 8-bit no padrão do jogo).
+- Menu da bandeja (botão direito): Restaurar / Som > Som do jogo / Sair.
+- Janela flutuante: ícones redondos opacos no estilo do jogo; ao abrir, a principal fecha (só vai para a bandeja ao fechar a principal).
+- Correções de áudio: autoplay liberado e sincronização de música/efeitos via botões do jogo.
 
 ### v1.1.0
 - Introdução da janela flutuante independente.
