@@ -114,12 +114,8 @@ O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\
 ## 📋 Histórico de versões
 
 ### v1.2.2
-- Botão de votar abre no navegador direto (TopIdle/OAuth fora da WebView).
-- Links externos (Discord, Kick, Twitch, YouTube etc.) abrem no navegador; a flutuante fecha junto ao abrir o link externo.
-- Missões: polling com mesclagem das sessões, negrito nos rótulos, barras de Passe/Tarefa, arrastável e redimensionável, salva tamanho/local.
-- Flutuante: ícones redondos opacos no estilo do jogo; ao abrir, a principal fecha (só vai para a bandeja ao fechar a principal).
-- Bandeja: Restaurar / Som > Som do jogo / Sair.
-- Sons de notificação 8-bit no padrão do jogo (lendário, missão, nível, mochila).
+- Votar abre no navegador direto (TopIdle/OAuth fora da WebView).
+- Links externos (Discord, Kick, Twitch) abrem no navegador e fecham a flutuante junto.
 
 ### v1.2.1
 - Janela de Missões (abre só junto com a flutuante): Passe/Tarefa com barras de progresso, Caçada, negrito nos rótulos, arrastável e redimensionável.
