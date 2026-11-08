@@ -37,6 +37,16 @@ Como compilar
 5. O executável será criado em:
    bin\Release\net8.0-windows\win-x64\publish\LoL Idle.exe
 
+Gerar instalador
+----------------
+1. Instale o Inno Setup 6 (winget install JRSoftware.InnoSetup -e).
+2. Execute GERAR-INSTALADOR.bat na pasta do projeto.
+3. O instalador será criado em:
+   artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
+
+O instalador verifica o Microsoft Edge WebView2 Runtime e o instala
+automaticamente quando necessário.
+
 Limitações desta versão
 -----------------------
 - Os painéis independentes de Missões, Barra lateral e Personagem não estão

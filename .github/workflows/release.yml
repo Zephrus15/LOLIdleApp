@@ -85,6 +85,34 @@ jobs:
       - name: Publicar para Windows 64 bits
         run: dotnet publish LoLIdleDesktop.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
 
+      - name: Instalar Inno Setup
+        if: hashFiles('installer/LoLIdleDesktop.iss') != ''
+        run: choco install innosetup --no-progress -y
+
+      - name: Baixar WebView2 Bootstrapper
+        if: hashFiles('installer/LoLIdleDesktop.iss') != ''
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path installer/redist | Out-Null
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile "installer/redist/MicrosoftEdgeWebView2Setup.exe"
+
+      - name: Compilar instalador
+        if: hashFiles('installer/LoLIdleDesktop.iss') != ''
+        shell: pwsh
+        run: |
+          $version = @(([xml](Get-Content LoLIdleDesktop.csproj)).Project.PropertyGroup.Version) |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            Select-Object -First 1
+          if (-not $version) { throw "Versão não encontrada no csproj." }
+          $version4 = if ($version -match '^\d+\.\d+\.\d+$') { "$version.0" } else { $version }
+          $iscc = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { throw "ISCC.exe não encontrado." }
+          & $iscc "/DMyAppVersion=$version" "/DMyAppVersion4=$version4" "/DSourceDir=$PWD\bin\Release\net8.0-windows\win-x64\publish" "/O$PWD\artifacts\installer" "installer\LoLIdleDesktop.iss"
+          if ($LASTEXITCODE -ne 0) { throw "Falha ao compilar o instalador." }
+
       - name: Criar pacote ZIP
         shell: pwsh
         run: |
@@ -110,4 +138,22 @@ jobs:
         with:
           name: LoLIdleDesktop-win-x64-test
           path: LoLIdleDesktop-win-x64.zip
+          if-no-files-found: error
+
+      - name: Anexar instalador à Release
+        if: github.event_name == 'release' && hashFiles('installer/LoLIdleDesktop.iss') != ''
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $setup = Get-ChildItem "artifacts/installer/LoLIdleDesktop-Setup-*-x64.exe" | Select-Object -First 1
+          if (-not $setup) { throw "Instalador não encontrado." }
+          gh release upload "${{ github.event.release.tag_name }}" $setup.FullName --clobber
+
+      - name: Guardar instalador de teste
+        if: github.event_name != 'release' && hashFiles('installer/LoLIdleDesktop.iss') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: LoLIdleDesktop-Setup
+          path: artifacts/installer/LoLIdleDesktop-Setup-*-x64.exe
           if-no-files-found: error

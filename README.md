@@ -8,7 +8,17 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 **[Baixar LoL Idle Desktop v1.1.0](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.1.0)**
 
-### Como instalar
+### Instalador (quando disponível na Release)
+
+Se a Release incluir o arquivo `LoLIdleDesktop-Setup-<versão>-x64.exe`:
+
+1. Baixe o instalador.
+2. Execute e siga o assistente.
+3. O instalador cria os atalhos, registra a desinstalação e verifica o WebView2 automaticamente.
+
+As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
+
+### Instalação pelo ZIP (portátil)
 
 1. Baixe o arquivo `LoLIdleDesktop-win-x64.zip` na página da Release.
 2. Extraia o conteúdo para uma pasta de sua preferência.
@@ -78,6 +88,28 @@ bin\Release\net8.0-windows\win-x64\publish\LoL Idle.exe
 ```
 
 As pastas `bin` e `obj` são geradas automaticamente durante a compilação e não precisam ser incluídas no código-fonte.
+
+### Gerar o instalador
+
+O instalador é criado com o [Inno Setup 6](https://jrsoftware.org/isinfo.php). Se ainda não estiver instalado:
+
+```bat
+winget install JRSoftware.InnoSetup -e
+```
+
+Depois execute:
+
+```bat
+GERAR-INSTALADOR.bat
+```
+
+O instalador será gerado em:
+
+```text
+artifacts\installer\LoLIdleDesktop-Setup-1.1.0-x64.exe
+```
+
+O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
 

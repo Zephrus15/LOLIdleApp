@@ -3,6 +3,9 @@ bin/
 obj/
 artifacts/
 
+# Instalador
+installer/redist/
+
 # Visual Studio / IDEs
 .vs/
 *.user
