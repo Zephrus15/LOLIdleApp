@@ -2,7 +2,7 @@
 
 Aplicativo desktop não oficial para Windows que permite jogar [LoL Idle](https://lolidle.com/jogar) em uma janela própria, sem precisar manter o navegador aberto.
 
-O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência integrada ao Windows, com recursos de janela flutuante, modo compacto e gerenciamento pela bandeja do sistema.
+O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência integrada ao Windows, com recursos de janela flutuante, controle de áudio e gerenciamento pela bandeja do sistema.
 
 ## 📥 Download
 
@@ -27,15 +27,11 @@ Não é necessário instalar o .NET separadamente para utilizar o pacote publica
 
 ### Janela flutuante
 - Permite manter o jogo em uma janela independente.
-- Opção de manter a janela sempre no topo.
-- Possibilidade de movimentar a janela pelo jogo.
-- Controles personalizados para gerenciamento da janela.
-- Opção para silenciar o áudio.
+- Opção de manter a janela sempre no topo durante a sessão atual.
+- Possibilidade de movimentar a janela arrastando pela área do jogo.
+- Controles personalizados para áudio, fixar e fechar.
+- Controle de silenciamento geral do áudio.
 - Possibilidade de fechar a janela flutuante e retornar à janela principal.
-
-### Modo compacto
-- Interface reduzida para ocupar menos espaço na tela.
-- Controles personalizados para facilitar o uso durante outras atividades.
 
 ### Bandeja do Windows
 - Fechar a janela principal oculta o aplicativo na bandeja do sistema.
@@ -44,9 +40,15 @@ Não é necessário instalar o .NET separadamente para utilizar o pacote publica
 - A sessão permanece ativa enquanto o aplicativo estiver oculto.
 
 ### Preferências e sessão
-- Salvamento automático de preferências.
-- Restauração das dimensões e da posição da janela.
+- Salvamento automático do tamanho, da posição e das preferências de áudio.
+- Restauração das dimensões e da posição da janela principal e da janela flutuante.
 - Gerenciamento da sessão do WebView2.
+
+### Limitações desta versão
+- Os painéis independentes de Missões, Barra lateral e Personagem não estão incluídos.
+- O controle de áudio disponível silencia todo o áudio do jogo. Nesta versão não há uma tela acessível para ajustar música e efeitos separadamente.
+- O botão de fixar (sempre no topo) vale para a sessão atual e não é restaurado na próxima execução.
+- O botão fechar (×) oculta o aplicativo na bandeja. Para encerrar, use **Sair** no menu da bandeja.
 
 ## 🖥️ Requisitos
 

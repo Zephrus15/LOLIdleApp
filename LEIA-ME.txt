@@ -1,4 +1,4 @@
-LoL Idle Desktop - versão 1.0.1
+LoL Idle Desktop - versão 1.1.0
 Aplicativo desktop não oficial para Windows
 
 O que é
@@ -9,7 +9,9 @@ usando Microsoft Edge WebView2. Não altera o jogo nem automatiza ações.
 Recursos
 --------
 - Janela personalizada sem abas ou barra de endereço do navegador.
-- Botão de modo compacto.
+- Janela flutuante independente com controles de áudio, fixar e fechar.
+- Arraste da janela flutuante pela área do jogo.
+- Controle de silenciamento geral do áudio.
 - Minimizar (－) envia a janela para a barra de tarefas do Windows.
 - Fechar (×) oculta o aplicativo na bandeja do sistema, sem notificação.
 - Clique esquerdo no ícone da bandeja restaura a janela.
@@ -34,6 +36,15 @@ Como compilar
 
 5. O executável será criado em:
    bin\Release\net8.0-windows\win-x64\publish\LoL Idle.exe
+
+Limitações desta versão
+-----------------------
+- Os painéis independentes de Missões, Barra lateral e Personagem não estão
+  incluídos nesta versão.
+- O controle de áudio disponível silencia todo o áudio do jogo. Não há uma
+  tela acessível para ajustar música e efeitos separadamente.
+- O botão fixar (sempre no topo) vale apenas para a sessão atual e não é
+  restaurado na próxima execução.
 
 Observações importantes
 -----------------------

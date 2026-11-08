@@ -1,0 +1,20 @@
+# Artefatos de build
+bin/
+obj/
+artifacts/
+
+# Visual Studio / IDEs
+.vs/
+*.user
+*.suo
+
+# Pacotes locais
+packages/
+
+# Empacotamento local
+package/
+LoLIdleDesktop-win-x64.zip
+
+# Sistema
+Thumbs.db
+desktop.ini
