@@ -113,7 +113,7 @@ public partial class MainWindow : Window
                     display:grid; place-items:center; }
                 #lol-idle-floating-controls button:hover { background:#2a2e38; }
                 #lol-idle-floating-controls button.active { color:#e8cf8f; }
-                #lol-idle-floating-controls svg { width:16px; height:16px; fill:none; stroke:#fff;
+                #lol-idle-floating-controls svg { width:16px; height:16px; fill:none; stroke:currentColor;
                     stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; pointer-events:none; }
                 #lol-idle-settings svg path { fill:#fff; stroke:none; }
                 #lol-idle-floating-controls button.active svg { fill:#e8cf8f; stroke:#e8cf8f; }
@@ -314,6 +314,33 @@ public partial class MainWindow : Window
     private Microsoft.Web.WebView2.Wpf.WebView2? _preparedFloatingView;
     private bool _isPreparingFloatingView;
     private Window? _floatingSettingsWindow;
+    private const string VoteButtonScript = @"(() => {
+        if (window.__lolIdleVoteButtonInstalled) return;
+        window.__lolIdleVoteButtonInstalled = true;
+        const bind = () => {
+            document.querySelectorAll('button, a, [role=button]').forEach(el => {
+                const txt = (el.textContent || '').toLowerCase();
+                const title = (el.getAttribute('title') || el.getAttribute('aria-label') || '').toLowerCase();
+                if (txt.includes('voto') || txt.includes('bônus do voto') || txt.includes('bonus do voto') || title.includes('voto') || title.includes('topidle')) {
+                    el.style.cursor = 'pointer';
+                    el.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        window.chrome.webview.postMessage('lol-idle-vote-button');
+                    }, true);
+                }
+            });
+        };
+        bind();
+        new MutationObserver(bind).observe(document.documentElement, { childList: true, subtree: true });
+    })();";
+
+    // Janela separada de voto (TopIdle) - independente da janela flutuante.
+    private Window? _voteWindow;
+    private Microsoft.Web.WebView2.Wpf.WebView2? _voteView;
+    private Window? _preparedVoteWindow;
+    private Microsoft.Web.WebView2.Wpf.WebView2? _preparedVoteView;
+    private bool _isPreparingVoteView;
     private const string MissionsScript = @"(() => {
         if (window.__lolIdleMissionsInstalled) return;
         window.__lolIdleMissionsInstalled = true;
@@ -395,6 +422,11 @@ public partial class MainWindow : Window
         public bool TrayBalloon { get; set; } = true;
         public bool ShowHeroBar { get; set; }
         public bool ShowMissions { get; set; }
+        public bool HasMissionsBounds { get; set; }
+        public double MissionsWidth { get; set; } = 360;
+        public double MissionsHeight { get; set; } = 320;
+        public double MissionsLeft { get; set; } = 200;
+        public double MissionsTop { get; set; } = 200;
         public double MissionsOpacity { get; set; } = 1.0;
         public bool IsMaximized { get; set; }
         public bool RememberWindowState { get; set; } = true;
@@ -804,20 +836,24 @@ public partial class MainWindow : Window
         var win = new Window
         {
             Title = "LoL Idle - Missões",
-            Width = 360,
+            Width = _settings.MissionsWidth >= 300 ? _settings.MissionsWidth : 360,
+            Height = _settings.MissionsHeight >= 200 ? _settings.MissionsHeight : 320,
             MinWidth = 300,
             MinHeight = 200,
-            SizeToContent = SizeToContent.Height,
             WindowStyle = WindowStyle.None,
             ResizeMode = ResizeMode.CanResize,
             ShowInTaskbar = false,
             ShowActivated = false,
             Topmost = false,
-            Background = new SolidColorBrush(Color.FromRgb(14, 16, 22)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(48, 52, 61)),
+            Background = new SolidColorBrush(Color.FromRgb(25, 28, 35)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(242, 192, 58)),
             BorderThickness = new Thickness(1)
         };
-        win.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        win.WindowStartupLocation = WindowStartupLocation.Manual;
+        win.Left = _settings.HasMissionsBounds ? _settings.MissionsLeft : 200;
+        win.Top = _settings.HasMissionsBounds ? _settings.MissionsTop : 200;
+        win.LocationChanged += (_, _) => { _settings.MissionsLeft = win.Left; _settings.MissionsTop = win.Top; _settings.HasMissionsBounds = true; SaveWindowSettings(); };
+        win.SizeChanged += (_, _) => { _settings.MissionsWidth = win.Width; _settings.MissionsHeight = win.Height; _settings.HasMissionsBounds = true; SaveWindowSettings(); };
         var root = new StackPanel { Margin = new Thickness(10), Background = new SolidColorBrush(Color.FromRgb(25, 28, 35)) };
         _missionsRoot = root;
         var top = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 6) };
@@ -999,6 +1035,20 @@ public partial class MainWindow : Window
             _preparedFloatingView = null;
             prepared.Close();
         }
+        if (_voteWindow != null)
+        {
+            var vote = _voteWindow;
+            _voteWindow = null;
+            _voteView = null;
+            vote.Close();
+        }
+        if (_preparedVoteWindow != null)
+        {
+            var preparedVote = _preparedVoteWindow;
+            _preparedVoteWindow = null;
+            _preparedVoteView = null;
+            preparedVote.Close();
+        }
 
         if (_trayIcon != null)
         {
@@ -1091,6 +1141,7 @@ public partial class MainWindow : Window
 
             GameView.Source = new Uri(GameUrl);
             _ = PrepareFloatingWebViewAsync(this);
+            _ = PrepareVoteWebViewAsync(this);
         }
         catch (Exception ex)
         {
@@ -1119,7 +1170,7 @@ public partial class MainWindow : Window
                 (Uri.TryCreate(requestedUrl, UriKind.Absolute, out var blankUri) &&
                  blankUri!.AbsoluteUri.Equals("about:blank", StringComparison.OrdinalIgnoreCase));
 
-            LogFloatingWindowEvent($"NewWindowRequested: blank={isBlankWindow}, http={hasHttpUri}, userInitiated={args.IsUserInitiated}");
+            LogFloatingWindowEvent($"NewWindowRequested: blank={isBlankWindow}, http={hasHttpUri}, host={(hasHttpUri ? requestedUri!.Host : "")}, userInitiated={args.IsUserInitiated}");
 
             if (!hasHttpUri && !isBlankWindow)
             {
@@ -1129,6 +1180,56 @@ public partial class MainWindow : Window
 
             if (hasHttpUri)
                 _lastFloatingUri = requestedUri!.ToString();
+
+            // Popup de voto (TopIdle/OAuth): abre no navegador real,
+            // porque Google/Discord bloqueiam login em WebView2.
+            // Blank (about:blank) e os demais popups continuam na janela
+            // flutuante, como antes.
+            string host = hasHttpUri ? requestedUri!.Host.ToLowerInvariant() : "";
+            string urlLower = hasHttpUri ? requestedUri!.ToString().ToLowerInvariant() : "";
+            bool isOAuthHost = host.Contains("accounts.google.com") || host.Contains("discord.com") || host.Contains("discordapp") || host.Contains("discord.gg") || host.Contains("kick.com") || host.Contains("twitch.tv");
+            bool isVoteHost = host.Contains("topidle");
+            bool isExternalHost = hasHttpUri && host.Length > 0 && !host.Equals(GameHost, StringComparison.OrdinalIgnoreCase) && !host.EndsWith("." + GameHost, StringComparison.OrdinalIgnoreCase) && (host.Contains("kick.com") || host.Contains("twitch.tv") || host.Contains("youtube.com") || host.Contains("tiktok.com") || host.Contains("instagram.com") || host.Contains("discord.gg"));
+            bool isGamePulse = hasHttpUri && (host.Equals(GameHost, StringComparison.OrdinalIgnoreCase) || host.EndsWith("." + GameHost, StringComparison.OrdinalIgnoreCase) || urlLower.Contains("/jogar") || isBlankWindow);
+            // Links de Discord e demais externos: direto no navegador (sem flutuante).
+            bool isDiscordLink = hasHttpUri && (host.Contains("discord.com") || host.Contains("discordapp") || host.Contains("discord.gg") || urlLower.Contains("discord"));
+            // Popup de voto (TopIdle/OAuth): abre no navegador real,
+            // porque Google/Discord bloqueiam login em WebView2.
+            // Blank (about:blank) e os demais popups continuam na janela
+            // flutuante, como antes.
+            if (isDiscordLink)
+            {
+                args.Handled = true;
+                LogFloatingWindowEvent($"PopupVote: ({host}) redirecionado ao navegador real.");
+                try
+                {
+                    System.Diagnostics.Process.Start(
+                        new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = requestedUri!.ToString(),
+                            UseShellExecute = true
+                        });
+                }
+                catch { }
+                return;
+            }
+            bool useVoteWindow = hasHttpUri && !isGamePulse && (isVoteHost || isOAuthHost || isExternalHost || urlLower.Contains("topidle") || urlLower.Contains("/voto"));
+            if (useVoteWindow)
+            {
+                args.Handled = true;
+                LogFloatingWindowEvent($"PopupVote: ({host}) redirecionado ao navegador real.");
+                try
+                {
+                    System.Diagnostics.Process.Start(
+                        new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = requestedUri!.ToString(),
+                            UseShellExecute = true
+                        });
+                }
+                catch { }
+                return;
+            }
 
             if (_preparedFloatingWindow == null || _preparedFloatingView?.CoreWebView2 == null)
             {
@@ -1154,10 +1255,7 @@ public partial class MainWindow : Window
             _isHiddenToTray = true;
             Hide();
             _ = ApplyAudioSettingsAsync();
-            _settings.ShowMissions = true;
-            SaveWindowSettings();
             _floatingOpened = true;
-            ShowMissions();
             LogFloatingWindowEvent("Popup: janela exibida. Janela principal fechada (sem bandeja).");
 
             _ = PrepareFloatingWebViewAsync(this);
@@ -1166,6 +1264,28 @@ public partial class MainWindow : Window
         {
             LogFloatingWindowEvent($"Popup: erro ao entregar WebView preparado: {ex}");
         }
+    }
+
+    // Mostra a janela separada de voto com decoração normal do Windows,
+    // em estilo mobile (estreita, vertical, centrada).
+    private void ShowVoteWindow(Window window)
+    {
+        window.Title = "Votar no LoL Idle — TopIdle";
+        window.WindowState = WindowState.Normal;
+        window.WindowStyle = WindowStyle.SingleBorderWindow;
+        window.ResizeMode = ResizeMode.CanResize;
+        window.ShowInTaskbar = true;
+        window.ShowActivated = true;
+        window.Topmost = false;
+        window.Opacity = 1;
+        window.Width = 420;
+        window.Height = 800;
+        window.MinWidth = 320;
+        window.MinHeight = 600;
+        window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+        if (!window.IsVisible)
+            window.Show();
+        window.Activate();
     }
 
     // Restaura a última geometria da janela flutuante sem deixá-la fora da tela.
@@ -1180,6 +1300,7 @@ public partial class MainWindow : Window
         width = Math.Clamp(width, 360, Math.Max(360, SystemParameters.VirtualScreenWidth));
         height = Math.Clamp(height, 240, Math.Max(240, SystemParameters.VirtualScreenHeight));
 
+        window.Title = "LoL Idle - Janela flutuante";
         window.WindowState = WindowState.Normal;
         window.WindowStyle = WindowStyle.None;
         window.ResizeMode = ResizeMode.CanResize;
@@ -1355,8 +1476,7 @@ public partial class MainWindow : Window
                     try { closedView?.Dispose(); } catch { }
 
                     LogFloatingWindowEvent("FloatingWindow: janela fechada; referências liberadas e popup encerrado.");
-                    _missionsWindow?.Hide();
-                    _settings.ShowMissions = false;
+                    // Mantém a memória das missões: não força abrir/fechar.
                     SaveWindowSettings();
                     _ = Dispatcher.BeginInvoke(new Action(() =>
                     {
@@ -1384,9 +1504,54 @@ public partial class MainWindow : Window
 
             LogFloatingWindowEvent("Prepare: antes de EnsureCoreWebView2Async.");
             await view.EnsureCoreWebView2Async(_webViewEnvironment);
+            view.CoreWebView2.NavigationStarting += (_, navArgs) =>
+            {
+                if (Uri.TryCreate(navArgs.Uri, UriKind.Absolute, out var navUri) &&
+                    (navUri.Scheme == "http" || navUri.Scheme == "https"))
+                {
+                    var lh = navUri.Host.ToLowerInvariant();
+                    var lu = navUri.ToString().ToLowerInvariant();
+                    if (lh.Contains("topidle") || lu.Contains("topidle"))
+                    {
+                        navArgs.Cancel = true;
+                        LogFloatingWindowEvent($"FloatingNav: voto detectado ({navUri.Host}) redirecionado ao navegador real.");
+                        try
+                        {
+                            System.Diagnostics.Process.Start(
+                                new System.Diagnostics.ProcessStartInfo
+                                {
+                                    FileName = navUri.ToString(),
+                                    UseShellExecute = true
+                                });
+                        }
+                        catch { }
+                        return;
+                    }
+                    // Discord/Kick/Twitch/youtube/etc: abre no navegador real
+                    if (lh.Length > 0 && !lh.Equals(GameHost, StringComparison.OrdinalIgnoreCase) && !lh.EndsWith("." + GameHost, StringComparison.OrdinalIgnoreCase) &&
+                        (lh.Contains("discord.com") || lh.Contains("discordapp") || lh.Contains("discord.gg") || lh.Contains("kick.com") || lh.Contains("twitch.tv") || lh.Contains("youtube.com") || lh.Contains("tiktok.com") || lh.Contains("instagram.com") || lh.Contains("accounts.google.com")))
+                    {
+                        navArgs.Cancel = true;
+                        LogFloatingWindowEvent($"FloatingNav: externo ({navUri.Host}) redirecionado ao navegador.");
+                        try
+                        {
+                            System.Diagnostics.Process.Start(
+                                new System.Diagnostics.ProcessStartInfo
+                                {
+                                    FileName = navUri.ToString(),
+                                    UseShellExecute = true
+                                });
+                        }
+                        catch { }
+                        if (ReferenceEquals(_floatingWindow, popupWindow))
+                            _ = Dispatcher.InvokeAsync(() => popupWindow.Close());
+                    }
+                }
+            };
             await view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(AudioBootstrapScript);
             await view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(TrayNotifyScript);
             await view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(MissionsScript);
+            await view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(VoteButtonScript);
             await view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(FloatingControlsScript);
             await view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(FloatingDragScript);
             view.CoreWebView2.WebMessageReceived += (_, messageArgs) =>
@@ -1415,12 +1580,28 @@ public partial class MainWindow : Window
                     {
                         popupWindow.Close();
                     }
+                    else if (message == "lol-idle-vote-button")
+                    {
+                        LogFloatingWindowEvent("VoteButton: abrir TopIdle no navegador.");
+                        try
+                        {
+                            System.Diagnostics.Process.Start(
+                                new System.Diagnostics.ProcessStartInfo
+                                {
+                                    FileName = "https://topidle.com/voto",
+                                    UseShellExecute = true
+                                });
+                        }
+                        catch { }
+                    }
                     else if (message == "lol-idle-control:missions")
                     {
                         _settings.ShowMissions = !_settings.ShowMissions;
                         SaveWindowSettings();
                         if (_settings.ShowMissions) ShowMissions();
                         else _missionsWindow?.Hide();
+                        var core2 = _floatingView?.CoreWebView2;
+                        if (core2 != null) _ = core2.ExecuteScriptAsync($"document.querySelector('#lol-idle-missions')?.classList.toggle('active', {_settings.ShowMissions.ToString().ToLower()});");
                     }
                     else if (message != null && message.StartsWith("lol-idle-notify:"))
                     {
@@ -1447,6 +1628,31 @@ public partial class MainWindow : Window
             {
                 if (navArgs.IsSuccess)
                 {
+                    try
+                    {
+                        var finalUrl = view.CoreWebView2.Source ?? "";
+                        if (Uri.TryCreate(finalUrl, UriKind.Absolute, out var finUri) &&
+                            (finUri.Scheme == "http" || finUri.Scheme == "https"))
+                        {
+                            var lh = finUri.Host.ToLowerInvariant();
+                            var isGame = lh.Equals(GameHost, StringComparison.OrdinalIgnoreCase) || lh.EndsWith("." + GameHost, StringComparison.OrdinalIgnoreCase) || lh.Contains("lolidle.com");
+                            if (!isGame)
+                            {
+                                LogFloatingWindowEvent($"FloatingNavDone: externo ({finUri.Host}) fechando flutuante e abrindo navegador.");
+                                _ = Dispatcher.InvokeAsync(() =>
+                                {
+                                    try
+                                    {
+                                        System.Diagnostics.Process.Start(
+                                            new System.Diagnostics.ProcessStartInfo { FileName = finUri.ToString(), UseShellExecute = true });
+                                    }
+                                    catch { }
+                                    popupWindow.Close();
+                                });
+                            }
+                        }
+                    }
+                    catch { }
                     _ = ApplyAudioSettingsAsync();
                 }
             };
@@ -1479,6 +1685,128 @@ public partial class MainWindow : Window
         finally
         {
             _isPreparingFloatingView = false;
+        }
+    }
+
+    // Prepara a janela separada de voto (TopIdle) — decoração normal,
+    // sem scripts de arraste/controles da flutuante.
+    private async Task PrepareVoteWebViewAsync(Window? owner)
+    {
+        if (_webViewEnvironment == null || _isPreparingVoteView ||
+            (_preparedVoteWindow != null && _preparedVoteView?.CoreWebView2 != null))
+            return;
+
+        _isPreparingVoteView = true;
+        Window? voteWindow = null;
+        try
+        {
+            LogFloatingWindowEvent("PrepareVote: iniciando criação da janela separada de voto.");
+            voteWindow = new Window
+            {
+                Title = "Votar no LoL Idle — TopIdle",
+                Width = 420,
+                Height = 800,
+                MinWidth = 320,
+                MinHeight = 600,
+                WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                ShowInTaskbar = true,
+                ShowActivated = true,
+                WindowStyle = WindowStyle.SingleBorderWindow,
+                ResizeMode = ResizeMode.CanResize,
+                Background = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(17, 19, 24))
+            };
+            // Ajusta se a tela for menor que 800px de altura
+            voteWindow.MaxWidth = SystemParameters.VirtualScreenWidth * 0.9;
+            voteWindow.MaxHeight = SystemParameters.VirtualScreenHeight * 0.9;
+            var root = new Grid();
+            var view = new Microsoft.Web.WebView2.Wpf.WebView2
+            {
+                DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24)
+            };
+            root.Children.Add(view);
+            voteWindow.Content = root;
+            _preparedVoteWindow = voteWindow;
+            _preparedVoteView = view;
+            voteWindow.Closed += (_, _) =>
+            {
+                bool wasActive = ReferenceEquals(_voteWindow, voteWindow);
+                bool wasPrepared = ReferenceEquals(_preparedVoteWindow, voteWindow);
+                if (wasPrepared)
+                {
+                    _preparedVoteWindow = null;
+                    _preparedVoteView = null;
+                    LogFloatingWindowEvent("PrepareVote: host preparado de voto fechado.");
+                }
+                if (wasActive)
+                {
+                    _voteWindow = null;
+                    _voteView?.Dispose();
+                    _voteView = null;
+                    LogFloatingWindowEvent("PrepareVote: janela separada de voto fechada.");
+                    _ = PrepareVoteWebViewAsync(this);
+                }
+            };
+            voteWindow.Show();
+            await voteWindow.Dispatcher.InvokeAsync(() => { },
+                System.Windows.Threading.DispatcherPriority.Loaded);
+            await view.EnsureCoreWebView2Async(_webViewEnvironment);
+            view.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+            view.CoreWebView2.Settings.IsStatusBarEnabled = false;
+            view.CoreWebView2.Settings.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
+            view.CoreWebView2.NavigationStarting += (_, navArgs) =>
+            {
+                if (Uri.TryCreate(navArgs.Uri, UriKind.Absolute, out var nu) &&
+                    (nu.Host.Contains("accounts.google.com") || nu.Host.Contains("accounts.google") || nu.Host.Contains("discord.com") || nu.Host.Contains("discordapp")))
+                {
+                    navArgs.Cancel = true;
+                    LogFloatingWindowEvent($"PopupVote: OAuth ({nu.Host}) redirecionado ao navegador real.");
+                    try
+                    {
+                        System.Diagnostics.Process.Start(
+                            new System.Diagnostics.ProcessStartInfo
+                            {
+                                FileName = nu.ToString(),
+                                UseShellExecute = true
+                            });
+                    }
+                    catch { }
+                }
+            };
+            view.CoreWebView2.NewWindowRequested += (_, popupArgs) =>
+            {
+                if (Uri.TryCreate(popupArgs.Uri, UriKind.Absolute, out var uri) &&
+                    (uri.Scheme == "http" || uri.Scheme == "https"))
+                {
+                    popupArgs.Handled = true;
+                    LogFloatingWindowEvent($"PopupVote: janela aninhada ({uri.Host}) reutilizando WebView de voto.");
+                    var voteViewRef = view;
+                    _ = Dispatcher.InvokeAsync(() =>
+                    {
+                        if (_voteWindow != null && !_voteWindow.IsVisible) _voteWindow.Show();
+                        _voteWindow?.Activate();
+                        var target = uri.ToString();
+                        _ = Task.Run(() => voteViewRef.CoreWebView2.Navigate(target));
+                    });
+                }
+                else popupArgs.Handled = true;
+            };
+            voteWindow.Hide();
+            LogFloatingWindowEvent("PrepareVote: janela separada de voto pronta e oculta.");
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"PrepareVote: falha ao inicializar: {ex.Message}");
+            if (ReferenceEquals(_preparedVoteWindow, voteWindow))
+            {
+                _preparedVoteWindow = null;
+                _preparedVoteView = null;
+            }
+            voteWindow?.Close();
+        }
+        finally
+        {
+            _isPreparingVoteView = false;
         }
     }
 
@@ -1745,10 +2073,7 @@ public partial class MainWindow : Window
                 _isHiddenToTray = true;
                 Hide();
                 _ = ApplyAudioSettingsAsync();
-                _settings.ShowMissions = true;
-                SaveWindowSettings();
                 _floatingOpened = true;
-                ShowMissions();
                 LogFloatingWindowEvent("ReopenButton: janela flutuante reaberta. Janela principal fechada (sem bandeja).");
                 return;
             }
@@ -1775,10 +2100,7 @@ public partial class MainWindow : Window
             _isHiddenToTray = true;
             Hide();
             _ = ApplyAudioSettingsAsync();
-            _settings.ShowMissions = true;
-            SaveWindowSettings();
             _floatingOpened = true;
-            ShowMissions();
             LogFloatingWindowEvent("ReopenButton: janela flutuante aberta. Janela principal fechada (sem bandeja).");
 
             var target = Uri.TryCreate(_lastFloatingUri, UriKind.Absolute, out var savedUri) &&
