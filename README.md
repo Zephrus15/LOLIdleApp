@@ -116,7 +116,7 @@ O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\
 ### v1.2.2
 - Votar abre no navegador direto (TopIdle/OAuth fora da WebView).
 - Links externos (Discord, Kick, Twitch) abrem no navegador e fecham a flutuante junto.
-- Alternar transparência da janela de Missões pelo ícone de meio-círculo na flutuante.
+- Indicador da aba de Missões aberta (ícone de caderninho dourado na flutuante quando ativa).
 
 ### v1.2.1
 - Janela de Missões (abre só junto com a flutuante): Passe/Tarefa com barras de progresso, Caçada, negrito nos rótulos, arrastável e redimensionável.
