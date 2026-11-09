@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.2.6](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.2.6)**
+**[Baixar LoL Idle Desktop v1.2.7](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.2.7)**
 
 ### Instalador (quando disponível na Release)
 
@@ -37,11 +37,18 @@ Não é necessário instalar o .NET separadamente para utilizar o pacote publica
 
 ### Janela flutuante
 - Permite manter o jogo em uma janela independente.
-- Opção de manter a janela sempre no topo durante a sessão atual.
+- Opção de manter a janela sempre no topo (preferência salva e restaurada ao reabrir).
 - Possibilidade de movimentar a janela arrastando pela área do jogo.
 - Controles personalizados para áudio, fixar e fechar.
 - Controle de silenciamento geral do áudio.
 - Possibilidade de fechar a janela flutuante e retornar à janela principal.
+
+### Janela de Missões
+- Janela separada e destacável, visível só com a janela flutuante aberta.
+- Mostra dados das missões (somente leitura) vindos da janela flutuante.
+- Arrastável e redimensionável (canto inferior direito, largura e altura).
+- Salva tamanho, local e preferência "sempre no topo" (independente da flutuante).
+- Lembra o último estado ativo/inativo ao reabrir a flutuante.
 
 ### Bandeja do Windows
 - Fechar a janela principal oculta o aplicativo na bandeja do sistema.
@@ -51,13 +58,13 @@ Não é necessário instalar o .NET separadamente para utilizar o pacote publica
 
 ### Preferências e sessão
 - Salvamento automático do tamanho, da posição e das preferências de áudio.
-- Restauração das dimensões e da posição da janela principal e da janela flutuante.
+- Restauração das dimensões e da posição da janela principal, da janela flutuante e da janela de Missões.
+- Preferência "sempre no topo" salva separadamente para a janela flutuante e para a janela de Missões.
 - Gerenciamento da sessão do WebView2.
 
 ### Limitações desta versão
-- Os painéis independentes de Missões, Barra lateral e Personagem não estão incluídos.
-- O controle de áudio disponível silencia todo o áudio do jogo. Nesta versão não há uma tela acessível para ajustar música e efeitos separadamente.
-- O botão de fixar (sempre no topo) vale para a sessão atual e não é restaurado na próxima execução.
+- Painéis disponíveis: **Missões** (somente leitura) incluído. **Barra lateral interativa** e **Personagem** não incluídos (o jogo bloqueia a segunda sessão).
+- O controle de áudio disponível silencia todo o áudio do jogo. Não há uma tela acessível pela interface para ajustar música e efeitos separadamente (a tela de configurações de áudio existe no código, mas não é chamada pela interface atual).
 - O botão fechar (×) oculta o aplicativo na bandeja. Para encerrar, use **Sair** no menu da bandeja.
 
 ## 🖥️ Requisitos
@@ -106,12 +113,19 @@ GERAR-INSTALADOR.bat
 O instalador será gerado em:
 
 ```text
-artifacts\installer\LoLIdleDesktop-Setup-1.1.0-x64.exe
+artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
 ```
 
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.2.7
+- Sempre no topo agora é persistente (janela flutuante e Missões, separadas) e sincronizado ao reabrir.
+- Flutuante lembra se Missões estava ativa ao fechar.
+- Missões redimensiona em largura e altura (com limites mínimos).
+- Missões com fallback flutuante → principal (não trava mais em "Carregando...").
+- Notificação de missão restrita ao log real (sem tocar ao abrir a engrenagem).
 
 ### v1.2.6
 - Missões lembra último estado (ativa/desativada, tamanho e local) ao reabrir a flutuante.

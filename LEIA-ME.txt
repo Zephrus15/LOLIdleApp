@@ -1,4 +1,4 @@
-LoL Idle Desktop - versão 1.2.6
+LoL Idle Desktop - versão 1.2.7
 Aplicativo desktop não oficial para Windows
 
 O que é
@@ -12,10 +12,12 @@ Recursos
 - Janela flutuante independente com controles de áudio, fixar e fechar.
 - Arraste da janela flutuante pela área do jogo.
 - Controle de silenciamento geral do áudio.
+- Janela de Missões separada (somente leitura), visível só com a flutuante aberta,
+  arrastável e redimensionável (largura e altura), com borda amarela.
 - Minimizar (－) envia a janela para a barra de tarefas do Windows.
 - Fechar (×) oculta o aplicativo na bandeja do sistema, sem notificação.
 - Clique esquerdo no ícone da bandeja restaura a janela.
-- Clique direito no ícone da bandeja mostra as opções Abrir LoL Idle e Sair.
+- Clique direito no ícone da bandeja mostra: Restaurar / Som > Som do jogo / Sair.
 - Cookies e sessão persistidos em %LOCALAPPDATA%\LoLIdleDesktop\WebView2.
 - Links externos abrem no navegador padrão.
 
@@ -47,14 +49,24 @@ Gerar instalador
 O instalador verifica o Microsoft Edge WebView2 Runtime e o instala
 automaticamente quando necessário.
 
+Correções (resolução de bugs na v1.2.7)
+--------------------------------------------------------------
+- Sempre no topo agora persiste separadamente para a janela flutuante e para
+  a janela de Missões (ícone dourado sincronizado ao reabrir).
+- A janela flutuante lembra se Missões estava ativa ao ser fechada.
+- Redimensionamento das Missões atualizado (largura e altura, com limites).
+- Missões voltam a carregar mesmo quando a flutuante ainda está sem o tracker
+  (fallback para a janela principal).
+- Notificação de missão restrita ao log real (sem som falso ao abrir a engrenagem).
+- Remoção de código órfão (barra de personagem) e das preferências sem uso.
+
 Limitações desta versão
 -----------------------
-- Os painéis independentes de Missões, Barra lateral e Personagem não estão
-  incluídos nesta versão.
+- Missões incluído (somente leitura). Barra lateral interativa e Personagem
+  não incluídos (o jogo bloqueia a segunda sessão).
 - O controle de áudio disponível silencia todo o áudio do jogo. Não há uma
-  tela acessível para ajustar música e efeitos separadamente.
-- O botão fixar (sempre no topo) vale apenas para a sessão atual e não é
-  restaurado na próxima execução.
+  tela acessível pela interface para ajustar música e efeitos separadamente
+  (a tela existe no código, mas não é chamada pela interface atual).
 
 Observações importantes
 -----------------------

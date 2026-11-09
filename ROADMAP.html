@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
@@ -44,17 +44,17 @@ code{background:#0f141f;padding:2px 6px;border-radius:6px;border:1px solid var(-
     <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center">
       <div>
         <h1>🗺️ Roadmap — LoL Idle Desktop</h1>
-        <p class="sub">Base <strong>v1.2.6</strong> · Painéis de Missões prontos, barra lateral e personagem interativos bloqueados pelo jogo, e foco atual em <strong>polir sons e detalhes</strong>.</p>
+        <p class="sub">Base <strong>v1.2.7</strong> · Painéis de Missões prontos, barra lateral e personagem interativos bloqueados pelo jogo, e foco atual em <strong>polir sons e detalhes</strong>.</p>
       </div>
       <div class="badges">
-        <span class="pill p-green">1 feito</span>
-        <span class="pill p-red">2 impossível</span>
-        <span class="pill p-amber">3 polir</span>
+        <span class="pill p-green">3 feitos</span>
+        <span class="pill p-red">2 impossíveis</span>
+        <span class="pill p-amber">2 pendentes/polir</span>
         <span class="pill p-blue">1 futuro</span>
       </div>
     </div>
-    <div class="bar" aria-label="Progresso geral"><div style="width:38%;background:linear-gradient(90deg,#2ea043,#3fb950)"></div></div>
-    <p class="muted" style="margin:0">Progresso geral (feito / total do roadmap): <strong>~38%</strong> — Missões + bandeja prontos; áudio separado e persistência são polimento.</p>
+    <div class="bar" aria-label="Progresso geral"><div style="width:50%;background:linear-gradient(90deg,#2ea043,#3fb950)"></div></div>
+    <p class="muted" style="margin:0">Progresso geral (feito / total do roadmap): <strong>~50%</strong> — Missões, bandeja e sempre no topo persistente prontos; áudio separado precisa de decisão.</p>
   </div>
 
   <div class="grid">
@@ -84,7 +84,7 @@ code{background:#0f141f;padding:2px 6px;border-radius:6px;border:1px solid var(-
     </div>
 
     <div class="card">
-      <h2>🧙 Personagem <span class="tag p-red">NÃO CONFIRMADO ❌</span></h2>
+      <h2>🧙 Personagem <span class="tag p-red">IMPOSSÍVEL ❌</span></h2>
       <p class="muted">Mesma limitação — segunda WebView/sessão é bloqueada.</p>
       <ul><li>Não tem como fazer do jeito desejado</li></ul>
       <div class="bar"><div style="width:0%;background:#ff4d4f"></div></div>
@@ -93,7 +93,7 @@ code{background:#0f141f;padding:2px 6px;border-radius:6px;border:1px solid var(-
 
     <div class="card">
       <h2>🔔 Bandeja inteligente <span class="tag p-green">FEITO ✅</span></h2>
-      <p class="muted">Sons por evento no modo bandeja (v1.2.0 → v1.2.6).</p>
+      <p class="muted">Sons por evento no modo bandeja (v1.2.0 → v1.2.7).</p>
       <ul>
         <li>🟠 Lendário · 🟣 Épico · 📜 Missão · 🎒 Inventário 30/30 · ⭐ Level up</li>
         <li>Mutado por padrão · balão opcional</li>
@@ -113,15 +113,14 @@ code{background:#0f141f;padding:2px 6px;border-radius:6px;border:1px solid var(-
     </div>
 
     <div class="card">
-      <h2>🎯 Próximo foco <span class="tag p-amber">POLIR 🟡</span></h2>
+      <h2>🎯 Próximo foco</h2>
       <ul>
         <li>Sons de notificação (volume/timbre)</li>
         <li>Detalhes flutuante + Missões</li>
-        <li>Áudio separado música/efeitos*</li>
-        <li>Sempre no topo persistente</li>
+        <li>Áudio separado — <strong>precisa de decisão</strong> (expor a tela órfã?)</li>
+        <li>✅ Sempre no topo persistente — <strong>feito (v1.2.7)</strong></li>
         <li>Aviso de nova versão</li>
       </ul>
-      <p class="muted">*Se o jogo expuser os canais.</p>
     </div>
   </div>
 
@@ -133,11 +132,11 @@ code{background:#0f141f;padding:2px 6px;border-radius:6px;border:1px solid var(-
       <tbody>
         <tr><td>📖 Missões</td><td>✅ Confirmado</td><td>v1.2.5 / v1.2.6</td><td class="muted">só-texto, janela própria</td></tr>
         <tr><td>🎛️ Barra lateral (interativa)</td><td>❌ Impossível</td><td>—</td><td class="muted">jogo bloqueia 2ª sessão</td></tr>
-        <tr><td>🧙 Personagem</td><td>❌ Não confirmado</td><td>—</td><td class="muted">jogo bloqueia 2ª sessão</td></tr>
-        <tr><td>🔔 Bandeja inteligente</td><td>✅ Confirmado</td><td>v1.2.0 → v1.2.6</td><td class="muted">polindo sons</td></tr>
+        <tr><td>🧙 Personagem (interativo)</td><td>❌ Impossível</td><td>—</td><td class="muted">jogo bloqueia 2ª sessão</td></tr>
+        <tr><td>🔔 Bandeja inteligente</td><td>✅ Confirmado</td><td>v1.2.0 → v1.2.7</td><td class="muted">polindo sons</td></tr>
+        <tr><td>📌 Sempre no topo persistente</td><td>✅ Confirmado</td><td>v1.2.7*</td><td class="muted">por janela (`FloatingTopmost`/`MissionsTopmost`)</td></tr>
         <tr><td>📱 Android</td><td>🔵 Futuro</td><td>—</td><td class="muted">MAUI / .NET Android</td></tr>
-        <tr><td>🔊 Áudio separado</td><td>🟡 Falta polir</td><td>—</td><td class="muted">hoje só mute geral</td></tr>
-        <tr><td>📌 Sempre no topo</td><td>🟡 Falta polir</td><td>—</td><td class="muted">hoje só na sessão</td></tr>
+        <tr><td>🔊 Áudio separado</td><td>🟡 Pendente — precisa de decisão</td><td>—</td><td class="muted">lógica existe; UI (`ShowFloatingSettings`) inacessível</td></tr>
         <tr><td>🔄 Aviso de versão</td><td>🟡 Falta polir</td><td>—</td><td class="muted">checagem GitHub</td></tr>
       </tbody>
     </table>
@@ -146,9 +145,10 @@ code{background:#0f141f;padding:2px 6px;border-radius:6px;border:1px solid var(-
   </div>
 
   <div class="footer">
-    <span>Gerado a partir do estado v1.2.6 · Veja <a href="./ROADMAP.md">ROADMAP.md</a> no GitHub</span>
+    <span>Gerado a partir do estado v1.2.7 · Veja <a href="./ROADMAP.md">ROADMAP.md</a> no GitHub</span>
     <span>Polimento atual: sons + detalhes</span>
   </div>
 </div>
 </body>
 </html>
+

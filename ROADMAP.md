@@ -1,12 +1,13 @@
 # 🗺️ Roadmap — LoL Idle Desktop
 
-> Base: **v1.2.6** · Última atualização: 2026-11-09
+> Base: **v1.2.7** · Última atualização: 2026-11-09
 > Versão web estilizada: [`ROADMAP.html`](./ROADMAP.html) — abra no navegador para visualizar como site.
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Status-1%20feito-2ea043?style=for-the-badge" alt="feito">
-  <img src="https://img.shields.io/badge/Status-2%20imposs%C3%ADvel-ff4d4f?style=for-the-badge" alt="impossível">
-  <img src="https://img.shields.io/badge/Status-1%20futuro-blue?style=for-the-badge" alt="futuro">
+  <img src="https://img.shields.io/badge/Status-3%20feitos-2ea043?style=for-the-badge" alt="feitos">
+  <img src="https://img.shields.io/badge/Status-2%20imposs%C3%ADveis-ff4d4f?style=for-the-badge" alt="impossíveis">
+  <img src="https://img.shields.io/badge/Status-1%20futuro-58a6ff?style=for-the-badge" alt="futuro">
+  <img src="https://img.shields.io/badge/Status-2%20pendentes%2Fpolir-f0b429?style=for-the-badge" alt="pendentes">
 </p>
 
 ---
@@ -17,11 +18,11 @@
 |---|---|---|
 | 📖 **Missões** | ✅ **Confirmado** | v1.2.5 / v1.2.6 |
 | 🎛️ **Barra lateral (interativa)** | ❌ **Impossível** | — (jogo bloqueia 2ª sessão) |
-| 🧙 **Personagem** | ❌ **Não confirmado** | — (jogo bloqueia 2ª sessão) |
-| 🔔 **Bandeja inteligente (sons)** | ✅ **Confirmado** | v1.2.0 → v1.2.6 |
+| 🧙 **Personagem (interativo)** | ❌ **Impossível** | — (jogo bloqueia 2ª sessão) |
+| 🔔 **Bandeja inteligente (sons)** | ✅ **Confirmado** | v1.2.0 → v1.2.7 |
+| 📌 **Sempre no topo persistente** | ✅ **Confirmado** | v1.2.7 |
 | 📱 **Android** | 🔵 **Futuro** | — |
-| 🔊 **Áudio separado (música/efeitos)** | 🟡 **Falta polir** | — |
-| 📌 **Sempre no topo persistente** | 🟡 **Falta polir** | — (hoje só na sessão) |
+| 🔊 **Áudio separado (música/efeitos)** | 🟡 **Pendente — precisa de decisão** | lógica existe; UI inacessível (`ShowFloatingSettings` sem chamada) |
 | 🔄 **Aviso de versão nova** | 🟡 **Falta polir** | — |
 
 ---
@@ -46,10 +47,11 @@ Painel separado e destacável que **já está pronto** (v1.2.5 / v1.2.6):
 - Um clone vivo/interativo da barra **não funciona**.
 - Só seria viável a versão **só-texto** (como Missões) — **não é o desejado** → marcado como impossível.
 
-### 🧙 Personagem — `NÃO CONFIRMADO` ❌
+### 🧙 Personagem — `IMPOSSÍVEL (interativo)` ❌
 
 - **Por que não dá:** mesma limitação da barra — **segunda sessão é bloqueada**.
-- Não tem como fazer do jeito desejado.
+- Não tem como fazer do jeito desejado (clone vivo/interativo).
+- Só seria viável a versão **só-texto** (como Missões), que não é o desejado.
 
 **Comportamento esperado (para painéis futuros):**
 
@@ -89,20 +91,20 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 | Limitação | Situação |
 |---|---|
 | Missões | ✅ **Resolvido** (v1.2.5/v1.2.6) |
-| Barra lateral / Personagem | ❌ Inviáveis interativos (bloqueio de 2ª sessão) |
-| Áudio | 🟡 Só mute geral — sem volume separado música/efeitos |
-| Sempre no topo | 🟡 Só na sessão — não persiste |
+| Barra lateral / Personagem | ❌ Impossíveis interativos (bloqueio de 2ª sessão) |
+| Áudio | 🟡 Lógica de música/efeitos existe no código (`AudioBootstrapScript` + `bt-musica`/`bt-efeitos`), mas a tela `ShowFloatingSettings()` **não é chamada pela interface** — precisa de decisão para expor |
+| Sempre no topo | ✅ **Resolvido na v1.2.7** — persistente por janela (`FloatingTopmost` / `MissionsTopmost`) |
 
 ---
 
-## 🎯 Próximo foco: polir
+## 🎯 Próximo foco
 
 - [ ] Sons de notificação (volume/timbre por evento)
 - [ ] Detalhes da flutuante + Missões
-- [ ] Áudio separado (música/efeitos) — *se o jogo expuser os canais*
-- [ ] Sempre no topo persistente
+- [ ] Áudio separado (música/efeitos) — **decisão necessária:** expor a tela `ShowFloatingSettings()` (hoje órfã) ou manter apenas os botões `bt-musica`/`bt-efeitos` do jogo
+- [x] Sempre no topo persistente — **feito na v1.2.7** (`FloatingTopmost` / `MissionsTopmost`, com sincronia visual)
 - [ ] Aviso de nova versão (GitHub)
 
 ---
 
-<sub>Documento gerado a partir do estado atual do app (v1.2.6). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site.</sub>
+<sub>Documento gerado a partir do estado atual do app (v1.2.7). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site.</sub>

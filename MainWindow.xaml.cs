@@ -136,6 +136,11 @@ public partial class MainWindow : Window
                     <svg viewBox='0 0 24 24'><path d='M18 6 6 18M6 6l12 12'/></svg>
                 </button>`;
             if (window.__lolIdleMissionsActive) panel.querySelector('#lol-idle-missions')?.classList.add('active');
+            if (window.__lolIdleFloatingTopmost) {
+                const p = panel.querySelector('#lol-idle-pin');
+                p?.classList.add('active');
+                if (p) p.title = 'Desativar janela sempre no topo';
+            }
             document.documentElement.appendChild(panel);
             const send = action => window.chrome.webview.postMessage('lol-idle-control:' + action);
             const audio = panel.querySelector('#lol-idle-audio');
@@ -229,17 +234,27 @@ public partial class MainWindow : Window
                 if (/chei|lotad/i.test(cur)) send('inventory');
             } catch (_) {}
         };
+        // So executa a deteccao em areas de notificacao reais (#log, #avisos-saque).
+        // Fora delas (ex.: painel de configuracoes da engrenagem), o texto pode
+        // conter missao/concluida sem ser evento real e gerava falso positivo.
+        const inNotifyArea = (node) => {
+            try {
+                let el = node && node.nodeType === 1 ? node : (node && node.parentElement) || null;
+                if (!el || !el.closest) return false;
+                return !!(el.closest('#log') || el.closest('#avisos-saque'));
+            } catch (_) { return false; }
+        };
         const observer = new MutationObserver((mutations) => {
             for (const m of mutations) {
                 for (const n of m.addedNodes || []) {
                     if (n.nodeType === 1) {
                         checkSaqueNode(n);
-                        // Log de missões (canal Servidor #log) e fallback genérico
-                        if (n.textContent) checkText(n.textContent);
-                    } else if (n.nodeType === 3) checkText(n.nodeValue);
+                        // Log de missões (canal Servidor #log); ignora painéis fora dele.
+                        if ((n.textContent) && inNotifyArea(n)) checkText(n.textContent);
+                    } else if (n.nodeType === 3 && inNotifyArea(n)) checkText(n.nodeValue);
                 }
                 if (m.type === 'characterData' && m.target) {
-                    checkText(m.target.textContent);
+                    if (inNotifyArea(m.target)) checkText(m.target.textContent);
                     // Nível: observa #hud-nivel (o jogo usa som 'nivel' ao upar)
                     const pel = m.target.parentElement;
                     const hud = (m.target.closest ? m.target.closest('#hud-nivel') : null) || (pel?.closest ? pel.closest('#hud-nivel') : null) || (pel?.id === 'hud-nivel' ? pel : null);
@@ -271,54 +286,9 @@ public partial class MainWindow : Window
         else start();
     })();";
 
-    private const string HeroBarScript = @"(() => {
-        if (window.__lolIdleHeroBarInstalled) return;
-        window.__lolIdleHeroBarInstalled = true;
-        const send = () => {
-            try {
-                const g = (id) => document.getElementById(id)?.textContent?.trim() || '';
-                const w = (id) => {
-                    const el = document.getElementById(id);
-                    const s = el?.style?.width || '';
-                    const m = s.match(/[\d.]+%/) || s.match(/[\d.]+/);
-                    return m ? parseFloat(m[0]) || 0 : 0;
-                };
-                const cnt = (id) => document.getElementById(id)?.children?.length ?? 0;
-                const data = {
-                    nivel: g('hud-nivel'),
-                    vida: g('hud-vida-txt'), vidaP: Math.round(w('hud-vida')),
-                    mana: g('hud-mana-txt'), manaP: Math.round(w('hud-mana')),
-                    xp: g('hud-xpb-txt'), xpP: Math.round(w('hud-xpb-barra')),
-                    habs: g('hud-habs').slice(0, 20), habsN: cnt('hud-habs'),
-                    buffs: cnt('hud-buffs'), bolsa: g('hud-bolsa-n'),
-                    pocoes: g('hud-pocoes').slice(0, 20), pocoesN: cnt('hud-pocoes')
-                };
-                window.chrome.webview.postMessage('lol-idle-hero:' + JSON.stringify(data));
-            } catch (_) {}
-        };
-        const observer = new MutationObserver(() => send());
-        const start = () => {
-            if (!document.body) { setTimeout(start, 500); return; }
-            observer.observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['style'] });
-            send();
-            setInterval(send, 500);
-        };
-        if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
-        else start();
-    })();";
-
     private Forms.NotifyIcon? _trayIcon;
     private Forms.ToolStripMenuItem? _trayTrayMuteItem;
-    private Forms.ToolStripMenuItem? _trayHeroItem;
-    private Window? _heroWindow;
     private bool _floatingOpened;
-    private TextBlock? _heroLevel;
-    private System.Windows.Controls.ProgressBar? _heroVida;
-    private System.Windows.Controls.ProgressBar? _heroMana;
-    private System.Windows.Controls.ProgressBar? _heroXp;
-    private TextBlock? _heroVidaTxt;
-    private TextBlock? _heroManaTxt;
-    private TextBlock? _heroXpTxt;
     private bool _allowExit;
     private bool _isHiddenToTray;
     private bool _settingsReady;
@@ -400,6 +370,9 @@ public partial class MainWindow : Window
     private System.Windows.Controls.ProgressBar? _missionsTarefaBar;
     private TextBlock? _missionsPasseTxt;
     private TextBlock? _missionsTarefaTxt;
+    private Button? _missionsPinBtn;
+    private string? _lastMissionsJson;
+    private System.Windows.Threading.DispatcherTimer? _missionsPollTimer;
 
     private WindowSettings _settings = new();
     private string SettingsPath => Path.Combine(
@@ -426,7 +399,10 @@ public partial class MainWindow : Window
         public double NormalHeight { get; set; } = 800;
         public double Left { get; set; } = 100;
         public double Top { get; set; } = 100;
-        public bool IsAlwaysOnTop { get; set; }
+        // Persistência do "Sempre no topo" por janela (A).
+        // IsAlwaysOnTop (legado, sem uso) foi substituído por estas duas preferências.
+        public bool FloatingTopmost { get; set; }
+        public bool MissionsTopmost { get; set; }
         public bool HasFloatingBounds { get; set; }
         public double FloatingWidth { get; set; } = 900;
         public double FloatingHeight { get; set; } = 650;
@@ -438,20 +414,14 @@ public partial class MainWindow : Window
         public bool TrayMuted { get; set; } = true;
         public bool TrayNotify { get; set; } = true;
         public bool TrayBalloon { get; set; } = true;
-        public bool ShowHeroBar { get; set; }
         public bool ShowMissions { get; set; }
         public bool HasMissionsBounds { get; set; }
         public double MissionsWidth { get; set; } = 360;
         public double MissionsHeight { get; set; } = 320;
         public double MissionsLeft { get; set; } = 200;
         public double MissionsTop { get; set; } = 200;
-        public double MissionsOpacity { get; set; } = 1.0;
         public bool IsMaximized { get; set; }
         public bool RememberWindowState { get; set; } = true;
-        public bool HeroTopmost { get; set; }
-        public bool HasHeroBounds { get; set; }
-        public double HeroLeft { get; set; } = 100;
-        public double HeroTop { get; set; } = 100;
     }
 
     public MainWindow()
@@ -745,110 +715,16 @@ public partial class MainWindow : Window
         _ = ApplyAudioSettingsAsync();
     }
 
-    private Microsoft.Web.WebView2.Wpf.WebView2? _heroView;
-
-    private void ShowHeroBar()
-    {
-        if (_heroWindow != null)
-        {
-            _heroWindow.Show();
-            _heroWindow.Activate();
-            if (_trayHeroItem != null) _trayHeroItem.Checked = true;
-            return;
-        }
-        var win = new Window
-        {
-            Title = "LoL Idle - Personagem",
-            Width = 900,
-            Height = 110,
-            MinWidth = 700,
-            MinHeight = 110,
-            WindowStyle = WindowStyle.None,
-            ResizeMode = ResizeMode.CanResize,
-            ShowInTaskbar = false,
-            ShowActivated = false,
-            Topmost = _settings.HeroTopmost,
-            Background = new SolidColorBrush(Color.FromRgb(14, 16, 22)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(48, 52, 61)),
-            BorderThickness = new Thickness(1)
-        };
-        win.WindowStartupLocation = WindowStartupLocation.Manual;
-        win.Left = _settings.HasHeroBounds ? _settings.HeroLeft : 100;
-        win.Top = _settings.HasHeroBounds ? _settings.HeroTop : 100;
-        var root = new DockPanel { Margin = new Thickness(8) };
-        win.Content = root;
-        // Coluna esquerda: retrato + nível (estilo HUD do jogo)
-        var left = new StackPanel { Width = 78, VerticalAlignment = VerticalAlignment.Center };
-        var emblem = new Border { Width = 62, Height = 62, CornerRadius = new CornerRadius(30), Background = Brushes.DarkSlateGray, BorderBrush = new SolidColorBrush(Color.FromRgb(200, 168, 112)), BorderThickness = new Thickness(2), HorizontalAlignment = System.Windows.HorizontalAlignment.Center };
-        _heroLevel = new TextBlock { Text = "25", Foreground = Brushes.White, FontSize = 22, FontWeight = FontWeights.Bold, HorizontalAlignment = System.Windows.HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
-        emblem.Child = _heroLevel;
-        var nvTxt = new TextBlock { Text = "Nível", Foreground = Brushes.White, FontSize = 10, HorizontalAlignment = System.Windows.HorizontalAlignment.Center, Margin = new Thickness(0, 4, 0, 0) };
-        left.Children.Add(emblem); left.Children.Add(nvTxt);
-        DockPanel.SetDock(left, Dock.Left);
-        root.Children.Add(left);
-        // Centro: barras vida/mana/XP
-        var bars = new StackPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(8, 0, 8, 0) };
-        _heroVida = new System.Windows.Controls.ProgressBar { Height = 18, Margin = new Thickness(0, 2, 0, 2), Foreground = new SolidColorBrush(Color.FromRgb(76, 210, 60)), Background = new SolidColorBrush(Color.FromRgb(30, 34, 42)) };
-        _heroMana = new System.Windows.Controls.ProgressBar { Height = 18, Margin = new Thickness(0, 2, 0, 2), Foreground = new SolidColorBrush(Color.FromRgb(52, 152, 219)), Background = new SolidColorBrush(Color.FromRgb(30, 34, 42)) };
-        _heroXp = new System.Windows.Controls.ProgressBar { Height = 14, Margin = new Thickness(0, 2, 0, 2), Foreground = new SolidColorBrush(Color.FromRgb(155, 89, 182)), Background = new SolidColorBrush(Color.FromRgb(30, 34, 42)) };
-        _heroVidaTxt = new TextBlock { Text = "-", Foreground = Brushes.White, FontSize = 11, Margin = new Thickness(0, 0, 0, 2) };
-        _heroManaTxt = new TextBlock { Text = "-", Foreground = Brushes.White, FontSize = 11, Margin = new Thickness(0, 0, 0, 2) };
-        _heroXpTxt = new TextBlock { Text = "-", Foreground = Brushes.White, FontSize = 10 };
-        var topRow = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = System.Windows.HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 4) };
-        var pinBtn = new Button { Content = "📌", Width = 20, Height = 20, Margin = new Thickness(0, 0, 4, 0) };
-        pinBtn.ToolTip = "Manter na frente (fixar)";
-        if (_settings.HeroTopmost) pinBtn.Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143));
-        pinBtn.Click += (_, _) => { win.Topmost = !win.Topmost; _settings.HeroTopmost = win.Topmost; SaveWindowSettings(); pinBtn.Foreground = win.Topmost ? new SolidColorBrush(Color.FromRgb(232, 207, 143)) : Brushes.White; };
-        topRow.Children.Add(pinBtn);
-        var closeBtn = new Button { Content = "×", Width = 20, Height = 20 };
-        closeBtn.Click += (_, _) => { win.Hide(); _settings.ShowHeroBar = false; SaveWindowSettings(); if (_trayHeroItem != null) _trayHeroItem.Checked = false; };
-        topRow.Children.Add(closeBtn);
-        DockPanel.SetDock(topRow, Dock.Top);
-        root.Children.Add(topRow);
-        bars.Children.Add(_heroVida); bars.Children.Add(_heroVidaTxt);
-        bars.Children.Add(_heroMana); bars.Children.Add(_heroManaTxt);
-        bars.Children.Add(_heroXp); bars.Children.Add(_heroXpTxt);
-        root.Children.Add(bars);
-        root.AddHandler(UIElement.MouseLeftButtonDownEvent, new MouseButtonEventHandler((_, _) => { if (Mouse.PrimaryDevice.DirectlyOver is Border || Mouse.PrimaryDevice.DirectlyOver is StackPanel) win.DragMove(); }));
-        win.Content = root;
-        win.LocationChanged += (_, _) =>
-        {
-            _settings.HeroLeft = win.Left;
-            _settings.HeroTop = win.Top;
-            _settings.HasHeroBounds = true;
-            SaveWindowSettings();
-        };
-        win.Closing += (_, ev) => { ev.Cancel = true; win.Hide(); _settings.ShowHeroBar = false; SaveWindowSettings(); if (_trayHeroItem != null) _trayHeroItem.Checked = false; };
-        _heroWindow = win;
-        win.Show();
-        if (_trayHeroItem != null) _trayHeroItem.Checked = true;
-    }
-
-    private void UpdateHeroBar(string json)
-    {
-        if (_heroWindow == null && !_floatingOpened) return;
-        if (_heroWindow == null) ShowHeroBar();
-        try
-        {
-            using var doc = System.Text.Json.JsonDocument.Parse(json);
-            var r = doc.RootElement;
-            if (_heroLevel != null) _heroLevel.Text = (r.TryGetProperty("nivel", out var n) ? n.GetString() : "—");
-            if (_heroVida != null && r.TryGetProperty("vidaP", out var vp)) _heroVida.Value = vp.GetDouble();
-            if (_heroMana != null && r.TryGetProperty("manaP", out var mp)) _heroMana.Value = mp.GetDouble();
-            if (_heroXp != null && r.TryGetProperty("xpP", out var xp)) _heroXp.Value = xp.GetDouble();
-            if (_heroVidaTxt != null && r.TryGetProperty("vida", out var vt)) _heroVidaTxt.Text = vt.GetString();
-            if (_heroManaTxt != null && r.TryGetProperty("mana", out var mt)) _heroManaTxt.Text = mt.GetString();
-            if (_heroXpTxt != null && r.TryGetProperty("xp", out var xt)) _heroXpTxt.Text = xt.GetString();
-        }
-        catch { }
-    }
-
     private void ShowMissions()
     {
         if (_missionsWindow != null)
         {
+            _missionsWindow.Topmost = _settings.MissionsTopmost;
+            if (_missionsPinBtn != null)
+                _missionsPinBtn.Foreground = _missionsWindow.Topmost ? new SolidColorBrush(Color.FromRgb(232, 207, 143)) : Brushes.White;
             _missionsWindow.Show();
             _missionsWindow.Activate();
+            try { _missionsPollTimer?.Start(); } catch { }
             return;
         }
         var win = new Window
@@ -862,7 +738,7 @@ public partial class MainWindow : Window
             ResizeMode = ResizeMode.CanResize,
             ShowInTaskbar = false,
             ShowActivated = false,
-            Topmost = false,
+            Topmost = _settings.MissionsTopmost,
             Background = new SolidColorBrush(Color.FromRgb(25, 28, 35)),
             BorderBrush = new SolidColorBrush(Color.FromRgb(242, 192, 58)),
             BorderThickness = new Thickness(1)
@@ -875,10 +751,14 @@ public partial class MainWindow : Window
         var root = new StackPanel { Margin = new Thickness(10), Background = new SolidColorBrush(Color.FromRgb(25, 28, 35)) };
         _missionsRoot = root;
         var top = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 6) };
-        var pinBtn = new Button { Content = "📌", Width = 20, Height = 20, Background = Brushes.Transparent, Foreground = Brushes.White, BorderThickness = new Thickness(0) };
+        var pinBtn = new Button { Content = "📌", Width = 20, Height = 20, Background = Brushes.Transparent, Foreground = win.Topmost ? new SolidColorBrush(Color.FromRgb(232, 207, 143)) : Brushes.White, BorderThickness = new Thickness(0) };
+        pinBtn.ToolTip = "Manter na frente (fixar)";
+        _missionsPinBtn = pinBtn;
         pinBtn.Click += (_, _) =>
         {
             win.Topmost = !win.Topmost;
+            _settings.MissionsTopmost = win.Topmost;
+            SaveWindowSettings();
             pinBtn.Foreground = win.Topmost ? new SolidColorBrush(Color.FromRgb(232, 207, 143)) : Brushes.White;
         };
         win.MouseEnter += (_, _) => { if (win.Topmost) pinBtn.Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143)); };
@@ -905,33 +785,48 @@ public partial class MainWindow : Window
         layout.Children.Add(grip);
         layout.Children.Add(root);
         bool resizing = false;
-        System.Windows.Point resizeStart = new System.Windows.Point();
+        double resizeStartX = 0, resizeStartY = 0;
         double startW = 0, startH = 0;
         grip.MouseLeftButtonDown += (_, e) =>
         {
             resizing = true;
-            resizeStart = e.GetPosition(win);
+            // Posição em coordenadas de tela (não relativa à janela, que muda ao redimensionar).
+            resizeStartX = Forms.Cursor.Position.X;
+            resizeStartY = Forms.Cursor.Position.Y;
             startW = win.Width; startH = win.Height;
             grip.CaptureMouse();
             e.Handled = true;
         };
-        win.MouseMove += (_, e) =>
+        win.MouseMove += (_, _) =>
         {
             if (!resizing) return;
-            var p = e.GetPosition(win);
-            win.Width = Math.Max(win.MinWidth, startW + (p.X - resizeStart.X));
+            double dx = Forms.Cursor.Position.X - resizeStartX;
+            double dy = Forms.Cursor.Position.Y - resizeStartY;
+            win.Width = Math.Max(win.MinWidth, startW + dx);
+            win.Height = Math.Max(win.MinHeight, startH + dy);
         };
-        win.MouseLeftButtonUp += (_, _) => { resizing = false; try { grip.ReleaseMouseCapture(); } catch { } };
+        win.MouseLeftButtonUp += (_, _) =>
+        {
+            if (!resizing) return;
+            resizing = false;
+            try { grip.ReleaseMouseCapture(); } catch { }
+            _settings.MissionsWidth = win.Width;
+            _settings.MissionsHeight = win.Height;
+            _settings.HasMissionsBounds = true;
+            SaveWindowSettings();
+        };
         win.Content = layout;
-        win.Closing += (_, e) => { e.Cancel = true; win.Hide(); _settings.ShowMissions = false; SaveWindowSettings(); };
+        win.Closing += (_, e) => { e.Cancel = true; win.Hide(); if (!_allowExit) _settings.ShowMissions = false; SaveWindowSettings(); };
         win.GotFocus += (_, _) => win.BorderThickness = new Thickness(1);
         win.LostFocus += (_, _) => win.BorderThickness = new Thickness(0);
         win.Opacity = 1.0;
         win.MouseEnter += (_, _) => { root.Background = new SolidColorBrush(Color.FromRgb(25, 28, 35)); };
         win.MouseLeave += (_, _) => { root.Background = new SolidColorBrush(Color.FromRgb(25, 28, 35)); };
         _missionsWindow = win;
+        _lastMissionsJson = null;
         win.Show();
         var pollTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+        _missionsPollTimer = pollTimer;
         win.Closing += (_, _) => pollTimer.Stop();
         pollTimer.Tick += async (_, _) =>
         {
@@ -939,24 +834,36 @@ public partial class MainWindow : Window
             try
             {
                 var expr = @"(() => { const g = (id) => document.getElementById(id)?.textContent?.trim() || ''; const gt = (id) => { const el = document.getElementById(id); const t = el?.textContent?.trim(); return t ? t : (el?.getAttribute('title') || '').trim(); }; return JSON.stringify({ missoes: g('rastreio-n'), eventos: g('rastreio-ev-n'), passe: gt('rastreio-passe'), tarefa: gt('rastreio-tarefa'), analise: gt('rastreio-analise'), diaria: gt('rastreio-diaria') }); })()";
-                string best = "";
+                // Prioridade: flutuante (jogo ativo) primeiro; se retornar vazio/inválido, tenta a principal.
+                // Evita o "maior JSON" (que podia escolher dado velho) e também evita ficar "Carregando..." quando
+                // apenas a flutuante ainda está sem o tracker no DOM.
+                string? json = null;
                 foreach (var core in new[] { _floatingView?.CoreWebView2, GameView?.CoreWebView2 })
                 {
                     if (core == null) continue;
-                    var raw = await core.ExecuteScriptAsync(expr);
+                    string raw;
+                    try { raw = await core.ExecuteScriptAsync(expr); } catch { continue; }
                     if (string.IsNullOrEmpty(raw)) continue;
-                    var json = System.Text.Json.JsonSerializer.Deserialize<string>(raw) ?? "";
-                    if (json.Length > best.Length) best = json;
+                    string candidate;
+                    try { candidate = System.Text.Json.JsonSerializer.Deserialize<string>(raw) ?? ""; } catch { continue; }
+                    if (string.IsNullOrWhiteSpace(candidate) || candidate == "{}") continue;
+                    try
+                    {
+                        using var d2 = System.Text.Json.JsonDocument.Parse(candidate);
+                        var hasAny = d2.RootElement.EnumerateObject().Any(p => !string.IsNullOrWhiteSpace(p.Value.GetString()));
+                        if (!hasAny) continue;
+                    }
+                    catch { continue; }
+                    json = candidate;
+                    break;
                 }
-                if (string.IsNullOrEmpty(best) || best == "{}") return;
-                try
-                {
-                    using var d2 = System.Text.Json.JsonDocument.Parse(best);
-                    var hasAny = d2.RootElement.EnumerateObject().Any(p => !string.IsNullOrWhiteSpace(p.Value.GetString()));
-                    if (!hasAny) return;
-                }
-                catch { }
-                if (!string.IsNullOrEmpty(best)) UpdateMissions(best, fromFloating: true);
+                if (string.IsNullOrWhiteSpace(json)) return;
+                if (json == _lastMissionsJson) return;
+                _lastMissionsJson = json;
+                // Usa fromFloating=true para que o fallback (principal) também possa exibir
+                // quando a flutuante ainda está sem tracker no DOM. A prioridade acima já
+                // garante que a flutuante seja preferida quando tiver dado válido.
+                UpdateMissions(json, fromFloating: true);
             }
             catch { }
         };
@@ -1031,8 +938,6 @@ public partial class MainWindow : Window
     {
         SaveWindowSettings();
         _allowExit = true;
-        try { _heroWindow?.Close(); } catch { }
-        _heroWindow = null;
         try { _missionsWindow?.Close(); } catch { }
         _missionsWindow = null;
 
@@ -1266,7 +1171,7 @@ public partial class MainWindow : Window
 
             try
             {
-                var seed = $"window.__lolIdleMissionsActive = {_settings.ShowMissions.ToString().ToLower()};";
+                var seed = $"window.__lolIdleMissionsActive = {_settings.ShowMissions.ToString().ToLower()}; window.__lolIdleFloatingTopmost = {_settings.FloatingTopmost.ToString().ToLower()};";
                 _ = view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(seed);
             }
             catch { }
@@ -1362,14 +1267,20 @@ public partial class MainWindow : Window
             };
         }
 
-        // Garante que a janela recém-revelada fique acima do jogo e receba foco.
-        window.Topmost = true;
+        // Restaura a preferência "Sempre no topo" da flutuante (A) e garante foco.
+        window.Topmost = _settings.FloatingTopmost;
         window.Activate();
-        window.Dispatcher.BeginInvoke(new Action(() =>
-        {
-            window.Topmost = false;
-            window.Activate();
-        }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        SyncFloatingControls();
+    }
+
+    private void SyncFloatingControls()
+    {
+        var core = _floatingView?.CoreWebView2;
+        if (core == null) return;
+        var missions = _settings.ShowMissions.ToString().ToLowerInvariant();
+        var topmost = _settings.FloatingTopmost.ToString().ToLowerInvariant();
+        var script = $"(()=>{{const m=document.querySelector('#lol-idle-missions'); if(m){{m.classList.toggle('active',{missions});}} const p=document.querySelector('#lol-idle-pin'); if(p){{p.classList.toggle('active',{topmost}); p.title={_settings.FloatingTopmost}?'Desativar janela sempre no topo':'Ativar janela sempre no topo';}} }})()";
+        try { _ = core.ExecuteScriptAsync(script); } catch { }
     }
 
     private void CaptureFloatingWindowBounds()
@@ -1604,6 +1515,8 @@ public partial class MainWindow : Window
                     else if (message == "lol-idle-control:pin")
                     {
                         popupWindow.Topmost = !popupWindow.Topmost;
+                        _settings.FloatingTopmost = popupWindow.Topmost;
+                        SaveWindowSettings();
                     }
                     else if (message == "lol-idle-control:close")
                     {
@@ -2104,7 +2017,11 @@ public partial class MainWindow : Window
                 Hide();
                 _ = ApplyAudioSettingsAsync();
                 _floatingOpened = true;
-                if (_settings.ShowMissions) ShowMissions();
+                if (_settings.ShowMissions)
+                {
+                    ShowMissions();
+                    SyncFloatingControls();
+                }
                 LogFloatingWindowEvent("ReopenButton: janela flutuante reaberta. Janela principal fechada (sem bandeja).");
                 return;
             }
@@ -2126,13 +2043,24 @@ public partial class MainWindow : Window
             _floatingWindow = window;
             _floatingView = view;
 
+            try
+            {
+                var seed = $"window.__lolIdleMissionsActive = {_settings.ShowMissions.ToString().ToLowerInvariant()}; window.__lolIdleFloatingTopmost = {_settings.FloatingTopmost.ToString().ToLowerInvariant()};";
+                _ = view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(seed);
+            }
+            catch { }
+
             ShowFloatingWindow(window);
             SaveWindowSettings();
             _isHiddenToTray = true;
             Hide();
             _ = ApplyAudioSettingsAsync();
             _floatingOpened = true;
-            if (_settings.ShowMissions) ShowMissions();
+            if (_settings.ShowMissions)
+            {
+                ShowMissions();
+                SyncFloatingControls();
+            }
             LogFloatingWindowEvent("ReopenButton: janela flutuante aberta. Janela principal fechada (sem bandeja).");
 
             var target = Uri.TryCreate(_lastFloatingUri, UriKind.Absolute, out var savedUri) &&
