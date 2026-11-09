@@ -222,7 +222,9 @@ public partial class MainWindow : Window
                 const cur = (el?.textContent || '') + '|' + qtd + '|' + (document.getElementById('bolsa-qtd')?.textContent || '');
                 if (cur === lastBolsa) return;
                 lastBolsa = cur;
-                if (/(\d+)\s*\/(30)/.test(cur) || /chei|lotad/i.test(cur)) send('inventory');
+                const m = cur.match(/(\d+)\s*\/\s*(\d+)/);
+                if (m && parseInt(m[1], 10) >= parseInt(m[2], 10) && parseInt(m[2], 10) > 0) { send('inventory'); return; }
+                if (/chei|lotad/i.test(cur)) send('inventory');
             } catch (_) {}
         };
         const observer = new MutationObserver((mutations) => {

@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.2.2](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.2.2)**
+**[Baixar LoL Idle Desktop v1.2.3](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.2.3)**
 
 ### Instalador (quando disponível na Release)
 
@@ -112,6 +112,9 @@ artifacts\installer\LoLIdleDesktop-Setup-1.1.0-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.2.3
+- Som de mochila cheia só toca quando enche de verdade (30/30), não a cada item.
 
 ### v1.2.2
 - Votar abre no navegador direto (TopIdle/OAuth fora da WebView).
