@@ -123,6 +123,7 @@ O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\
 ### v1.2.7
 - Sempre no topo agora é persistente (janela flutuante e Missões, separadas) e sincronizado ao reabrir.
 - Flutuante lembra se Missões estava ativa ao fechar.
+- Fechar Missões pelo × apaga o caderninho na flutuante.
 - Missões redimensiona em largura e altura (com limites mínimos).
 - Missões com fallback flutuante → principal (não trava mais em "Carregando...").
 - Notificação de missão restrita ao log real (sem tocar ao abrir a engrenagem).

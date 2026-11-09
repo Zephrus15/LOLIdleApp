@@ -54,6 +54,7 @@ Correções (resolução de bugs na v1.2.7)
 - Sempre no topo agora persiste separadamente para a janela flutuante e para
   a janela de Missões (ícone dourado sincronizado ao reabrir).
 - A janela flutuante lembra se Missões estava ativa ao ser fechada.
+- Fechar Missões pelo × apaga o caderninho na flutuante (sincronização do ícone).
 - Redimensionamento das Missões atualizado (largura e altura, com limites).
 - Missões voltam a carregar mesmo quando a flutuante ainda está sem o tracker
   (fallback para a janela principal).

@@ -725,6 +725,7 @@ public partial class MainWindow : Window
             _missionsWindow.Show();
             _missionsWindow.Activate();
             try { _missionsPollTimer?.Start(); } catch { }
+            SyncFloatingControls();
             return;
         }
         var win = new Window
@@ -764,7 +765,7 @@ public partial class MainWindow : Window
         win.MouseEnter += (_, _) => { if (win.Topmost) pinBtn.Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143)); };
         top.Children.Add(pinBtn);
         var closeBtn = new Button { Content = "×", Width = 20, Height = 20, Background = Brushes.Transparent, Foreground = Brushes.White, BorderThickness = new Thickness(0) };
-        closeBtn.Click += (_, _) => { win.Hide(); _settings.ShowMissions = false; SaveWindowSettings(); };
+        closeBtn.Click += (_, _) => { win.Hide(); _settings.ShowMissions = false; SaveWindowSettings(); SyncFloatingControls(); };
         top.Children.Add(closeBtn);
         root.Children.Add(top);
         _missionsTitle = new TextBlock { Text = "Missões", Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143)), FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) };
@@ -816,7 +817,7 @@ public partial class MainWindow : Window
             SaveWindowSettings();
         };
         win.Content = layout;
-        win.Closing += (_, e) => { e.Cancel = true; win.Hide(); if (!_allowExit) _settings.ShowMissions = false; SaveWindowSettings(); };
+        win.Closing += (_, e) => { e.Cancel = true; win.Hide(); if (!_allowExit) { _settings.ShowMissions = false; SaveWindowSettings(); SyncFloatingControls(); } };
         win.GotFocus += (_, _) => win.BorderThickness = new Thickness(1);
         win.LostFocus += (_, _) => win.BorderThickness = new Thickness(0);
         win.Opacity = 1.0;
