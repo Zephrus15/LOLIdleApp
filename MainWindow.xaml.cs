@@ -135,6 +135,7 @@ public partial class MainWindow : Window
                 <button id='lol-idle-close' title='Fechar janela flutuante' aria-label='Fechar'>
                     <svg viewBox='0 0 24 24'><path d='M18 6 6 18M6 6l12 12'/></svg>
                 </button>`;
+            if (window.__lolIdleMissionsActive) panel.querySelector('#lol-idle-missions')?.classList.add('active');
             document.documentElement.appendChild(panel);
             const send = action => window.chrome.webview.postMessage('lol-idle-control:' + action);
             const audio = panel.querySelector('#lol-idle-audio');
@@ -1263,6 +1264,12 @@ public partial class MainWindow : Window
             _floatingWindow = window;
             _floatingView = view;
 
+            try
+            {
+                var seed = $"window.__lolIdleMissionsActive = {_settings.ShowMissions.ToString().ToLower()};";
+                _ = view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(seed);
+            }
+            catch { }
             args.NewWindow = core;
             args.Handled = true;
             LogFloatingWindowEvent("Popup: Core pré-inicializado entregue ao jogo.");
@@ -1273,6 +1280,12 @@ public partial class MainWindow : Window
             Hide();
             _ = ApplyAudioSettingsAsync();
             _floatingOpened = true;
+            if (_settings.ShowMissions)
+            {
+                ShowMissions();
+                var c2 = view.CoreWebView2;
+                if (c2 != null) _ = c2.ExecuteScriptAsync("document.querySelector('#lol-idle-missions')?.classList.add('active');");
+            }
             LogFloatingWindowEvent("Popup: janela exibida. Janela principal fechada (sem bandeja).");
 
             _ = PrepareFloatingWebViewAsync(this);
@@ -1493,8 +1506,7 @@ public partial class MainWindow : Window
                     try { closedView?.Dispose(); } catch { }
 
                     LogFloatingWindowEvent("FloatingWindow: janela fechada; referências liberadas e popup encerrado.");
-                    // Mantém a memória das missões: não força abrir/fechar.
-                    SaveWindowSettings();
+                    _missionsWindow?.Hide();
                     _ = Dispatcher.BeginInvoke(new Action(() =>
                     {
                         if (!_allowExit && _floatingWindow == null)
@@ -2092,6 +2104,7 @@ public partial class MainWindow : Window
                 Hide();
                 _ = ApplyAudioSettingsAsync();
                 _floatingOpened = true;
+                if (_settings.ShowMissions) ShowMissions();
                 LogFloatingWindowEvent("ReopenButton: janela flutuante reaberta. Janela principal fechada (sem bandeja).");
                 return;
             }
@@ -2119,6 +2132,7 @@ public partial class MainWindow : Window
             Hide();
             _ = ApplyAudioSettingsAsync();
             _floatingOpened = true;
+            if (_settings.ShowMissions) ShowMissions();
             LogFloatingWindowEvent("ReopenButton: janela flutuante aberta. Janela principal fechada (sem bandeja).");
 
             var target = Uri.TryCreate(_lastFloatingUri, UriKind.Absolute, out var savedUri) &&
@@ -2208,7 +2222,7 @@ public partial class MainWindow : Window
     {
         if (e.ClickCount == 2)
             Maximize_Click(sender, e);
-        else if (e.LeftButton == MouseButtonState.Pressed)
+        else if (e.LeftButton == MouseButtonState.Pressed && !_isCustomMaximized)
             DragMove();
     }
 }
