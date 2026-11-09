@@ -187,17 +187,19 @@ public partial class MainWindow : Window
             try { window.chrome.webview.postMessage('lol-idle-notify:' + kind); } catch (_) {}
         };
         const checkSaqueNode = (n) => {
+            const isSaque = (el) => el && el.matches && el.matches('.saque');
             let el = n;
             if (n.nodeType !== 1) return;
-            // Sobem até o bloco .saque (o jogo faz prepend em #avisos-saque)
-            while (el && el !== document.documentElement) {
-                if (el.matches && el.matches('.saque')) break;
-                el = el.parentElement;
-            }
-            if (!el || el === n.parentElement && !n.matches?.('.saque')) {
-                // Fallback: se o nó é um filho direto de #avisos-saque, considera ele mesmo
-                if (!n.parentElement?.matches?.('#avisos-saque')) return;
-                el = n;
+            if (!isSaque(el)) {
+                // sobe até .saque (added node pode ser filho interno do aviso)
+                while (el && el !== document.documentElement) {
+                    if (isSaque(el)) break;
+                    el = el.parentElement;
+                }
+                if (!isSaque(el)) {
+                    if (n.parentElement?.matches?.('#avisos-saque')) el = n;
+                    else return;
+                }
             }
             const cls = (el.className || '').toString().toLowerCase();
             const txtSaque = (el.textContent || '').toLowerCase();
@@ -209,8 +211,19 @@ public partial class MainWindow : Window
         const checkText = (t) => {
             const s = (t || '').toLowerCase();
             if (!s.trim()) return;
-            if (inventoryRe.test(s)) send('inventory');
-            else if (missionRe.test(s)) send('mission');
+            if (inventoryRe.test(s)) { send('inventory'); return; }
+            if (missionRe.test(s)) send('mission');
+        };
+        let lastBolsa = '';
+        const checkBolsa = () => {
+            try {
+                const el = document.getElementById('hud-bolsa-n');
+                const qtd = document.getElementById('mochila-qtd')?.textContent?.trim() || '';
+                const cur = (el?.textContent || '') + '|' + qtd + '|' + (document.getElementById('bolsa-qtd')?.textContent || '');
+                if (cur === lastBolsa) return;
+                lastBolsa = cur;
+                if (/(\d+)\s*\/(30)/.test(cur) || /chei|lotad/i.test(cur)) send('inventory');
+            } catch (_) {}
         };
         const observer = new MutationObserver((mutations) => {
             for (const m of mutations) {
@@ -235,6 +248,7 @@ public partial class MainWindow : Window
                         }
                     }
                 }
+                checkBolsa();
                 // Também checa mudança direta do #hud-nivel via childList (texto substituído)
                 for (const n of m.addedNodes || []) {
                     if (n.nodeType === 1 && (n.id === 'hud-nivel' || n.querySelector?.('#hud-nivel'))) {
@@ -1947,7 +1961,7 @@ public partial class MainWindow : Window
         {
             "legendary" => ("LoL Idle", "Item lendário obtido!", "Assets/notify_legendary.wav"),
             "mission" => ("LoL Idle", "Missão concluída!", "Assets/notify_mission.wav"),
-            "inventory" => ("LoL Idle", "Inventário cheio!", "Assets/notify_mission.wav"),
+            "inventory" => ("LoL Idle", "Inventário cheio!", "Assets/notify_inventory.wav"),
             "level" => ("LoL Idle", "Subiu de nível!", "Assets/notify_level.wav"),
             _ => ("LoL Idle", "Evento importante no jogo!", "Assets/notify_mission.wav")
         };
