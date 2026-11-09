@@ -6,7 +6,7 @@ Versão base: **v1.2.6**
 
 ### 1. Painéis independentes
 - **Missões** — ✅ **Confirmado (feito em v1.2.5/v1.2.6)** — painel separado e destacável, só aparece com a flutuante aberta, arrastável/redimensionável, borda amarela, barra de progresso Passe/Tarefa, Caçada, lembra último estado (ativa/desativada, tamanho e local)
-- **Barra lateral** — ⏳ Pendente — painel separado e destacável
+- **Barra lateral** — ❌ **Impossível (interativo)** — jogo bloqueia segunda sessão; clone vivo/interativo não funciona (só seria viável versão só-texto como Missões, que não é o desejado)
 - **Personagem** — ❌ **Não confirmado** — não tem como fazer do jeito desejado (segunda sessão/WebView é bloqueada pelo jogo)
 - Comportamento esperado: cada painel pode ficar em janela própria, sempre no topo se necessário, e sem travar a janela principal
 - Salvar posição/tamanho de cada painel (como já fazemos com a principal e a flutuante)
@@ -27,6 +27,6 @@ Versão base: **v1.2.6**
 
 ## Limitações atuais (base para o roadmap)
 - Painel de **Missões**: ✅ **já incluído** (v1.2.5/v1.2.6) → ver item 1
-- Painéis independentes de Barra lateral e Personagem **não incluídos** → ver item 1 (Personagem inviável do jeito desejado: jogo bloqueia segunda sessão)
+- Painéis independentes de Barra lateral e Personagem **não incluídos** → ver item 1 (Barra lateral interativa e Personagem inviáveis do jeito desejado: jogo bloqueia segunda sessão)
 - Áudio só tem mute geral, sem volume separado música/efeitos
 - Botão "sempre no topo" só vale para a sessão atual, não persiste
