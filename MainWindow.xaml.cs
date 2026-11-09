@@ -867,8 +867,13 @@ public partial class MainWindow : Window
                 }
                 if (string.IsNullOrWhiteSpace(json)) return;
                 if (json == _lastMissionsJson) return;
+                // Fallback inicial: se a flutuante está visível mas ainda sem tracker,
+                // e ainda não exibimos nada, permite mostrar o dado da principal
+                // (senão fica preso em "Carregando..."). Depois que algo foi exibido,
+                // o dado de janela oculta não sobrescreve o atual.
+                bool primeiroCarregamento = _lastMissionsJson == null;
                 _lastMissionsJson = json;
-                UpdateMissions(json, fromFloating: fonteÉFlutuante);
+                UpdateMissions(json, fromFloating: fonteÉFlutuante || primeiroCarregamento);
             }
             catch { }
         };

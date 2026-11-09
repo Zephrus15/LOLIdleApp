@@ -126,6 +126,9 @@ O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\
 
 ## 📋 Histórico de versões
 
+### v1.2.9
+- Missões: fallback inicial liberado quando a flutuante ainda está sem tracker (não fica mais em "Carregando...").
+
 ### v1.2.8
 - Missões com prioridade por visibilidade (flutuante visível → flutuante primeiro; escondida → principal primeiro) e origem correta no fallback.
 - Alt+F4 / fechar pelo sistema agora oculta na bandeja (não minimiza).

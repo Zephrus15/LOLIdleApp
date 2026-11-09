@@ -1,4 +1,4 @@
-LoL Idle Desktop - versão 1.2.8
+LoL Idle Desktop - versão 1.2.9
 Aplicativo desktop não oficial para Windows
 
 O que é
@@ -60,8 +60,10 @@ Gerar instalador
 O instalador verifica o Microsoft Edge WebView2 Runtime e o instala
 automaticamente quando necessário.
 
-Correções (resolução de bugs na v1.2.8)
+Correções (resolução de bugs na v1.2.9)
 --------------------------------------------------------------
+- Missões: fallback inicial liberado quando a flutuante ainda está sem tracker
+  (não fica mais em Carregando...).
 - Missões agora usa prioridade por visibilidade e registra a origem
   (flutuante visível → flutuante primeiro; escondida → principal primeiro),
   com fallback apenas se a prioritária não tiver dado válido.
