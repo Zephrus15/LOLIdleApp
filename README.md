@@ -114,7 +114,6 @@ O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\
 ## 📋 Histórico de versões
 
 ### v1.2.6
-- Votar abre no navegador direto; links externos fecham a flutuante junto.
 - Missões lembra último estado (ativa/desativada, tamanho e local) ao reabrir a flutuante.
 
 ### v1.2.5
