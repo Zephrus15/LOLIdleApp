@@ -1,4 +1,4 @@
-LoL Idle Desktop - versão 1.2.7
+LoL Idle Desktop - versão 1.2.8
 Aplicativo desktop não oficial para Windows
 
 O que é
@@ -9,17 +9,28 @@ usando Microsoft Edge WebView2. Não altera o jogo nem automatiza ações.
 Recursos
 --------
 - Janela personalizada sem abas ou barra de endereço do navegador.
-- Janela flutuante independente com controles de áudio, fixar e fechar.
-- Arraste da janela flutuante pela área do jogo.
-- Controle de silenciamento geral do áudio.
+- Janela flutuante independente, aberta pelo pedido do jogo (window.open),
+  não por botão na principal. Ao abrir, a principal é oculta sem bandeja.
+  Fechar a flutuante pelo × restaura a principal.
+  ReopenFloatingWindow_Click existe sem ligação no XAML (a confirmar).
+- Arraste da janela flutuante pela área do jogo (exceto controles).
+- Controle de silenciamento geral do áudio. A tela de música/efeitos
+  separados (ShowFloatingSettings) não tem UI acessível hoje.
 - Janela de Missões separada (somente leitura), visível só com a flutuante aberta,
   arrastável e redimensionável (largura e altura), com borda amarela.
 - Minimizar (－) envia a janela para a barra de tarefas do Windows.
-- Fechar (×) oculta o aplicativo na bandeja do sistema, sem notificação.
+- Fechar (×) ou Alt+F4/fechar pelo sistema oculta o aplicativo na bandeja
+  do sistema, sem notificação.
+- Mudo automático na bandeja só quando a principal está oculta E a
+  flutuante não está visível. Com flutuante aberta, o som continua.
 - Clique esquerdo no ícone da bandeja restaura a janela.
 - Clique direito no ícone da bandeja mostra: Restaurar / Som > Som do jogo / Sair.
 - Cookies e sessão persistidos em %LOCALAPPDATA%\LoLIdleDesktop\WebView2.
-- Links externos abrem no navegador padrão.
+- Preferências em window-settings.json e log em floating-window.log
+  no mesmo diretório.
+- Links externos (fora de lolidle.com) abrem no navegador padrão, sem flutuante.
+  Hosts: Discord, Google OAuth, TopIdle/voto, Kick, Twitch, YouTube,
+  TikTok, Instagram. Na flutuante, link externo fecha a flutuante.
 
 Requisitos
 ----------
@@ -49,15 +60,17 @@ Gerar instalador
 O instalador verifica o Microsoft Edge WebView2 Runtime e o instala
 automaticamente quando necessário.
 
-Correções (resolução de bugs na v1.2.7)
+Correções (resolução de bugs na v1.2.8)
 --------------------------------------------------------------
-- Sempre no topo agora persiste separadamente para a janela flutuante e para
+- Missões agora usa prioridade por visibilidade e registra a origem
+  (flutuante visível → flutuante primeiro; escondida → principal primeiro),
+  com fallback apenas se a prioritária não tiver dado válido.
+- Alt+F4 / fechar pelo sistema agora oculta na bandeja (antes minimizava).
+- Siempre no topo agora persiste separadamente para a janela flutuante e para
   a janela de Missões (ícone dourado sincronizado ao reabrir).
 - A janela flutuante lembra se Missões estava ativa ao ser fechada.
 - Fechar Missões pelo × apaga o caderninho na flutuante (sincronização do ícone).
 - Redimensionamento das Missões atualizado (largura e altura, com limites).
-- Missões voltam a carregar mesmo quando a flutuante ainda está sem o tracker
-  (fallback para a janela principal).
 - Notificação de missão restrita ao log real (sem som falso ao abrir a engrenagem).
 - Remoção de código órfão (barra de personagem) e das preferências sem uso.
 
@@ -67,7 +80,9 @@ Limitações desta versão
   não incluídos (o jogo bloqueia a segunda sessão).
 - O controle de áudio disponível silencia todo o áudio do jogo. Não há uma
   tela acessível pela interface para ajustar música e efeitos separadamente
-  (a tela existe no código, mas não é chamada pela interface atual).
+  (a tela ShowFloatingSettings existe no código, mas não é chamada).
+- Janela separada de voto (ShowVoteWindow) existe sem exibição; voto/OAuth
+  abrem no navegador real.
 
 Observações importantes
 -----------------------

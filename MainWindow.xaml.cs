@@ -835,11 +835,17 @@ public partial class MainWindow : Window
             try
             {
                 var expr = @"(() => { const g = (id) => document.getElementById(id)?.textContent?.trim() || ''; const gt = (id) => { const el = document.getElementById(id); const t = el?.textContent?.trim(); return t ? t : (el?.getAttribute('title') || '').trim(); }; return JSON.stringify({ missoes: g('rastreio-n'), eventos: g('rastreio-ev-n'), passe: gt('rastreio-passe'), tarefa: gt('rastreio-tarefa'), analise: gt('rastreio-analise'), diaria: gt('rastreio-diaria') }); })()";
-                // Prioridade: flutuante (jogo ativo) primeiro; se retornar vazio/inválido, tenta a principal.
+                // Prioridade por visibilidade: flutuante visível -> [flutuante, principal]; escondida -> [principal, flutuante].
+                // Se retornar vazio/inválido, tenta a outra fonte.
                 // Evita o "maior JSON" (que podia escolher dado velho) e também evita ficar "Carregando..." quando
                 // apenas a flutuante ainda está sem o tracker no DOM.
                 string? json = null;
-                foreach (var core in new[] { _floatingView?.CoreWebView2, GameView?.CoreWebView2 })
+                bool fonteÉFlutuante = false;
+                bool floatingVisible = IsFloatingVisible();
+                var sources = floatingVisible
+                    ? new[] { (_floatingView?.CoreWebView2, true), (GameView?.CoreWebView2, false) }
+                    : new[] { (GameView?.CoreWebView2, false), (_floatingView?.CoreWebView2, true) };
+                foreach (var (core, isFloating) in sources)
                 {
                     if (core == null) continue;
                     string raw;
@@ -856,15 +862,13 @@ public partial class MainWindow : Window
                     }
                     catch { continue; }
                     json = candidate;
+                    fonteÉFlutuante = isFloating;
                     break;
                 }
                 if (string.IsNullOrWhiteSpace(json)) return;
                 if (json == _lastMissionsJson) return;
                 _lastMissionsJson = json;
-                // Usa fromFloating=true para que o fallback (principal) também possa exibir
-                // quando a flutuante ainda está sem tracker no DOM. A prioridade acima já
-                // garante que a flutuante seja preferida quando tiver dado válido.
-                UpdateMissions(json, fromFloating: true);
+                UpdateMissions(json, fromFloating: fonteÉFlutuante);
             }
             catch { }
         };
@@ -2141,7 +2145,7 @@ public partial class MainWindow : Window
         if (!_allowExit)
         {
             e.Cancel = true;
-            WindowState = WindowState.Minimized;
+            HideToTray();
         }
     }
 

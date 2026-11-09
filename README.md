@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.2.7](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.2.7)**
+**[Baixar LoL Idle Desktop v1.2.8](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.2.8)**
 
 ### Instalador (quando disponível na Release)
 
@@ -33,12 +33,14 @@ Não é necessário instalar o .NET separadamente para utilizar o pacote publica
 - Abre o LoL Idle em uma janela própria.
 - Interface sem abas ou barra de endereço do navegador.
 - Sessão e cookies persistidos entre execuções.
-- Links externos direcionados ao navegador padrão.
+- Links externos (fora de `lolidle.com`) abrem no navegador padrão e não abrem a flutuante.
+- Hosts tratados além de Discord/Kick/Twitch: `discord.com`, `discordapp.com`, `discord.gg`, `accounts.google.com`, `topidle.com/voto`, YouTube, TikTok, Instagram. Na flutuante, link externo abre no navegador e fecha a flutuante.
 
 ### Janela flutuante
-- Permite manter o jogo em uma janela independente.
+- A flutuante não é aberta por botão da interface principal. Ela abre quando o jogo solicita nova janela (`window.open` / `NewWindowRequested`, `HandleNewWindowRequested`).
+- Ao abrir, a janela principal é oculta sem ir para a bandeja. Ao fechar a flutuante pelo ×, a principal é restaurada.
 - Opção de manter a janela sempre no topo (preferência salva e restaurada ao reabrir).
-- Possibilidade de movimentar a janela arrastando pela área do jogo.
+- Possibilidade de movimentar a janela arrastando pela área do jogo (exceto controles).
 - Controles personalizados para áudio, fixar e fechar.
 - Controle de silenciamento geral do áudio.
 - Possibilidade de fechar a janela flutuante e retornar à janela principal.
@@ -51,21 +53,25 @@ Não é necessário instalar o .NET separadamente para utilizar o pacote publica
 - Lembra o último estado ativo/inativo ao reabrir a flutuante.
 
 ### Bandeja do Windows
-- Fechar a janela principal oculta o aplicativo na bandeja do sistema.
+- Fechar a janela principal (pelo × ou Alt+F4/fechar pelo sistema, exceto quando o encerramento é permitido) oculta o aplicativo na bandeja do sistema e mostra o ícone.
 - Clique esquerdo no ícone para restaurar a janela.
-- Clique direito para acessar as opções de abrir ou sair.
+- Clique direito para acessar as opções de abrir ou sair (`Restaurar` / `Som > Som do jogo` / `Sair`).
 - A sessão permanece ativa enquanto o aplicativo estiver oculto.
+- O mudo automático na bandeja só vale se a principal estiver oculta E a flutuante não estiver visível. Com a flutuante aberta, o som continua mesmo com a principal oculta.
 
 ### Preferências e sessão
 - Salvamento automático do tamanho, da posição e das preferências de áudio.
 - Restauração das dimensões e da posição da janela principal, da janela flutuante e da janela de Missões.
 - Preferência "sempre no topo" salva separadamente para a janela flutuante e para a janela de Missões.
 - Gerenciamento da sessão do WebView2.
+- Arquivos em `%LOCALAPPDATA%\LoLIdleDesktop`: `window-settings.json` (preferências/geometria), `WebView2\` (sessão/cookies) e `floating-window.log` (log técnico).
 
 ### Limitações desta versão
 - Painéis disponíveis: **Missões** (somente leitura) incluído. **Barra lateral interativa** e **Personagem** não incluídos (o jogo bloqueia a segunda sessão).
-- O controle de áudio disponível silencia todo o áudio do jogo. Não há uma tela acessível pela interface para ajustar música e efeitos separadamente (a tela de configurações de áudio existe no código, mas não é chamada pela interface atual).
-- O botão fechar (×) oculta o aplicativo na bandeja. Para encerrar, use **Sair** no menu da bandeja.
+- O controle de áudio disponível silencia todo o áudio do jogo. Não há uma tela acessível pela interface para ajustar música e efeitos separadamente (a tela de configurações de áudio `ShowFloatingSettings` existe no código, mas não é chamada pela interface atual).
+- A janela separada de voto (`ShowVoteWindow` / `PrepareVoteWebViewAsync`) existe no código mas não é exibida; voto e login OAuth usam o navegador real.
+- O botão fechar (×) e o Alt+F4/fechar pelo sistema ocultam o aplicativo na bandeja. Para encerrar, use **Sair** no menu da bandeja.
+- `ReopenFloatingWindow_Click` existe no código sem ligação no `MainWindow.xaml` atual — a flutuante só abre via `window.open` do jogo.
 
 ## 🖥️ Requisitos
 
@@ -119,6 +125,10 @@ artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.2.8
+- Missões com prioridade por visibilidade (flutuante visível → flutuante primeiro; escondida → principal primeiro) e origem correta no fallback.
+- Alt+F4 / fechar pelo sistema agora oculta na bandeja (não minimiza).
 
 ### v1.2.7
 - Sempre no topo agora é persistente (janela flutuante e Missões, separadas) e sincronizado ao reabrir.
