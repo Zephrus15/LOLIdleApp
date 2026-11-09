@@ -1,13 +1,13 @@
 # Roadmap — LoL Idle Desktop
 
-Versão base: **v1.1.0**
+Versão base: **v1.2.6**
 
 ## Próximas funcionalidades
 
 ### 1. Painéis independentes
-- **Missões** — painel separado e destacável
-- **Barra lateral** — painel separado e destacável
-- **Personagem** — painel separado e destacável
+- **Missões** — ✅ **Confirmado (feito em v1.2.5/v1.2.6)** — painel separado e destacável, só aparece com a flutuante aberta, arrastável/redimensionável, borda amarela, barra de progresso Passe/Tarefa, Caçada, lembra último estado (ativa/desativada, tamanho e local)
+- **Barra lateral** — ⏳ Pendente — painel separado e destacável
+- **Personagem** — ❌ **Não confirmado** — não tem como fazer do jeito desejado (segunda sessão/WebView é bloqueada pelo jogo)
 - Comportamento esperado: cada painel pode ficar em janela própria, sempre no topo se necessário, e sem travar a janela principal
 - Salvar posição/tamanho de cada painel (como já fazemos com a principal e a flutuante)
 
@@ -26,6 +26,7 @@ Versão base: **v1.1.0**
 - Definir estratégia: MAUI / .NET Android / WebView wrapper nativo
 
 ## Limitações atuais (base para o roadmap)
-- Painéis independentes de Missões, Barra lateral e Personagem **não incluídos** → ver item 1
+- Painel de **Missões**: ✅ **já incluído** (v1.2.5/v1.2.6) → ver item 1
+- Painéis independentes de Barra lateral e Personagem **não incluídos** → ver item 1 (Personagem inviável do jeito desejado: jogo bloqueia segunda sessão)
 - Áudio só tem mute geral, sem volume separado música/efeitos
 - Botão "sempre no topo" só vale para a sessão atual, não persiste
