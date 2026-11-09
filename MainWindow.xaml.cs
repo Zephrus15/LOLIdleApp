@@ -469,35 +469,14 @@ public partial class MainWindow : Window
         SourceInitialized += Window_SourceInitialized;
     }
 
-    // Faz a janela sem bordas respeitar a área de trabalho ao maximizar.
     private void Window_SourceInitialized(object? sender, EventArgs e)
-    {
-        var handle = new WindowInteropHelper(this).Handle;
-        HwndSource.FromHwnd(handle)?.AddHook(WindowProc);
-    }
+    { }
 
-    private static IntPtr WindowProc(IntPtr hwnd, int message, IntPtr wParam, IntPtr lParam, ref bool handled)
-    {
-        if (message == WM_GETMINMAXINFO)
-        {
-            var monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-            if (monitor != IntPtr.Zero)
-            {
-                var monitorInfo = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
-                if (GetMonitorInfo(monitor, ref monitorInfo))
-                {
-                    var info = Marshal.PtrToStructure<MINMAXINFO>(lParam);
-                    info.ptMaxPosition.x = monitorInfo.rcWork.left - monitorInfo.rcMonitor.left;
-                    info.ptMaxPosition.y = monitorInfo.rcWork.top - monitorInfo.rcMonitor.top;
-                    info.ptMaxSize.x = monitorInfo.rcWork.right - monitorInfo.rcWork.left;
-                    info.ptMaxSize.y = monitorInfo.rcWork.bottom - monitorInfo.rcWork.top;
-                    Marshal.StructureToPtr(info, lParam, true);
-                    handled = true;
-                }
-            }
-        }
-        return IntPtr.Zero;
-    }
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT { public int x; public int y; }
@@ -573,10 +552,18 @@ public partial class MainWindow : Window
             }
 
             if (settings.RememberWindowState && settings.IsMaximized)
-                WindowState = WindowState.Maximized;
+            {
+                _restoreLeft = Left; _restoreTop = Top;
+                _restoreWidth = Width; _restoreHeight = Height;
+                var work = SystemParameters.WorkArea;
+                Left = work.Left; Top = work.Top; Width = work.Width; Height = work.Height;
+                ResizeMode = ResizeMode.NoResize;
+                _isCustomMaximized = true;
+            }
         }
 
         _settingsReady = true;
+        UpdateMaximizeButton();
         SyncTrayMenuChecks();
     }
 
@@ -590,13 +577,10 @@ public partial class MainWindow : Window
         {
             Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
 
-            if (WindowState == WindowState.Maximized)
+            if (_isCustomMaximized)
             {
                 _settings.IsMaximized = true;
-                _settings.NormalWidth = RestoreBounds.Width;
-                _settings.NormalHeight = RestoreBounds.Height;
-                _settings.Left = RestoreBounds.Left;
-                _settings.Top = RestoreBounds.Top;
+                // mantém _normalWidth/_normalHeight como tamanho restaurável e Left/Top salvos
             }
             else if (WindowState != WindowState.Minimized)
             {
@@ -631,6 +615,22 @@ public partial class MainWindow : Window
 
     private void Window_LocationChanged(object? sender, EventArgs e)
     {
+        QueueWindowSettingsSave();
+    }
+
+    private void Window_StateChanged(object? sender, EventArgs e)
+    {
+        if (WindowState == WindowState.Maximized && !_isCustomMaximized)
+        {
+            // Converte o maximizar nativo (fullscreen) para o nosso (área útil)
+            var rb = RestoreBounds;
+            if (rb.Width > 0) { _normalWidth = rb.Width; _normalHeight = rb.Height; }
+            var work = SystemParameters.WorkArea;
+            WindowState = WindowState.Normal;
+            _isCustomMaximized = true;
+            _settings.IsMaximized = true;
+            Left = work.Left; Top = work.Top; Width = work.Width; Height = work.Height;
+        }
         QueueWindowSettingsSave();
     }
 
@@ -2146,11 +2146,44 @@ public partial class MainWindow : Window
         WindowState = WindowState.Minimized;
     }
 
+    private bool _isCustomMaximized;
+    private double _restoreLeft;
+    private double _restoreTop;
+    private double _restoreWidth;
+    private double _restoreHeight;
+
     private void Maximize_Click(object sender, RoutedEventArgs e)
     {
-        WindowState = WindowState == WindowState.Maximized
-            ? WindowState.Normal
-            : WindowState.Maximized;
+        if (!_isCustomMaximized)
+        {
+            _restoreLeft = Left; _restoreTop = Top;
+            _restoreWidth = Width; _restoreHeight = Height;
+            var work = SystemParameters.WorkArea;
+            Left = work.Left; Top = work.Top; Width = work.Width; Height = work.Height;
+            ResizeMode = ResizeMode.NoResize;
+            _isCustomMaximized = true;
+            _settings.IsMaximized = true;
+            SaveWindowSettings();
+        }
+        else
+        {
+            _isCustomMaximized = false;
+            _settings.IsMaximized = false;
+            ResizeMode = ResizeMode.CanResize;
+            Left = _restoreLeft; Top = _restoreTop;
+            Width = _restoreWidth; Height = _restoreHeight;
+            SaveWindowSettings();
+        }
+        UpdateMaximizeButton();
+    }
+
+    private void UpdateMaximizeButton()
+    {
+        if (MaximizeButton != null)
+        {
+            MaximizeButton.Content = _isCustomMaximized ? "❐" : "□";
+            MaximizeButton.ToolTip = _isCustomMaximized ? "Restaurar" : "Maximizar";
+        }
     }
 
     private void Close_Click(object sender, RoutedEventArgs e)
