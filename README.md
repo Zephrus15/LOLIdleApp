@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.2.5](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.2.5)**
+**[Baixar LoL Idle Desktop v1.2.6](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.2.6)**
 
 ### Instalador (quando disponível na Release)
 
@@ -112,6 +112,10 @@ artifacts\installer\LoLIdleDesktop-Setup-1.1.0-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.2.6
+- Votar abre no navegador direto; links externos fecham a flutuante junto.
+- Missões lembra último estado (ativa/desativada, tamanho e local) ao reabrir a flutuante.
 
 ### v1.2.5
 - Janela de Missões estável (só na flutuante, com barras de progresso e Caçada).
