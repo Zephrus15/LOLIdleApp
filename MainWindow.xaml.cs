@@ -178,7 +178,7 @@ public partial class MainWindow : Window
         window.__lolIdleTrayNotifyInstalled = true;
         const missionRe = /(miss[aã]o.*(conclu|complet)|mission.*(complete|conclu)|quest.*(complete|conclu)|conclu.*miss[aã]o|tarefa.*(conclu|complet))/i;
         const inventoryRe = /(mochila.*chei|invent[áa]rio.*(cheio|lotado|cheia)|inventory.*(full|lotado)|bolsa.*(cheia|lotada)|sem espa[cç]o|no space|not enough space|bag.*full)/i;
-        const last = { legendary: 0, mission: 0, inventory: 0, level: 0 };
+        const last = { legendary: 0, epic: 0, mission: 0, inventory: 0, level: 0 };
         let prevLevel = null;
         const send = (kind) => {
             const now = Date.now();
@@ -206,6 +206,7 @@ public partial class MainWindow : Window
             // So drops: ignora avisos do Arsenal (Nova estrela no Arsenal) que tambem usam classe lendario mas sem imagem do item
             if (txtSaque.includes('arsenal')) return;
             if ((cls.includes('lendario') || cls.includes('mitico')) && el.querySelector('img')) { send('legendary'); return; }
+            if (cls.includes('epico') && el.querySelector('img')) { send('epic'); return; }
             if (cls.includes('alerta') || inventoryRe.test(txtSaque)) { send('inventory'); return; }
         };
         const checkText = (t) => {
@@ -1962,6 +1963,7 @@ public partial class MainWindow : Window
         var (title, message, sound) = kind switch
         {
             "legendary" => ("LoL Idle", "Item lendário obtido!", "Assets/notify_legendary.wav"),
+            "epic" => ("LoL Idle", "Item épico obtido!", "Assets/notify_epic.wav"),
             "mission" => ("LoL Idle", "Missão concluída!", "Assets/notify_mission.wav"),
             "inventory" => ("LoL Idle", "Inventário cheio!", "Assets/notify_inventory.wav"),
             "level" => ("LoL Idle", "Subiu de nível!", "Assets/notify_level.wav"),
