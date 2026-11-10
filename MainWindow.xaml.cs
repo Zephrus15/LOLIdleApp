@@ -540,7 +540,7 @@ public partial class MainWindow : Window
         ApplySidebarLayout();
         UpdateMaximizeButton();
         SyncTrayMenuChecks();
-        _ = AtualizarContaConectadaUI();
+        _ = AtualizarContaConectadaUIAsync(); // fire-and-forget
     }
 
     // Salva as preferências no perfil local do Windows.
@@ -721,7 +721,7 @@ public partial class MainWindow : Window
 
         Activate();
         _ = ApplyAudioSettingsAsync();
-        _ = AtualizarContaConectadaUI();
+        _ = AtualizarContaConectadaUIAsync(); // fire-and-forget
     }
 
     private void ShowMissions()
@@ -2168,7 +2168,7 @@ public partial class MainWindow : Window
         SidebarPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
 
         if (SidebarToggleButton.Content is TextBlock chevron)
-            chevron.Text = visible ? "◀" : "▶";
+            chevron.Text = visible ? "▶" : "◀";
 
         SidebarToggleButton.ToolTip = visible ? "Esconder contas" : "Mostrar contas";
     }
@@ -2203,7 +2203,7 @@ public partial class MainWindow : Window
         _settings.ContasAdicionadasCount++;
         SaveWindowSettings();
 
-        await AtualizarContaConectadaUI();
+        await AtualizarContaConectadaUIAsync();
 
         MessageBox.Show(
             $"Conta adicionada: {conta}\nContas salvas: {_settings.ContasAdicionadasCount} / {MaxContas}",
@@ -2230,9 +2230,10 @@ public partial class MainWindow : Window
                     return el ? (el.textContent || '').trim() : '';
                 };
                 const candidatos = [
+                    pegar('st-nome'),
+                    cls('.nome-jogador'),
                     pegar('usuario'),
-                    cls('.usuario'),
-                    pegar('nome-usuario')
+                    cls('.usuario')
                 ];
                 for (const t of candidatos) {
                     if (t) return t;
@@ -2252,10 +2253,49 @@ public partial class MainWindow : Window
     }
 
     // Atualiza o texto da conta conectada exibida na barra lateral.
-    private async Task AtualizarContaConectadaUI()
+    private async Task AtualizarContaConectadaUIAsync()
     {
         var conta = await ObterContaConectadaAsync();
-        ContaConectadaText.Text = conta != null ? $"Conta conectada: {conta}" : "Nenhuma conta conectada";
+
+        // Remove todas as abas exceto as duas padrões (Conta 1 e Conta 2)
+        while (ContasTabControl.Items.Count > 2)
+        {
+            ContasTabControl.Items.RemoveAt(ContasTabControl.Items.Count - 1);
+        }
+
+        // Se há conta conectada e não há aba com esse nome, adiciona uma nova aba
+        if (conta != null)
+        {
+            bool jaExiste = false;
+            for (int i = 2; i < ContasTabControl.Items.Count; i++)
+            {
+                var header = ContasTabControl.Items[i].ToString();
+                if (header.Contains(conta))
+                {
+                    jaExiste = true;
+                    break;
+                }
+            }
+
+            if (!jaExiste)
+            {
+                int novaIndex = ContasTabControl.Items.Count;
+                var novaAba = new TabItem
+                {
+                    Header = conta,
+                    Content = new TextBlock
+                    {
+                        Text = conta,
+                        Foreground = System.Windows.Media.Brushes.DodgerBlue,
+                        FontSize = 12,
+                        Margin = new Thickness(8, 4, 4, 4)
+                    }
+                };
+                ContasTabControl.Items.Add(novaAba);
+            }
+        }
+
+        // Atualiza o contador visível
         ContasCountText.Text = $"Contas: {_settings.ContasAdicionadasCount} / {MaxContas}";
     }
 

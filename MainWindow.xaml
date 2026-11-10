@@ -150,13 +150,23 @@
                                    Foreground="#E8CF8F"
                                    FontSize="15"
                                    FontWeight="SemiBold"
-                                   Margin="0,0,0,12"/>
-
-                        <TextBlock x:Name="ContaConectadaText"
-                                   Foreground="#D8DCE4"
-                                   FontSize="12"
-                                   TextWrapping="Wrap"
                                    Margin="0,0,0,8"/>
+
+                        <TabControl x:Name="ContasTabControl">
+                            <TabControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel IsItemsHost="True" Orientation="Horizontal"/>
+                                </ItemsPanelTemplate>
+                            </TabControl.ItemsPanel>
+
+                            <TabItem Header="Conta 1">
+                                <TextBlock Text="Zephrus" Foreground="#D8DCE4" FontSize="12" Margin="8,4"/>
+                            </TabItem>
+
+                            <TabItem Header="Conta 2">
+                                <TextBlock Text="Convidado" Foreground="#D8DCE4" FontSize="12" Margin="8,4"/>
+                            </TabItem>
+                        </TabControl>
 
                         <Button x:Name="AddAccountButton"
                                 Content="➕ Adicionar conta"
@@ -165,15 +175,15 @@
                                 Background="#2A2E38"
                                 BorderBrush="#D8B45A"
                                 BorderThickness="1"
-                                Padding="8,6"
-                                Margin="0,0,0,12"
+                                Margin="0,8,0,0"
                                 HorizontalAlignment="Left"
-                                Cursor="Hand"/>
+                                Cursor="Hand"
+                                FontSize="12"/>
 
                         <TextBlock x:Name="ContasCountText" Text="Contas: 0 / 4"
                                    Foreground="#9298A5"
                                    FontSize="12"
-                                   TextWrapping="Wrap"/>
+                                   Margin="0,8,0,0"/>
                     </StackPanel>
                 </Border>
             </Grid>
