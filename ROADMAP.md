@@ -1,6 +1,6 @@
 ﻿# 🗺️ Roadmap — LoL Idle Desktop
 
-> Base: **v1.3.2** · Última atualização: 2026-11-10
+> Base: **v1.3.3** · Última atualização: 2026-11-10
 > Versão web estilizada: [`ROADMAP.html`](./ROADMAP.html) — abra no navegador para visualizar como site.
 
 <p align="center">
@@ -17,9 +17,10 @@
 | Painel / Recurso | Status | Versão |
 |---|---|---|
 | 📖 **Missões** | ✅ **Confirmado** | v1.2.5 / v1.2.6 |
-| 🎛️ **Barra lateral (interativa)** | ❌ **Impossível** | — (jogo bloqueia 2ª sessão) |
-| 🧙 **Personagem (interativo)** | ❌ **Impossível** | — (jogo bloqueia 2ª sessão) |
 | 🔔 **Bandeja inteligente (sons + clique abre app)** | ✅ **Confirmado** | v1.2.0 → v1.3.0 |
+| 🎛️ **Barra lateral de contas** | ✅ **Feito** | v1.3.2 / v1.3.3 |
+| 🔔 **Notificações por conta e por tipo** | ✅ **Feito** | v1.3.3 |
+| 🧙 **Personagem (interativo)** | ❌ **Impossível** | — (jogo bloqueia 2ª sessão) |
 | 📌 **Sempre no topo persistente** | ✅ **Confirmado** | v1.2.7 |
 | 📱 **Android** | 🔵 **Futuro** | — |
 | 🔊 **Áudio separado (música/efeitos)** | 🟡 **Pendente — precisa de decisão** | lógica existe; UI inacessível (`ShowFloatingSettings` sem chamada) |
@@ -41,11 +42,21 @@ Painel separado e destacável que **já está pronto** (v1.2.5 / v1.2.6):
 
 > ℹ️ É um painel **só-texto** (igual ao que a Barra lateral poderia ser), sem segunda sessão do jogo.
 
-### 🎛️ Barra lateral — `IMPOSSÍVEL (interativo)` ❌
+### 🎛️ Barra lateral de contas — `FEITO` ✅ (v1.3.2 / v1.3.3)
 
-- **Por que não dá:** o LoL Idle **bloqueia a segunda sessão/WebView**.
-- Um clone vivo/interativo da barra **não funciona**.
-- Só seria viável a versão **só-texto** (como Missões) — **não é o desejado** → marcado como impossível.
+A sidebar **de contas** (lado direito, com toggle esconder/mostrar) foi implementada e evoluiu ao longo da v1.3.x:
+
+- **Várias contas reais ao mesmo tempo** — uma WebView2 por conta, cada uma com sessão/partição independente (`%LOCALAPPDATA%\LoLIdleDesktop\WebView2\Contas\<slug>`)
+- **Troca entre contas clicando na lista**, sem precisar deslogar/logar (fica salva para sempre naquela conta)
+- **Lista vertical estilo IdleDeck** — avatar quadrado roxo com iniciais, bolinha de status no avatar (verde = na frente, azul = em segundo plano), item inteiro clicável
+- **Renomear** via ✏️ (nome personalizado tem prioridade sobre o lido do DOM)
+- **Remover** conta com o × (o login salvo NÃO é apagado)
+- **Até 4 contas no total** (principal + 3 extras)
+- **Botão "🔔 Notificações"** (v1.3.3) — ativar/desativar, checkmarks escuros por conta, checkboxes por tipo (Lendário, Épico, Missão, Inventário, Nível) e prefixo automático com o nome da conta (vários habilitados: "Mio — Missão concluída!")
+- Botão "Contas ▴" esconde/mostra a lista (sem borda cinza residual)
+- Conta ativa lembrada ao reabrir (`ContaAtiva`)
+
+> ℹ️ **O que continua inviável** é um **painel do jogo interativo dentro da barra** (2ª sessão viva acoplada ao painel) — o LoL Idle bloqueia uma segunda WebView com o jogo absoluto no mesmo momento. A barra feita aqui é **seletor + gerenciador de contas**, não um painel vivo.
 
 ### 🧙 Personagem — `IMPOSSÍVEL (interativo)` ❌
 
@@ -107,4 +118,4 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 
 ---
 
-<sub>Documento gerado a partir do estado atual do app \(v1.2.9\). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site.</sub>
+<sub>Documento gerado a partir do estado atual do app \(v1.3.3\). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site.</sub>

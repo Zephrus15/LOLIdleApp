@@ -44,17 +44,17 @@ code{background:#0f141f;padding:2px 6px;border-radius:6px;border:1px solid var(-
     <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center">
       <div>
         <h1>🗺️ Roadmap — LoL Idle Desktop</h1>
-        <p class="sub">Base <strong>v1.3.2</strong> · Missões prontas, contas reais com várias sessões simultâneas, e foco atual em <strong>polir sons e detalhes</strong>.</p>
+        <p class="sub">Base <strong>v1.3.3</strong> · Missões prontas, contas reais com várias sessões simultâneas, painel de Notificações por conta/tipo, e foco atual em <strong>polir sons e detalhes</strong>.</p>
       </div>
       <div class="badges">
-        <span class="pill p-green">3 feitos</span>
-        <span class="pill p-red">2 impossíveis</span>
+        <span class="pill p-green">5 feitos</span>
+        <span class="pill p-red">1 impossível</span>
         <span class="pill p-amber">2 pendentes/polir</span>
         <span class="pill p-blue">1 futuro</span>
       </div>
     </div>
-    <div class="bar" aria-label="Progresso geral"><div style="width:50%;background:linear-gradient(90deg,#2ea043,#3fb950)"></div></div>
-    <p class="muted" style="margin:0">Progresso geral (feito / total do roadmap): <strong>~50%</strong> — Missões, bandeja e sempre no topo persistente prontos; áudio separado precisa de decisão.</p>
+    <div class="bar" aria-label="Progresso geral"><div style="width:56%;background:linear-gradient(90deg,#2ea043,#3fb950)"></div></div>
+    <p class="muted" style="margin:0">Progresso geral (feito / total do roadmap): <strong>~56%</strong> — Missões, bandeja, sempre no topo, barra lateral de contas e Notificações por conta/tipo prontos; áudio separado precisa de decisão.</p>
   </div>
 
   <div class="grid">
@@ -72,15 +72,31 @@ code{background:#0f141f;padding:2px 6px;border-radius:6px;border:1px solid var(-
     </div>
 
     <div class="card">
-      <h2>🎛️ Barra lateral <span class="tag p-amber">PENDENTE ⏳</span></h2>
-      <p class="muted">A alternância de contas fora da WebView principal funciona — cada conta tem seu WebView2 em partição própria (~v1.3.2). O que permanece inviável é um painel interativo "vivo" dentro da sidebar (2ª sessão viva acoplada ao painel).</p>
+      <h2>🎛️ Barra lateral de contas <span class="tag p-green">FEITO ✅</span></h2>
+      <p class="muted">Sidebar de contas com várias sessões reais ao mesmo tempo (v1.3.2 / v1.3.3).</p>
       <ul>
-        <li>✅ Alternar entre contas clicando no chip (vários WebViews, sessão separada por conta)</li>
-        <li>❌ Painel do jogo interativo dentro da barra lateral — continua bloqueado pelo jogo</li>
-        <li>Não confundir: barra de contas (seletor) ≠ painel do jogo dentro da barra</li>
+        <li>✅ Várias contas WebView2 com sessão/partição isolada</li>
+        <li>✅ Troca clicando na lista (salva para sempre por conta)</li>
+        <li>✅ Lista estilo IdleDeck: avatar + bolinhas de status (verde/azul)</li>
+        <li>✅ Renomear (✏️), remover (×), até 4 contas</li>
+        <li>✅ Painel "🔔 Notificações" (v1.3.3) por conta e por tipo</li>
+        <li>❌ Painel interativo do jogo dentro da barra — bloqueado pelo jogo</li>
       </ul>
-      <div class="bar"><div style="width:50%;background:#f0b429"></div></div>
-      <p class="muted">Status: 50% (seletor pronto, painel vivo inviável)</p>
+      <div class="bar"><div style="width:100%;background:#2ea043"></div></div>
+      <p class="muted">Status: 100% ✔ (seletor completo; painel vivo inviável)</p>
+    </div>
+
+    <div class="card">
+      <h2>🔔 Notificações por conta / tipo <span class="tag p-green">FEITO ✅</span></h2>
+      <p class="muted">Painel "🔔 Notificações" na sidebar (v1.3.3).</p>
+      <ul>
+        <li>✅ Ativar/desativar notificações</li>
+        <li>✅ Checkmarks escuros por conta</li>
+        <li>✅ Checkboxes por tipo (Lendário, Épico, Missão, Inventário, Nível)</li>
+        <li>✅ Prefixo automático com a conta (ex.: "Mio — Missão concluída!")</li>
+      </ul>
+      <div class="bar"><div style="width:100%;background:#2ea043"></div></div>
+      <p class="muted">Status: 100% ✔</p>
     </div>
 
     <div class="card">
@@ -131,7 +147,8 @@ code{background:#0f141f;padding:2px 6px;border-radius:6px;border:1px solid var(-
       <thead><tr><th>Recurso</th><th>Status</th><th>Versão</th><th>Nota</th></tr></thead>
       <tbody>
         <tr><td>📖 Missões</td><td>✅ Confirmado</td><td>v1.2.5 / v1.2.6</td><td class="muted">só-texto, janela própria</td></tr>
-        <tr><td>🎛️ Barra lateral (seletor de contas)</td><td>⏳ Parcial</td><td>v1.3.2</td><td class="muted">troca real por partição WebView2; painel vivo impossível</td></tr>
+        <tr><td>🎛️ Barra lateral de contas</td><td>✅ Confirmado</td><td>v1.3.2 / v1.3.3</td><td class="muted">troca real por partição WebView2; avatar + bolinhas de status</td></tr>
+        <tr><td>🔔 Notificações por conta/tipo</td><td>✅ Confirmado</td><td>v1.3.3</td><td class="muted">checkmarks escuros; prefixo da conta no balão</td></tr>
         <tr><td>🧙 Personagem (interativo)</td><td>❌ Impossível</td><td>—</td><td class="muted">painel vivo no painel lateral bloqueado pelo jogo</td></tr>
         <tr><td>🔔 Bandeja inteligente</td><td>✅ Confirmado</td><td>v1.2.0 → v1\.3\.1</td><td class="muted">clique no balão abre o app</td></tr>
         <tr><td>📌 Sempre no topo persistente</td><td>✅ Confirmado</td><td>v1.2.7*</td><td class="muted">por janela (`FloatingTopmost`/`MissionsTopmost`)</td></tr>
@@ -145,7 +162,7 @@ code{background:#0f141f;padding:2px 6px;border-radius:6px;border:1px solid var(-
   </div>
 
   <div class="footer">
-    <span>Gerado a partir do estado v1\.3\.1 · Veja <a href="./ROADMAP.md">ROADMAP.md</a> no GitHub</span>
+    <span>Gerado a partir do estado v1\.3\.3 · Veja <a href="./ROADMAP.md">ROADMAP.md</a> no GitHub</span>
     <span>Polimento atual: sons + detalhes</span>
   </div>
 </div>

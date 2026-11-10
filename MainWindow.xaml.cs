@@ -411,7 +411,7 @@ public partial class MainWindow : Window
     private double _normalWidth = 1280;
     private double _normalHeight = 800;
 
-    private sealed class WindowSettings
+    public sealed class WindowSettings
     {
         public double NormalWidth { get; set; } = 1280;
         public double NormalHeight { get; set; } = 800;
@@ -450,6 +450,12 @@ public partial class MainWindow : Window
         public Dictionary<string, string> ContasNomes { get; set; } = new();
         // Chaves cujo rótulo foi escolhido manualmente (o DOM não sobrescreve)
         public List<string> ContasNomesPersonalizados { get; set; } = new();
+        // Notificações: master switch e filtros por conta e por tipo (vazio = todas ativas)
+        public bool NotifyEnabled { get; set; } = true;
+        // Chaves de contas DESATIVADAS para notificações
+        public List<string> NotifyAccountsDisabled { get; set; } = new();
+        // Tipos de notificação desativados (legendary / epic / mission / inventory / level)
+        public List<string> NotifyTypesDisabled { get; set; } = new();
     }
 
     public MainWindow()
@@ -542,6 +548,10 @@ public partial class MainWindow : Window
                 _settings.ContasNomes = new Dictionary<string, string>();
             if (_settings.ContasNomesPersonalizados == null)
                 _settings.ContasNomesPersonalizados = new List<string>();
+            if (_settings.NotifyAccountsDisabled == null)
+                _settings.NotifyAccountsDisabled = new List<string>();
+            if (_settings.NotifyTypesDisabled == null)
+                _settings.NotifyTypesDisabled = new List<string>();
             if (string.IsNullOrWhiteSpace(_settings.ContaAtiva))
                 _settings.ContaAtiva = DefaultAccountName;
 
@@ -1459,7 +1469,7 @@ public partial class MainWindow : Window
             {
                 var msg = args.TryGetWebMessageAsString();
                 if (msg != null && msg.StartsWith("lol-idle-notify:"))
-                    PlayTrayNotification(msg["lol-idle-notify:".Length..]);
+                    HandleNotification(key, msg["lol-idle-notify:".Length..]);
             }
             catch { }
         };
@@ -1903,7 +1913,7 @@ public partial class MainWindow : Window
                     }
                     else if (message != null && message.StartsWith("lol-idle-notify:"))
                     {
-                        PlayTrayNotification(message["lol-idle-notify:".Length..]);
+                        HandleNotification(_settings.ContaAtiva, message["lol-idle-notify:".Length..]);
                     }
                     else if (message != null && message.StartsWith("lol-idle-missions:"))
                     {
@@ -2236,19 +2246,43 @@ public partial class MainWindow : Window
         window.Activate();
     }
 
-    private void PlayTrayNotification(string kind)
+    // Tratamento central de notificação: aplica os filtros das preferências.
+    // `key` = chave da conta que gerou o evento; `kind` = tipo do evento.
+    private void HandleNotification(string? key, string kind)
+    {
+        if (!_settings.NotifyEnabled) return;
+        if (_settings.NotifyTypesDisabled.Contains(kind, StringComparer.OrdinalIgnoreCase)) return;
+        if (key != null && _settings.NotifyAccountsDisabled.Contains(key, StringComparer.OrdinalIgnoreCase)) return;
+
+        // Se mais de uma conta estiver habilitada, mostra o nome da conta no balão
+        string? accountLabel = null;
+        if (key != null)
+        {
+            var todasContas = new List<string> { DefaultAccountName };
+            todasContas.AddRange(_settings.ContasAdicionadas);
+            int habilitadas = todasContas.Count(c =>
+                !_settings.NotifyAccountsDisabled.Contains(c, StringComparer.OrdinalIgnoreCase));
+            if (habilitadas > 1)
+                accountLabel = GetAccountDisplayName(key);
+        }
+
+        PlayTrayNotification(kind, accountLabel);
+    }
+
+    private void PlayTrayNotification(string kind, string? accountLabel = null)
     {
         if (!_settings.TrayNotify && !_settings.TrayBalloon)
             return;
 
-        var (title, message, sound) = kind switch
+        var title = accountLabel ?? "LoL Idle";
+        var (titleFinal, message, sound) = kind switch
         {
-            "legendary" => ("LoL Idle", "Item lendário obtido!", "Assets/notify_legendary.wav"),
-            "epic" => ("LoL Idle", "Item épico obtido!", "Assets/notify_epic.wav"),
-            "mission" => ("LoL Idle", "Missão concluída!", "Assets/notify_mission.wav"),
-            "inventory" => ("LoL Idle", "Inventário cheio!", "Assets/notify_inventory.wav"),
-            "level" => ("LoL Idle", "Subiu de nível!", "Assets/notify_level.wav"),
-            _ => ("LoL Idle", "Evento importante no jogo!", "Assets/notify_mission.wav")
+            "legendary" => (title, "Item lendário obtido!", "Assets/notify_legendary.wav"),
+            "epic" => (title, "Item épico obtido!", "Assets/notify_epic.wav"),
+            "mission" => (title, "Missão concluída!", "Assets/notify_mission.wav"),
+            "inventory" => (title, "Inventário cheio!", "Assets/notify_inventory.wav"),
+            "level" => (title, "Subiu de nível!", "Assets/notify_level.wav"),
+            _ => (title, "Evento importante no jogo!", "Assets/notify_mission.wav")
         };
 
         if (_settings.TrayNotify)
@@ -2282,7 +2316,7 @@ public partial class MainWindow : Window
 
         if (_settings.TrayBalloon && _trayIcon != null)
         {
-            try { _trayIcon.ShowBalloonTip(5000, title, message, Forms.ToolTipIcon.Info); } catch { }
+            try { _trayIcon.ShowBalloonTip(5000, titleFinal, message, Forms.ToolTipIcon.Info); } catch { }
         }
 
         if (!_isHiddenToTray)
@@ -2534,6 +2568,21 @@ public partial class MainWindow : Window
         }
 
         SidebarToggleButton.ToolTip = visible ? "Esconder contas" : "Mostrar contas";
+    }
+
+    // Abre o painel de Notificações (onde o usuário escolhe contas/tipos)
+    private void Notifications_Click(object sender, RoutedEventArgs e)
+    {
+        var accountKeys = new List<string> { DefaultAccountName };
+        accountKeys.AddRange(_settings.ContasAdicionadas);
+
+        var window = new NotifySettingsWindow(
+            _settings,
+            accountKeys,
+            GetAccountDisplayName,
+            SaveWindowSettings,
+            this);
+        window.ShowDialog();
     }
 
     // Limite total de contas (incluindo a principal): 4 = principal + 3 extras

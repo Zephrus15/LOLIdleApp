@@ -250,6 +250,15 @@
                                        Foreground="#9298A5"
                                        FontSize="12"
                                        Margin="0,8,0,0"/>
+
+                            <Button x:Name="NotificationsButton"
+                                    Content="🔔 Notificações"
+                                    Click="Notifications_Click"
+                                    ToolTip="Configurar como os avisos do jogo chegam (conta, tipo, ativar/desativar)"
+                                    Style="{StaticResource AddAccountButtonStyle}"
+                                    Margin="0,16,0,0"
+                                    HorizontalAlignment="Left"
+                                    FontSize="12"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>
