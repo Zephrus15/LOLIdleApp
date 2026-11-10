@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Microsoft.Web.WebView2.Core;
 using System;
 using System.IO;
@@ -24,6 +25,8 @@ public partial class MainWindow : Window
 {
     private const string GameUrl = "https://lolidle.com/jogar";
     private const string GameHost = "lolidle.com";
+    // Rótulo da conta padrão/principal
+    private const string DefaultAccountName = "Conta principal";
 
     // Instalado antes dos scripts do jogo para acompanhar AudioContext desde sua criação.
     private const string AudioBootstrapScript = @"(() => {
@@ -294,6 +297,21 @@ public partial class MainWindow : Window
     private bool _settingsReady;
     private System.Windows.Threading.DispatcherTimer? _settingsSaveTimer;
     private System.Drawing.Icon? _appIcon;
+    private const string AccountBrowserArguments = "--autoplay-policy=no-user-gesture-required" +
+        " --disable-background-timer-throttling" +
+        " --disable-backgrounding-occluded-windows" +
+        " --disable-renderer-backgrounding";
+    // Uma WebView2 (sessão/partição própria) por conta. GameView aponta para a padrão.
+    private readonly Dictionary<string, Microsoft.Web.WebView2.Wpf.WebView2> _accountViews = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, CoreWebView2Environment> _accountEnvs = new(StringComparer.OrdinalIgnoreCase);
+    // Referência para a conta padrão (compatibilidade com o restante do código).
+    private Microsoft.Web.WebView2.Wpf.WebView2? GameView;
+    // WebView da conta atualmente ativa (fallback: conta padrão).
+    private Microsoft.Web.WebView2.Wpf.WebView2? ActiveView =>
+        (_settings.ContaAtiva != null &&
+         _accountViews.TryGetValue(_settings.ContaAtiva, out var ativa))
+            ? ativa
+            : GameView;
     private CoreWebView2Environment? _webViewEnvironment;
     private string _lastFloatingUri = GameUrl;
     private Window? _floatingWindow;
@@ -425,6 +443,13 @@ public partial class MainWindow : Window
         public double MissionsTop { get; set; } = 200;
         public bool IsMaximized { get; set; }
         public bool RememberWindowState { get; set; } = true;
+        // Comportamento ao fechar (0 = perguntar, 1 = continuar em segundo plano, 2 = sair)
+        public int CloseBehavior { get; set; } = 0;
+        public List<string> ContasAdicionadas { get; set; } = new();
+        public string ContaAtiva { get; set; } = "Conta principal";
+        public Dictionary<string, string> ContasNomes { get; set; } = new();
+        // Chaves cujo rótulo foi escolhido manualmente (o DOM não sobrescreve)
+        public List<string> ContasNomesPersonalizados { get; set; } = new();
     }
 
     public MainWindow()
@@ -505,6 +530,21 @@ public partial class MainWindow : Window
         if (settings != null)
         {
             _settings = settings;
+
+            // Sincroniza contagem com a lista de contas persistidas
+            if (_settings.ContasAdicionadas == null)
+                _settings.ContasAdicionadas = new List<string>();
+            _settings.ContasAdicionadas = _settings.ContasAdicionadas
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            _settings.ContasAdicionadasCount = _settings.ContasAdicionadas.Count;
+            if (_settings.ContasNomes == null)
+                _settings.ContasNomes = new Dictionary<string, string>();
+            if (_settings.ContasNomesPersonalizados == null)
+                _settings.ContasNomesPersonalizados = new List<string>();
+            if (string.IsNullOrWhiteSpace(_settings.ContaAtiva))
+                _settings.ContaAtiva = DefaultAccountName;
+
             if (settings.NormalWidth >= 480 && settings.NormalWidth <= 10000)
                 _normalWidth = settings.NormalWidth;
 
@@ -1018,70 +1058,45 @@ public partial class MainWindow : Window
             Directory.CreateDirectory(userData);
 
             var envOptions = new CoreWebView2EnvironmentOptions();
-            envOptions.AdditionalBrowserArguments = "--autoplay-policy=no-user-gesture-required";
+            envOptions.AdditionalBrowserArguments = AccountBrowserArguments;
             _webViewEnvironment = await CoreWebView2Environment.CreateAsync(
                 userDataFolder: userData, options: envOptions);
+            // Registra o ambiente padrão como o da conta principal
+            _accountEnvs[DefaultAccountName] = _webViewEnvironment;
 
-            await GameView.EnsureCoreWebView2Async(_webViewEnvironment);
-            await GameView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(AudioBootstrapScript);
-            await GameView.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(TrayNotifyScript);
-            GameView.CoreWebView2.WebMessageReceived += (_, args) =>
+            // Restaura a conta ativa; se a chave salva não existir mais, cai para a padrão.
+            string active = _settings.ContaAtiva;
+            if (!string.Equals(active, DefaultAccountName, StringComparison.OrdinalIgnoreCase))
             {
-                try
+                var match = _settings.ContasAdicionadas
+                    .FirstOrDefault(c => c.Equals(active, StringComparison.OrdinalIgnoreCase));
+                if (match == null)
                 {
-                    var msg = args.TryGetWebMessageAsString();
-                    if (msg != null && msg.StartsWith("lol-idle-notify:"))
-                        PlayTrayNotification(msg["lol-idle-notify:".Length..]);
+                    active = DefaultAccountName;
                 }
-                catch { }
-            };
-
-            GameView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
-            GameView.CoreWebView2.Settings.IsStatusBarEnabled = false;
-            GameView.CoreWebView2.Settings.AreDevToolsEnabled = false;
-            GameView.CoreWebView2.Settings.IsZoomControlEnabled = true;
-
-            GameView.CoreWebView2.NavigationStarting += (_, args) =>
-            {
-                if (Uri.TryCreate(args.Uri, UriKind.Absolute, out var uri) &&
-                    uri.Scheme is "http" or "https" &&
-                    !uri.Host.Equals(GameHost, StringComparison.OrdinalIgnoreCase) &&
-                    !uri.Host.EndsWith("." + GameHost, StringComparison.OrdinalIgnoreCase))
+                else
                 {
-                    args.Cancel = true;
-
-                    try
-                    {
-                        System.Diagnostics.Process.Start(
-                            new System.Diagnostics.ProcessStartInfo
-                            {
-                                FileName = uri.ToString(),
-                                UseShellExecute = true
-                            });
-                    }
-                    catch { }
+                    active = match; // normaliza para a chave canônica persistida
                 }
-
-                StatusText.Text = "Carregando LoL Idle...";
-            };
-
-            GameView.CoreWebView2.NavigationCompleted += (_, args) =>
-            {
-                StatusText.Text = args.IsSuccess
-                    ? "LoL Idle pronto  •  Sua sessão fica salva neste computador"
-                    : "Não foi possível carregar. Verifique sua conexão e tente atualizar.";
-                if (args.IsSuccess)
+                if (!string.Equals(active, _settings.ContaAtiva, StringComparison.Ordinal))
                 {
-                    _ = ApplyAudioSettingsAsync();
+                    _settings.ContaAtiva = active;
+                    SaveWindowSettings();
                 }
-            };
+            }
 
-            GameView.CoreWebView2.NewWindowRequested += (_, args) =>
+            await EnsureAccountViewAsync(DefaultAccountName);
+            if (!string.Equals(active, DefaultAccountName, StringComparison.OrdinalIgnoreCase))
             {
-                HandleNewWindowRequested(args);
-            };
-
-            GameView.Source = new Uri(GameUrl);
+                try { await EnsureAccountViewAsync(active); }
+                catch
+                {
+                    _settings.ContaAtiva = DefaultAccountName;
+                    SaveWindowSettings();
+                }
+            }
+            ApplyAccountVisibility();
+            _ = AtualizarContaConectadaUIAsync();
             _ = PrepareFloatingWebViewAsync(this);
             _ = PrepareVoteWebViewAsync(this);
         }
@@ -1367,6 +1382,328 @@ public partial class MainWindow : Window
         };
     }
 
+    // Cria (se necessário) e retorna a WebView da conta indicada.
+    // A conta padrão reutiliza a sessão salva (\LoLIdleDesktop\WebView2).
+    // As demais ganham sessão isolada em \WebView2\Contas\<slug>.
+    private async Task<Microsoft.Web.WebView2.Wpf.WebView2> EnsureAccountViewAsync(string key)
+    {
+        if (_accountViews.TryGetValue(key, out var existing))
+            return existing;
+
+        bool isDefault = string.Equals(key, DefaultAccountName, StringComparison.OrdinalIgnoreCase);
+
+        var view = new Microsoft.Web.WebView2.Wpf.WebView2
+        {
+            DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24),
+            Visibility = Visibility.Collapsed
+        };
+        AccountViewHost.Children.Add(view);
+        _accountViews[key] = view;
+        if (isDefault)
+            GameView = view;
+
+        CoreWebView2Environment env;
+        if (isDefault)
+        {
+            env = _webViewEnvironment
+                ?? throw new InvalidOperationException("Ambiente WebView2 padrão não inicializado.");
+        }
+        else
+        {
+            string baseDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "LoLIdleDesktop", "WebView2", "Contas");
+            string folder = Path.Combine(baseDir, Slugify(key));
+            Directory.CreateDirectory(folder);
+
+            var options = new CoreWebView2EnvironmentOptions
+            {
+                AdditionalBrowserArguments = AccountBrowserArguments
+            };
+            env = await CoreWebView2Environment.CreateAsync(
+                userDataFolder: folder, options: options);
+        }
+        _accountEnvs[key] = env;
+
+        try
+        {
+            await view.EnsureCoreWebView2Async(env);
+            await ConfigurarAccountViewAsync(view, key);
+            view.Source = new Uri(GameUrl);
+        }
+        catch
+        {
+            _accountViews.Remove(key);
+            _accountViews.Remove(key); // garante remoção nas duas coleções
+            _accountEnvs.Remove(key);
+            AccountViewHost.Children.Remove(view);
+            try { view.Dispose(); } catch { }
+            throw;
+        }
+
+        return view;
+    }
+
+    // Aplica a todas as contas: scripts de áudio/notificação, handlers e settings.
+    private async Task ConfigurarAccountViewAsync(Microsoft.Web.WebView2.Wpf.WebView2 view, string key)
+    {
+        var core = view.CoreWebView2;
+        if (core == null)
+            throw new InvalidOperationException("CoreWebView2 indisponível após EnsureCoreWebView2Async.");
+
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(AudioBootstrapScript);
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(TrayNotifyScript);
+        core.WebMessageReceived += (_, args) =>
+        {
+            try
+            {
+                var msg = args.TryGetWebMessageAsString();
+                if (msg != null && msg.StartsWith("lol-idle-notify:"))
+                    PlayTrayNotification(msg["lol-idle-notify:".Length..]);
+            }
+            catch { }
+        };
+
+        core.Settings.AreDefaultContextMenusEnabled = true;
+        core.Settings.IsStatusBarEnabled = false;
+        core.Settings.AreDevToolsEnabled = false;
+        core.Settings.IsZoomControlEnabled = true;
+
+        core.NavigationStarting += (_, args) =>
+        {
+            if (Uri.TryCreate(args.Uri, UriKind.Absolute, out var uri) &&
+                uri.Scheme is "http" or "https" &&
+                !uri.Host.Equals(GameHost, StringComparison.OrdinalIgnoreCase) &&
+                !uri.Host.EndsWith("." + GameHost, StringComparison.OrdinalIgnoreCase))
+            {
+                args.Cancel = true;
+
+                try
+                {
+                    System.Diagnostics.Process.Start(
+                        new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = uri.ToString(),
+                            UseShellExecute = true
+                        });
+                }
+                catch { }
+            }
+
+            StatusText.Text = "Carregando LoL Idle...";
+        };
+
+        core.NavigationCompleted += (_, args) =>
+        {
+            StatusText.Text = args.IsSuccess
+                ? "LoL Idle pronto  •  Sua sessão fica salva neste computador"
+                : "Não foi possível carregar. Verifique sua conexão e tente atualizar.";
+            if (args.IsSuccess)
+            {
+                _ = ApplyAudioSettingsAsync();
+                if (key != null)
+                    _ = RefreshAccountLabelAsync(key);
+            }
+        };
+
+        core.NewWindowRequested += (_, args) =>
+        {
+            HandleNewWindowRequested(args);
+        };
+    }
+
+    // Alterna visibilidade: só a conta ativa fica visível; as demais colapsadas (continuam rodando).
+    private void ApplyAccountVisibility()
+    {
+        foreach (var kvp in _accountViews)
+            kvp.Value.Visibility = string.Equals(kvp.Key, _settings.ContaAtiva, StringComparison.OrdinalIgnoreCase)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+    }
+
+    // Alterna para a conta indicada, criando a WebView sob demanda na primeira troca.
+    private async Task SwitchAccountAsync(string key)
+    {
+        try
+        {
+            await EnsureAccountViewAsync(key);
+            _settings.ContaAtiva = key;
+            ApplyAccountVisibility();
+            SaveWindowSettings();
+
+            // Nunca queremos flutuante com dados da conta anterior: fecha e descarta/recria
+            if (_floatingWindow != null)
+            {
+                try { _floatingWindow.Close(); } catch { }
+            }
+
+            _ = ApplyAudioSettingsAsync();
+            RestartPreparedFloating();
+            _lastMissionsJson = null;
+            await AtualizarContaConectadaUIAsync();
+            if (_accountViews.TryGetValue(key, out var view))
+                view.Focus();
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(
+                "Não foi possível alternar para a conta.\n\n" + ex.Message,
+                "Trocar conta",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+        }
+    }
+
+    // Nome de pasta seguro para a partição da conta (estável: baseado na chave, não no apelido).
+    private static string Slugify(string value)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (char c in value.ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(c)) sb.Append(c);
+            else if (c == ' ' || c == '-' || c == '_') sb.Append('-');
+        }
+        var s = sb.ToString().Trim('-');
+        while (s.Contains("--")) s = s.Replace("--", "-");
+        return string.IsNullOrWhiteSpace(s) ? "conta" : s;
+    }
+
+    // Próxima chave automática para conta extra: "Conta 2", "Conta 3", ...
+    private string NextAccountKey()
+    {
+        int n = 2;
+        while (true)
+        {
+            string candidate = $"Conta {n}";
+            bool used = _settings.ContasAdicionadas.Any(
+                c => c.Equals(candidate, StringComparison.OrdinalIgnoreCase));
+            if (!used) return candidate;
+            n++;
+        }
+    }
+
+    // Rótulo exibido de uma conta (nome do jogador lido do DOM, ou provisório)
+    private string GetAccountDisplayName(string key)
+    {
+        var nomes = _settings.ContasNomes;
+        if (nomes != null &&
+            nomes.TryGetValue(key, out var nome) &&
+            !string.IsNullOrWhiteSpace(nome))
+            return nome;
+
+        return string.Equals(key, DefaultAccountName, StringComparison.OrdinalIgnoreCase)
+            ? DefaultAccountName
+            : $"{key} (sem login)";
+    }
+
+    // Lê o nome do jogador da conta a partir de um CoreWebView2 específico.
+    private async Task<string?> ReadPlayerNameAsync(CoreWebView2? core)
+    {
+        try
+        {
+            if (core == null) return null;
+
+            const string script = @"(() => {
+                const pegar = (id) => {
+                    const el = document.getElementById(id);
+                    return el ? (el.textContent || '').trim() : '';
+                };
+                const cls = (sel) => {
+                    const el = document.querySelector(sel);
+                    return el ? (el.textContent || '').trim() : '';
+                };
+                const candidatos = [
+                    pegar('st-nome'),
+                    cls('.nome-jogador'),
+                    pegar('usuario'),
+                    cls('.usuario')
+                ];
+                for (const t of candidatos) {
+                    if (t) return t;
+                }
+                return '';
+            })()";
+
+            string raw = await core.ExecuteScriptAsync(script);
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            string valor = System.Text.Json.JsonSerializer.Deserialize<string>(raw) ?? "";
+            valor = valor.Trim();
+            return string.IsNullOrWhiteSpace(valor) ? null : valor;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // Após navegação/troca, lê o nome do jogador e atualiza o chip dinamicamente.
+    // Se vazio (não logada), mantém o rótulo provisório ("Conta N (sem login)").
+    private async Task RefreshAccountLabelAsync(string key)
+    {
+        try
+        {
+            if (!_accountViews.TryGetValue(key, out var view)) return;
+
+            // O jogo é uma SPA; o nome pode demorar para aparecer no DOM.
+            await Task.Delay(2000);
+            var name = await ReadPlayerNameAsync(view.CoreWebView2);
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                await Task.Delay(3000);
+                name = await ReadPlayerNameAsync(view.CoreWebView2);
+            }
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                // Deslogado/sem nome: remove o rótulo antigo -> chip volta ao provisório
+                var nomesAtual = _settings.ContasNomes;
+                if (nomesAtual != null && nomesAtual.Remove(key))
+                {
+                    SaveWindowSettings();
+                    _ = AtualizarContaConectadaUIAsync();
+                }
+                return;
+            }
+            if (!_accountViews.ContainsKey(key)) return;
+
+            var nomes = _settings.ContasNomes ??= new Dictionary<string, string>();
+            string? current = nomes.TryGetValue(key, out var n) ? n : null;
+            if (!string.Equals(current, name, StringComparison.Ordinal))
+            {
+                nomes[key] = name!;
+                QueueWindowSettingsSave();
+                await AtualizarContaConectadaUIAsync();
+            }
+        }
+        catch { }
+    }
+
+    // Ambiente compartilhado pelo WebView da conta ativa (para a flutuante).
+    private CoreWebView2Environment GetActiveAccountEnvironment()
+    {
+        var key = _settings.ContaAtiva;
+        if (_accountEnvs.TryGetValue(key, out var env))
+            return env;
+        return _webViewEnvironment
+            ?? throw new InvalidOperationException("Ambiente WebView2 padrão não inicializado.");
+    }
+
+    // Descarta a flutuante pré-inicializada e recria com o ambiente da conta ativa.
+    // Só faz isso quando a flutuante não estiver aberta (a aberta continuará com a conta ativa).
+    private void RestartPreparedFloating()
+    {
+        if (_floatingWindow != null) return; // flutuante aberta: não mexe
+
+        if (_preparedFloatingWindow != null)
+        {
+            var w = _preparedFloatingWindow;
+            _preparedFloatingWindow = null;
+            _preparedFloatingView = null;
+            try { w.Close(); } catch { }
+        }
+
+        _ = PrepareFloatingWebViewAsync(this);
+    }
+
     // Prepara uma janela invisível antes de qualquer pedido do jogo.
     private async Task PrepareFloatingWebViewAsync(Window? owner)
     {
@@ -1462,7 +1799,7 @@ public partial class MainWindow : Window
                 System.Windows.Threading.DispatcherPriority.Loaded);
 
             LogFloatingWindowEvent("Prepare: antes de EnsureCoreWebView2Async.");
-            await view.EnsureCoreWebView2Async(_webViewEnvironment);
+            await view.EnsureCoreWebView2Async(GetActiveAccountEnvironment());
             view.CoreWebView2.NavigationStarting += (_, navArgs) =>
             {
                 if (Uri.TryCreate(navArgs.Uri, UriKind.Absolute, out var navUri) &&
@@ -1973,15 +2310,24 @@ public partial class MainWindow : Window
         // Só muta de fato na bandeja (não na janela flutuante)
         bool trulyHidden = _isHiddenToTray && !IsFloatingVisible();
         bool effectiveMasterMuted = _settings.MasterMuted || (trulyHidden && _settings.TrayMuted);
-        var preferences = JsonSerializer.Serialize(new
+
+        // Preferências do usuário (aplicadas à CONTA ATIVA / frente)
+        var activePrefs = JsonSerializer.Serialize(new
         {
             musicMuted = _settings.MusicMuted,
             effectsMuted = _settings.EffectsMuted,
             masterMuted = effectiveMasterMuted
         });
+        // Contas fora de foco ficam totalmente mudas (o áudio sai só da conta ativa)
+        var inactivePrefs = JsonSerializer.Serialize(new
+        {
+            musicMuted = true,
+            effectsMuted = true,
+            masterMuted = true
+        });
 
-        var script = @"(() => {
-            const prefs = " + preferences + @";
+        var scriptTemplate = @"(() => {
+            const prefs = PREFERENCES_MARKER;
             if (typeof window.__lolIdleSetAudioPrefs === 'function') {
                 window.__lolIdleSetAudioPrefs(prefs);
             } else {
@@ -2013,12 +2359,25 @@ public partial class MainWindow : Window
                 webAudioControl: typeof window.__lolIdleSetAudioPrefs === 'function' };
         })();";
 
-        foreach (var core in new[] { GameView?.CoreWebView2, _floatingView?.CoreWebView2 })
+        // Script por conta (ativa vs segundo plano)
+        var scriptForActive = scriptTemplate.Replace("PREFERENCES_MARKER", activePrefs);
+        var scriptForInactive = scriptTemplate.Replace("PREFERENCES_MARKER", inactivePrefs);
+
+        foreach (var kvp in _accountViews)
         {
-            if (core == null)
-                continue;
+            var core = kvp.Value.CoreWebView2;
+            if (core == null) continue;
+            var script = string.Equals(kvp.Key, _settings.ContaAtiva, StringComparison.OrdinalIgnoreCase)
+                ? scriptForActive : scriptForInactive;
             try { await core.ExecuteScriptAsync(script); }
-            catch (Exception ex) { LogFloatingWindowEvent($"Audio: não foi possível aplicar preferências: {ex.Message}"); }
+            catch (Exception ex) { LogFloatingWindowEvent($"Audio: não foi possível aplicar preferências na {kvp.Key}: {ex.Message}"); }
+        }
+
+        // A flutuante segue a conta ativa (mesmo áudio)
+        if (_floatingView?.CoreWebView2 != null)
+        {
+            try { await _floatingView.CoreWebView2.ExecuteScriptAsync(scriptForActive); }
+            catch (Exception ex) { LogFloatingWindowEvent($"Audio: não foi possível aplicar preferências na flutuante: {ex.Message}"); }
         }
     }
 
@@ -2167,136 +2526,723 @@ public partial class MainWindow : Window
         SidebarColumn.Width = visible ? new GridLength(width) : new GridLength(0);
         SidebarPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
 
-        if (SidebarToggleButton.Content is TextBlock chevron)
-            chevron.Text = visible ? "▶" : "◀";
+        // Alterna a visibilidade dos dois ícones vetoriais
+        if (SidebarToggleLeftIcon != null && SidebarToggleRightIcon != null)
+        {
+            SidebarToggleLeftIcon.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;   // ◀ quando escondida (clique para mostrar)
+            SidebarToggleRightIcon.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;   // ▶ quando visível (clique para esconder)
+        }
 
         SidebarToggleButton.ToolTip = visible ? "Esconder contas" : "Mostrar contas";
     }
 
-    // Limite máximo de contas adicionadas.
-    private const int MaxContas = 4;
+    // Limite total de contas (incluindo a principal): 4 = principal + 3 extras
+    private const int MaxContas = 3;
 
     // Abre um dialog simples mostrando a conta conectada (se houver) com opção de adicionar.
     private async void AddAccount_Click(object sender, RoutedEventArgs e)
     {
-        if (_settings.ContasAdicionadasCount >= MaxContas)
+        if (_settings.ContasAdicionadas.Count >= MaxContas)
         {
             MessageBox.Show(
-                $"Limite de {MaxContas} contas atingido.",
+                $"Limite de {MaxContas + 1} contas atingido.",
                 "Adicionar conta",
                 MessageBoxButton.OK,
                 MessageBoxImage.Warning);
             return;
         }
 
-        var conta = await ObterContaConectadaAsync();
-        if (conta == null)
+        string key = NextAccountKey();
+        _settings.ContasAdicionadas.Add(key);
+        _settings.ContasAdicionadasCount = _settings.ContasAdicionadas.Count;
+        _settings.ContaAtiva = key;
+        SaveWindowSettings();
+
+        try
         {
+            await EnsureAccountViewAsync(key);
+            ApplyAccountVisibility();
+        }
+        catch (Exception ex)
+        {
+            // Não deixa conta "quebrada" no seletor.
+            _settings.ContasAdicionadas.RemoveAll(c => c.Equals(key, StringComparison.OrdinalIgnoreCase));
+            _settings.ContasAdicionadasCount = _settings.ContasAdicionadas.Count;
+            _settings.ContaAtiva = DefaultAccountName;
+            SaveWindowSettings();
+            await AtualizarContaConectadaUIAsync();
+            ApplyAccountVisibility();
             MessageBox.Show(
-                "Nenhuma conta conectada no jogo.",
+                "Não foi possível criar a nova conta.\n\n" + ex.Message,
                 "Adicionar conta",
                 MessageBoxButton.OK,
-                MessageBoxImage.Information);
+                MessageBoxImage.Error);
             return;
         }
-
-        _settings.ContasAdicionadasCount++;
-        SaveWindowSettings();
 
         await AtualizarContaConectadaUIAsync();
 
         MessageBox.Show(
-            $"Conta adicionada: {conta}\nContas salvas: {_settings.ContasAdicionadasCount} / {MaxContas}",
+            $"Conta criada: {key}\n\nFaça login na conta nesta aba; ela fica salva e o chip troca para o nome do jogador automaticamente.",
             "Adicionar conta",
             MessageBoxButton.OK,
             MessageBoxImage.Information);
     }
 
     // Lê o nome da conta logada do DOM do jogo (WebView2) tentando vários seletores.
-    private async Task<string?> ObterContaConectadaAsync()
+    // Lê o nome da conta ativa (na frente) a partir de um CoreWebView2.
+    private Task<string?> ObterContaConectadaAsync()
     {
-        try
-        {
-            var core = GameView?.CoreWebView2;
-            if (core == null) return null;
-
-            const string script = @"(() => {
-                const pegar = (id) => {
-                    const el = document.getElementById(id);
-                    return el ? (el.textContent || '').trim() : '';
-                };
-                const cls = (sel) => {
-                    const el = document.querySelector(sel);
-                    return el ? (el.textContent || '').trim() : '';
-                };
-                const candidatos = [
-                    pegar('st-nome'),
-                    cls('.nome-jogador'),
-                    pegar('usuario'),
-                    cls('.usuario')
-                ];
-                for (const t of candidatos) {
-                    if (t) return t;
-                }
-                return '';
-            })()";
-
-            string raw = await core.ExecuteScriptAsync(script);
-            if (string.IsNullOrWhiteSpace(raw)) return null;
-            string valor = System.Text.Json.JsonSerializer.Deserialize<string>(raw) ?? "";
-            return string.IsNullOrWhiteSpace(valor) ? null : valor;
-        }
-        catch
-        {
-            return null;
-        }
+        return ReadPlayerNameAsync(ActiveView?.CoreWebView2);
     }
 
-    // Atualiza o texto da conta conectada exibida na barra lateral.
-    private async Task AtualizarContaConectadaUIAsync()
+    // Atualiza os itens de conta exibidos na barra lateral (lista estilo IdleDeck).
+    private Task AtualizarContaConectadaUIAsync()
     {
-        var conta = await ObterContaConectadaAsync();
+        // Limpar a lista existente
+        ContasWrapPanel.Children.Clear();
 
-        // Remove todas as abas exceto as duas padrões (Conta 1 e Conta 2)
-        while (ContasTabControl.Items.Count > 2)
+        string ativa = _settings.ContaAtiva ?? DefaultAccountName;
+
+        // Conta padrão (sempre presente, nunca removível)
+        ContasWrapPanel.Children.Add(CriarChip(
+            DefaultAccountName,
+            destacado: string.Equals(ativa, DefaultAccountName, StringComparison.OrdinalIgnoreCase)));
+
+        // Contas extras
+        foreach (var conta in _settings.ContasAdicionadas)
         {
-            ContasTabControl.Items.RemoveAt(ContasTabControl.Items.Count - 1);
+            ContasWrapPanel.Children.Add(CriarChip(
+                conta,
+                destacado: string.Equals(ativa, conta, StringComparison.OrdinalIgnoreCase)));
         }
 
-        // Se há conta conectada e não há aba com esse nome, adiciona uma nova aba
-        if (conta != null)
-        {
-            bool jaExiste = false;
-            for (int i = 2; i < ContasTabControl.Items.Count; i++)
-            {
-                var header = ContasTabControl.Items[i].ToString();
-                if (header.Contains(conta))
-                {
-                    jaExiste = true;
-                    break;
-                }
-            }
+        ContasCountText.Text = $"Contas: {_settings.ContasAdicionadas.Count + 1} / {MaxContas + 1}";
+        return Task.CompletedTask;
+    }
 
-            if (!jaExiste)
+    // Cria um item de conta (lista vertical):
+    // avatar quadrado com as iniciais, bolinha de status (verde = na frente, azul = fora),
+    // nome + subtítulo, ✏️ renomear e × remover (somente contas extras).
+    private Border CriarChip(string conta, bool destacado = false)
+    {
+        bool isDefault = string.Equals(conta, DefaultAccountName, StringComparison.OrdinalIgnoreCase);
+        string display = GetAccountDisplayName(conta);
+        string iniciais = display.Length >= 2
+            ? display[..2].ToUpperInvariant()
+            : display.ToUpperInvariant();
+
+        // Paleta de destaque
+        var bgItem = new SolidColorBrush(Color.FromRgb(0x1F, 0x22, 0x2B));
+        var bgItemAtivo = new SolidColorBrush(Color.FromRgb(0x14, 0x26, 0x23));
+        var bordaAtivo = new SolidColorBrush(Color.FromRgb(0x2B, 0xD4, 0x6A));
+        var bordaInativo = new SolidColorBrush(Colors.Transparent);
+        var verde = Color.FromRgb(0x2B, 0xD4, 0x6A);
+        var azul = Color.FromRgb(0x3B, 0x9B, 0xFF);
+        var fundoApp = Color.FromRgb(0x16, 0x19, 0x22);
+
+        // Avatar quadrado com iniciais
+        var avatar = new Border
+        {
+            Width = 40,
+            Height = 40,
+            CornerRadius = new CornerRadius(10),
+            Background = new SolidColorBrush(Color.FromRgb(0x6E, 0x4F, 0xD8)),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new TextBlock
             {
-                int novaIndex = ContasTabControl.Items.Count;
-                var novaAba = new TabItem
-                {
-                    Header = conta,
-                    Content = new TextBlock
-                    {
-                        Text = conta,
-                        Foreground = System.Windows.Media.Brushes.DodgerBlue,
-                        FontSize = 12,
-                        Margin = new Thickness(8, 4, 4, 4)
-                    }
-                };
-                ContasTabControl.Items.Add(novaAba);
+                Text = iniciais,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+                FontWeight = FontWeights.Bold,
+                FontSize = 14,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
             }
+        };
+
+        // Bolinha de status (canto inferior do avatar)
+        var bolinha = new System.Windows.Shapes.Ellipse
+        {
+            Width = 11,
+            Height = 11,
+            Fill = new SolidColorBrush(destacado ? verde : azul),
+            Stroke = new SolidColorBrush(fundoApp),
+            StrokeThickness = 2,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(29, 0, 0, 0)
+        };
+
+        var avatarStack = new Grid
+        {
+            Width = 40,
+            Height = 40,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        avatarStack.Children.Add(avatar);
+        avatarStack.Children.Add(bolinha);
+
+        // Nome + subtítulo
+        var textos = new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(10, 0, 0, 0)
+        };
+        textos.Children.Add(new TextBlock
+        {
+            Text = display,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+            FontWeight = FontWeights.SemiBold,
+            FontSize = 12,
+            TextTrimming = TextTrimming.CharacterEllipsis
+        });
+        textos.Children.Add(new TextBlock
+        {
+            Text = destacado ? "na frente" : "segundo plano",
+            Foreground = new SolidColorBrush(destacado
+                ? Color.FromRgb(0x37, 0xD0, 0x67)
+                : Color.FromRgb(0x6E, 0x9C, 0xD8)),
+            FontSize = 10,
+            Margin = new Thickness(0, 1, 0, 0)
+        });
+
+        // Coluna de botões à direita (renomear + remover)
+        var botoes = new StackPanel
+        {
+            Orientation = System.Windows.Controls.Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right
+        };
+
+        // Botão ✏️ para renomear (todas as contas)
+        var btnRenomear = new Button
+        {
+            Content = "✏️",
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "Renomear conta",
+            Style = (Style)System.Windows.Application.Current.Resources["GhostIconButton"]
+        };
+        btnRenomear.Click += (s, e) => RenomearConta(conta);
+        botoes.Children.Add(btnRenomear);
+
+        // Botão × para remover (a conta padrão não pode ser removida)
+        if (!isDefault)
+        {
+            var btnFechar = new Button
+            {
+                Content = "×",
+                FontSize = 14,
+                VerticalAlignment = VerticalAlignment.Center,
+                ToolTip = "Remover conta",
+                Style = (Style)System.Windows.Application.Current.Resources["GhostIconButton"]
+            };
+            btnFechar.Click += (s, e) => RemoverConta(conta);
+            botoes.Children.Add(btnFechar);
         }
 
-        // Atualiza o contador visível
-        ContasCountText.Text = $"Contas: {_settings.ContasAdicionadasCount} / {MaxContas}";
+        var grid = new Grid();
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(40) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        grid.Children.Add(avatarStack);
+        Grid.SetColumn(textos, 1);
+        grid.Children.Add(textos);
+        Grid.SetColumn(botoes, 2);
+        grid.Children.Add(botoes);
+
+        var chip = new Border
+        {
+            Margin = new Thickness(0, 0, 0, 6),
+            Padding = new Thickness(8, 8, 8, 8),
+            Background = destacado ? bgItemAtivo : bgItem,
+            BorderBrush = destacado ? bordaAtivo : bordaInativo,
+            BorderThickness = destacado ? new Thickness(1) : new Thickness(0),
+            CornerRadius = new CornerRadius(10),
+            Cursor = Cursors.Hand,
+            Tag = conta,
+            ToolTip = destacado
+                ? "Conta na frente"
+                : "Clique para trocar para esta conta",
+            Child = grid
+        };
+        chip.MouseLeftButtonUp += Chip_Click;
+        return chip;
+    }
+
+    // Alterna para a conta quando o usuário clica no item da lista.
+    private async void Chip_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (IsInsideButton(e.OriginalSource as DependencyObject))
+            return; // clique no × ou ✏️, não troca de conta
+        if (sender is FrameworkElement fe && fe.Tag is string key)
+            await SwitchAccountAsync(key);
+    }
+
+    // Mostra um prompt simples em código (sem biblioteca externa).
+    // Retorna o texto informado, ou null se cancelado.
+    private static string? MostrarPrompt(string titulo, string rotulo, string valorInicial)
+    {
+        var janela = new Window
+        {
+            Title = titulo,
+            Width = 380,
+            Height = 210,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            WindowStyle = WindowStyle.None,
+            AllowsTransparency = true,
+            Background = new SolidColorBrush(Colors.Transparent),
+            ShowInTaskbar = false,
+            Owner = System.Windows.Application.Current.MainWindow
+        };
+
+        var moldura = new Border
+        {
+            CornerRadius = new CornerRadius(12),
+            Background = new SolidColorBrush(Color.FromRgb(0x16, 0x19, 0x22)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x2F, 0x35, 0x40)),
+            BorderThickness = new Thickness(1)
+        };
+
+        var externa = new Grid();
+        externa.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        externa.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+
+        // Cabeçalho
+        var header = new Border
+        {
+            Padding = new Thickness(18, 12, 12, 12),
+            Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x21, 0x2B)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x22, 0x26, 0x2F)),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            CornerRadius = new CornerRadius(12, 12, 0, 0)
+        };
+
+        var headerGrid = new Grid();
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        headerGrid.Children.Add(new TextBlock
+        {
+            Text = titulo,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+            FontSize = 14,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        var btnFechar = new Button
+        {
+            Content = "✕",
+            Width = 30,
+            Height = 30,
+            ToolTip = "Fechar",
+            Style = (Style)System.Windows.Application.Current.Resources["GhostIconButton"]
+        };
+        btnFechar.Click += (s, e) => janela.DialogResult = false;
+        Grid.SetColumn(btnFechar, 1);
+        headerGrid.Children.Add(btnFechar);
+        header.Child = headerGrid;
+
+        // Corpo
+        var corpo = new StackPanel { Margin = new Thickness(18, 16, 18, 16) };
+        corpo.Children.Add(new TextBlock
+        {
+            Text = rotulo,
+            Margin = new Thickness(0, 0, 0, 10),
+            FontSize = 12,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xCD, 0xD6))
+        });
+
+        var box = new System.Windows.Controls.TextBox
+        {
+            Text = valorInicial,
+            FontSize = 13,
+            Padding = new Thickness(10, 8, 10, 8),
+            Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2E, 0x38)),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+            BorderThickness = new Thickness(1),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x3A, 0x40, 0x4C)),
+            CaretBrush = new SolidColorBrush(Color.FromRgb(0xD8, 0xB4, 0x5A))
+        };
+        corpo.Children.Add(box);
+
+        ControlTemplate CriarTemplateArredondado(System.Windows.Media.Brush fundo, System.Windows.Media.Brush fundoHover, double raio)
+        {
+            var template = new ControlTemplate(typeof(Button));
+            var borderFactory = new FrameworkElementFactory(typeof(Border), "BorderRoot");
+            borderFactory.SetValue(Border.CornerRadiusProperty, new CornerRadius(raio));
+            borderFactory.SetValue(Border.BackgroundProperty, fundo);
+            borderFactory.SetValue(Border.PaddingProperty, new Thickness(6));
+
+            var presenterFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.ContentPresenter));
+            presenterFactory.SetValue(HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
+            presenterFactory.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
+            borderFactory.AppendChild(presenterFactory);
+            template.VisualTree = borderFactory;
+
+            var trigger = new Trigger { Property = Button.IsMouseOverProperty, Value = true };
+            trigger.Setters.Add(new Setter(Border.BackgroundProperty, fundoHover, "BorderRoot"));
+            template.Triggers.Add(trigger);
+            return template;
+        }
+
+        var botoes = new StackPanel
+        {
+            Orientation = System.Windows.Controls.Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Margin = new Thickness(0, 14, 0, 0)
+        };
+
+        var btnOk = new Button
+        {
+            Content = "Salvar",
+            Width = 90,
+            Height = 34,
+            Background = new SolidColorBrush(Color.FromRgb(0x2B, 0xD4, 0x6A)),
+            Foreground = new SolidColorBrush(Color.FromRgb(0x0A, 0x2E, 0x19)),
+            BorderThickness = new Thickness(0),
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Cursor = Cursors.Hand,
+            Template = CriarTemplateArredondado(
+                new LinearGradientBrush(
+                    Color.FromRgb(0x36, 0xE6, 0x7D),
+                    Color.FromRgb(0x1F, 0x9E, 0x53),
+                    90),
+                new SolidColorBrush(Color.FromRgb(0x47, 0xF2, 0x90)),
+                17),
+            Margin = new Thickness(0, 0, 8, 0)
+        };
+        var btnCancelar = new Button
+        {
+            Content = "Cancelar",
+            Width = 90,
+            Height = 34,
+            Background = new SolidColorBrush(Colors.Transparent),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xCD, 0xD6)),
+            BorderThickness = new Thickness(0),
+            FontSize = 12,
+            Cursor = Cursors.Hand,
+            Template = CriarTemplateArredondado(
+                new SolidColorBrush(Colors.Transparent),
+                new SolidColorBrush(Color.FromRgb(0x2A, 0x2E, 0x38)),
+                17)
+        };
+        btnCancelar.Click += (s, e) => janela.DialogResult = false;
+        botoes.Children.Add(btnOk);
+        botoes.Children.Add(btnCancelar);
+        corpo.Children.Add(botoes);
+
+        externa.Children.Add(header);
+        Grid.SetRow(corpo, 1);
+        externa.Children.Add(corpo);
+        moldura.Child = externa;
+        janela.Content = moldura;
+
+        string? resultado = null;
+        btnOk.Click += (s, e) =>
+        {
+            resultado = box.Text;
+            janela.DialogResult = true;
+        };
+
+        janela.Loaded += (s, e) =>
+        {
+            box.Focus();
+            box.SelectAll();
+        };
+        janela.MouseLeftButtonDown += (s, e) =>
+        {
+            if (e.LeftButton == MouseButtonState.Pressed &&
+                e.OriginalSource is not Button &&
+                e.OriginalSource is not System.Windows.Controls.Primitives.ButtonBase)
+                janela.DragMove();
+        };
+
+        janela.ShowDialog();
+        return resultado;
+    }
+
+    // Diálogo customizado de confirmação de remoção (estilo do app).
+    // Retorna true se o usuário confirmar a remoção.
+    private static bool MostrarConfirmacaoRemover(string titulo, string mensagem, string subMensagem, string textoConfirmar)
+    {
+        var janela = new Window
+        {
+            Title = titulo,
+            Width = 420,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            WindowStyle = WindowStyle.None,
+            AllowsTransparency = true,
+            Background = new SolidColorBrush(Colors.Transparent),
+            ShowInTaskbar = false,
+            Owner = System.Windows.Application.Current.MainWindow
+        };
+
+        var moldura = new Border
+        {
+            CornerRadius = new CornerRadius(14),
+            Background = new SolidColorBrush(Color.FromRgb(0x16, 0x19, 0x22)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x2F, 0x35, 0x40)),
+            BorderThickness = new Thickness(1)
+        };
+
+        var externa = new Grid();
+
+        // Faixa de destaque (removida: ficava muito gritante no topo)
+
+        // Cabeçalho
+        var header = new Border
+        {
+            Padding = new Thickness(18, 8, 10, 8),
+            Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x21, 0x2B)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x22, 0x26, 0x2F)),
+            BorderThickness = new Thickness(0, 0, 0, 1)
+        };
+
+        var headerGrid = new Grid();
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        headerGrid.Children.Add(new TextBlock
+        {
+            Text = titulo,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+            FontSize = 14,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        var btnFechar = new Button
+        {
+            Content = "✕",
+            Width = 30,
+            Height = 30,
+            ToolTip = "Cancelar",
+            Style = (Style)System.Windows.Application.Current.Resources["GhostIconButton"]
+        };
+        btnFechar.Click += (s, e) => janela.DialogResult = false;
+        Grid.SetColumn(btnFechar, 1);
+        headerGrid.Children.Add(btnFechar);
+        header.Child = headerGrid;
+
+        // Corpo com ícone + mensagens
+        var corpo = new StackPanel
+        {
+            Margin = new Thickness(20, 16, 20, 14)
+        };
+
+        var icone = new Border
+        {
+            Width = 46,
+            Height = 46,
+            CornerRadius = new CornerRadius(23),
+            Background = new SolidColorBrush(Color.FromRgb(0x40, 0x24, 0x1F)),
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            Child = new TextBlock
+            {
+                Text = "!",
+                Foreground = new SolidColorBrush(Color.FromRgb(0xE0, 0x5B, 0x4B)),
+                FontSize = 22,
+                FontWeight = FontWeights.Bold,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center
+            }
+        };
+        corpo.Children.Add(icone);
+
+        corpo.Children.Add(new TextBlock
+        {
+            Text = mensagem,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+            FontSize = 13,
+            FontWeight = FontWeights.SemiBold,
+            TextWrapping = TextWrapping.Wrap,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
+            Margin = new Thickness(0, 12, 0, 6)
+        });
+
+        corpo.Children.Add(new TextBlock
+        {
+            Text = subMensagem,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x9A, 0xA3, 0xB2)),
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            TextAlignment = TextAlignment.Center
+        });
+
+        // Rodapé com botões
+        var botoes = new StackPanel
+        {
+            Orientation = System.Windows.Controls.Orientation.Horizontal,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            Margin = new Thickness(20, 6, 20, 18)
+        };
+
+        ControlTemplate CriarTemplateArredondado(System.Windows.Media.Brush fundo, System.Windows.Media.Brush fundoHover, double raio)
+        {
+            var template = new ControlTemplate(typeof(Button));
+            var borderFactory = new FrameworkElementFactory(typeof(Border), "BorderRoot");
+            borderFactory.SetValue(Border.CornerRadiusProperty, new CornerRadius(raio));
+            borderFactory.SetValue(Border.BackgroundProperty, fundo);
+            borderFactory.SetValue(Border.PaddingProperty, new Thickness(6));
+
+            var presenterFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.ContentPresenter));
+            presenterFactory.SetValue(HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
+            presenterFactory.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
+            borderFactory.AppendChild(presenterFactory);
+            template.VisualTree = borderFactory;
+
+            var trigger = new Trigger { Property = Button.IsMouseOverProperty, Value = true };
+            trigger.Setters.Add(new Setter(Border.BackgroundProperty, fundoHover, "BorderRoot"));
+            template.Triggers.Add(trigger);
+            return template;
+        }
+
+        var btnConfirmar = new Button
+        {
+            Content = textoConfirmar,
+            Width = 110,
+            Height = 36,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF)),
+            BorderThickness = new Thickness(0),
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Cursor = Cursors.Hand,
+            Template = CriarTemplateArredondado(
+                new LinearGradientBrush(
+                    Color.FromRgb(0xE0, 0x5B, 0x4B),
+                    Color.FromRgb(0xB8, 0x3B, 0x2F),
+                    90),
+                new SolidColorBrush(Color.FromRgb(0xF2, 0x6F, 0x5E)),
+                17),
+            Margin = new Thickness(0, 0, 10, 0)
+        };
+        btnConfirmar.Click += (s, e) => janela.DialogResult = true;
+
+        var btnCancelar = new Button
+        {
+            Content = "Cancelar",
+            Width = 110,
+            Height = 36,
+            Background = new SolidColorBrush(Colors.Transparent),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xCD, 0xD6)),
+            BorderThickness = new Thickness(0),
+            FontSize = 12,
+            Cursor = Cursors.Hand,
+            Template = CriarTemplateArredondado(
+                new SolidColorBrush(Colors.Transparent),
+                new SolidColorBrush(Color.FromRgb(0x2A, 0x2E, 0x38)),
+                17)
+        };
+        btnCancelar.Click += (s, e) => janela.DialogResult = false;
+
+        botoes.Children.Add(btnConfirmar);
+        botoes.Children.Add(btnCancelar);
+
+        var stack = new StackPanel();
+        stack.Children.Add(header);
+        stack.Children.Add(corpo);
+        stack.Children.Add(botoes);
+
+        moldura.Child = stack;
+        janela.Content = moldura;
+
+        janela.MouseLeftButtonDown += (s, e) =>
+        {
+            if (e.LeftButton == MouseButtonState.Pressed &&
+                e.OriginalSource is not Button &&
+                e.OriginalSource is not System.Windows.Controls.Primitives.ButtonBase)
+                janela.DragMove();
+        };
+
+        return janela.ShowDialog() == true;
+    }
+
+    // Renomeia uma conta (o rótulo escolhido tem prioridade sobre o nome lido do DOM).
+    private void RenomearConta(string conta)
+    {
+        string atual = GetAccountDisplayName(conta);
+        string? novo = MostrarPrompt(
+            "Renomear conta",
+            "Novo nome para a conta:",
+            atual);
+        if (novo == null) return;           // cancelou
+        novo = novo.Trim();
+        if (string.IsNullOrWhiteSpace(novo)) return;
+
+        _settings.ContasNomes ??= new Dictionary<string, string>();
+        _settings.ContasNomes[conta] = novo;
+
+        var personalizados = _settings.ContasNomesPersonalizados ??= new List<string>();
+        if (!personalizados.Contains(conta, StringComparer.OrdinalIgnoreCase))
+            personalizados.Add(conta);
+
+        SaveWindowSettings();
+        _ = AtualizarContaConectadaUIAsync();
+    }
+
+    // Remove uma conta extra (a padrão não pode ser removida).
+    // O userDataFolder da conta NÃO é apagado — o login fica preservado.
+    private void RemoverConta(string conta)
+    {
+        if (string.Equals(conta, DefaultAccountName, StringComparison.OrdinalIgnoreCase))
+        {
+            MessageBox.Show(
+                "A conta principal não pode ser removida.",
+                "Remover conta",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        string display = GetAccountDisplayName(conta);
+        bool confirmou = MostrarConfirmacaoRemover(
+            "Remover conta",
+            $"Remover conta '{display}'?",
+            "O login salvo NÃO será apagado — você pode adicionar a conta novamente depois.",
+            "Remover");
+        if (!confirmou)
+            return;
+
+        _settings.ContasAdicionadas.RemoveAll(
+            c => c.Equals(conta, StringComparison.OrdinalIgnoreCase));
+        _settings.ContasNomes?.Remove(conta);
+
+        if (_accountViews.TryGetValue(conta, out var view))
+        {
+            _accountViews.Remove(conta);
+            AccountViewHost.Children.Remove(view);
+            try { view.Dispose(); } catch { }
+        }
+        _accountEnvs.Remove(conta);
+
+        if (string.Equals(_settings.ContaAtiva, conta, StringComparison.OrdinalIgnoreCase))
+        {
+            _settings.ContaAtiva = DefaultAccountName;
+            ApplyAccountVisibility();
+        }
+
+        _settings.ContasAdicionadasCount = _settings.ContasAdicionadas.Count;
+        _settings.ContasNomesPersonalizados?.RemoveAll(
+            c => c.Equals(conta, StringComparison.OrdinalIgnoreCase));
+        SaveWindowSettings();
+        _ = AtualizarContaConectadaUIAsync();
+    }
+
+    // Esconde/mostra a lista de contas (mantém o título "Contas" visível).
+    private void ContasHide_Click(object sender, RoutedEventArgs e)
+    {
+        if (ContasListPanel == null) return;
+        bool escondido = ContasListPanel.Visibility == Visibility.Collapsed;
+        ContasListPanel.Visibility = escondido ? Visibility.Visible : Visibility.Collapsed;
+        if (ContasHideButton != null)
+            ContasHideButton.Content = escondido ? "Contas ▴" : "Contas ▾";
     }
 
     private void Close_Click(object sender, RoutedEventArgs e)

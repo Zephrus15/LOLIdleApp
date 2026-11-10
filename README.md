@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.3.1](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.3.1)**
+**[Baixar LoL Idle Desktop v1.3.2](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.3.2)**
 
 ### Instalador (quando disponível na Release)
 
@@ -137,6 +137,17 @@ artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.3.2
+- Várias contas reais ao mesmo tempo (cada conta com WebView2/sessão isolada). Troca clicando na lista de contas.
+- Lista de contas redesenhada (estilo IdleDeck): avatar com iniciais, bolinha de status (verde = na frente, azul = em segundo plano), item inteiro clicável.
+- Renomear conta (✏️) com diálogo customizado no estilo do app; nome personalizado tem prioridade sobre o lido do DOM.
+- Diálogo "Fechar o LoL Idle?" (reabrir na bandeja / sair) com opção de lembrar a escolha.
+- Diálogo "Remover conta" customizado no estilo do app (confirmação com botão "Remover" vermelho).
+- Áudio só da conta na frente; contas em segundo plano mudas.
+- Missões mostrem os dados da conta na frente (abre o painel Missões no jogo para carregar).
+- Botões da barra de título redesenhados (cantos arredondados, ícones vetoriais, hover vermelho no fechar) e toggle da sidebar corrigido (▶ visível / ◀ escondida).
+- Botão "+ Adicionar conta" sem borda cinza; botão "Contas ▴" com hover discreto.
 
 ### v1.3.1
 - Barra lateral de contas à direita com toggle esconder/mostrar (ícone bate com o estado).

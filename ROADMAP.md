@@ -1,6 +1,6 @@
 ﻿# 🗺️ Roadmap — LoL Idle Desktop
 
-> Base: **v1.3.1** · Última atualização: 2026-11-10
+> Base: **v1.3.2** · Última atualização: 2026-11-10
 > Versão web estilizada: [`ROADMAP.html`](./ROADMAP.html) — abra no navegador para visualizar como site.
 
 <p align="center">
