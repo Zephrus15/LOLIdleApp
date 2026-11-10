@@ -114,10 +114,61 @@
                         ToolTip="Fechar para a bandeja"/>
             </Grid>
 
-            <!-- Área do jogo -->
-            <wv2:WebView2 x:Name="GameView"
-                          Grid.Row="1"
-                          DefaultBackgroundColor="#111318"/>
+            <!-- Área do jogo + barra lateral de contas -->
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="28"/>
+                    <ColumnDefinition x:Name="SidebarColumn" Width="260"/>
+                </Grid.ColumnDefinitions>
+
+                <wv2:WebView2 x:Name="GameView"
+                              Grid.Column="0"
+                              DefaultBackgroundColor="#111318"/>
+
+                <!-- Toggle esconder/mostrar barra lateral -->
+                <Button Grid.Column="1"
+                        x:Name="SidebarToggleButton"
+                        Click="SidebarToggle_Click"
+                        Style="{StaticResource WindowButton}"
+                        ToolTip="Esconder contas">
+                    <TextBlock Text="◀"
+                               FontSize="12"
+                               Foreground="#D8DCE4"
+                               VerticalAlignment="Center"
+                               HorizontalAlignment="Center"/>
+                </Button>
+
+                <!-- Barra lateral: contas -->
+                <Border x:Name="SidebarPanel"
+                        Grid.Column="2"
+                        Background="#161922"
+                        BorderBrush="#30343D"
+                        BorderThickness="1 0 0 0">
+                    <StackPanel Margin="14">
+                        <TextBlock Text="Contas"
+                                   Foreground="#E8CF8F"
+                                   FontSize="15"
+                                   FontWeight="SemiBold"
+                                   Margin="0,0,0,12"/>
+
+                        <Button Content="+ Adicionar conta"
+                                Foreground="#D8DCE4"
+                                Background="Transparent"
+                                BorderBrush="#343A46"
+                                BorderThickness="1"
+                                Padding="8,6"
+                                Margin="0,0,0,12"
+                                HorizontalAlignment="Left"
+                                Cursor="Hand"/>
+
+                        <TextBlock Text="Nenhuma conta adicionada ainda."
+                                   Foreground="#9298A5"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
 
             <!-- Mantido oculto para preservar as referências do code-behind. -->
             <TextBlock x:Name="StatusText"

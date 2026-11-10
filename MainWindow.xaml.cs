@@ -415,6 +415,8 @@ public partial class MainWindow : Window
         public bool TrayNotify { get; set; } = true;
         public bool TrayBalloon { get; set; } = true;
         public bool ShowMissions { get; set; }
+        public bool SidebarVisible { get; set; } = true;
+        public double SidebarWidth { get; set; } = 260;
         public bool HasMissionsBounds { get; set; }
         public double MissionsWidth { get; set; } = 360;
         public double MissionsHeight { get; set; } = 320;
@@ -534,6 +536,7 @@ public partial class MainWindow : Window
         }
 
         _settingsReady = true;
+        ApplySidebarLayout();
         UpdateMaximizeButton();
         SyncTrayMenuChecks();
     }
@@ -2139,6 +2142,32 @@ public partial class MainWindow : Window
             MaximizeButton.Content = _isCustomMaximized ? "❐" : "□";
             MaximizeButton.ToolTip = _isCustomMaximized ? "Restaurar" : "Maximizar";
         }
+    }
+
+    // Alterna a visibilidade da barra lateral de contas e persiste a preferência.
+    private void SidebarToggle_Click(object sender, RoutedEventArgs e)
+    {
+        _settings.SidebarVisible = !_settings.SidebarVisible;
+        SaveWindowSettings();
+        ApplySidebarLayout();
+    }
+
+    // Aplica a largura/visibilidade da barra lateral com base na preferência salva.
+    private void ApplySidebarLayout()
+    {
+        if (SidebarColumn == null || SidebarPanel == null || SidebarToggleButton == null)
+            return;
+
+        bool visible = _settings.SidebarVisible;
+        double width = _settings.SidebarWidth >= 160 ? _settings.SidebarWidth : 260;
+
+        SidebarColumn.Width = visible ? new GridLength(width) : new GridLength(0);
+        SidebarPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+
+        if (SidebarToggleButton.Content is TextBlock chevron)
+            chevron.Text = visible ? "◀" : "▶";
+
+        SidebarToggleButton.ToolTip = visible ? "Esconder contas" : "Mostrar contas";
     }
 
     private void Close_Click(object sender, RoutedEventArgs e)
