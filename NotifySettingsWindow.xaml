@@ -137,7 +137,7 @@
                            FontSize="11"
                            Foreground="#9298A5"
                            TextWrapping="Wrap"
-                           Text="Quando mais de uma conta está marcada, o balão mostra o nome da conta que gerou o aviso (ex: Mio — Missão concluída!)." />
+                           Text="Quando mais de uma conta está marcada, o balão mostra o nome da conta que gerou o aviso (ex: Yasuo — Missão concluída!)." />
             </StackPanel>
 
             <!-- Rodapé -->

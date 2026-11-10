@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.3.3](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.3.3)**
+**[Baixar LoL Idle Desktop v1.3.4](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.3.4)**
 
 ### Instalador (quando disponível na Release)
 
@@ -138,9 +138,12 @@ O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\
 
 ## 📋 Histórico de versões
 
+### v1.3.4
+- Correção: a janela de Missões lia os dados da conta principal (fallback para `GameView`) em vez da conta na frente. Agora lê sempre a conta ativa (com fallback para a conta principal quando a ativa ainda está sem o tracker/painel indisponível).
+
 ### v1.3.3
 - Notificações por conta e por tipo (Ledger/Épico/Missão/Inventário/Nível) em checkboxes com tema escuro + toggle geral.
-- Quando mais de uma conta está marcada para notificar, o balão mostra o nome da conta que gerou o aviso (ex: Mio — Missão concluída!).
+- Quando mais de uma conta está marcada para notificar, o balão mostra o nome da conta que gerou o aviso (ex: Yasuo — Missão concluída!).
 - Botão "Concluído" no painel de Notificações; painel no mesmo estilo do app (checkmarks escuros com check verde).
 
 ### v1.3.2

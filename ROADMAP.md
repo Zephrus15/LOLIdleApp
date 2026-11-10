@@ -1,6 +1,6 @@
 ﻿# 🗺️ Roadmap — LoL Idle Desktop
 
-> Base: **v1.3.3** · Última atualização: 2026-11-10
+> Base: **v1.3.4** · Última atualização: 2026-11-10
 > Versão web estilizada: [`ROADMAP.html`](./ROADMAP.html) — abra no navegador para visualizar como site.
 
 <p align="center">
@@ -52,7 +52,7 @@ A sidebar **de contas** (lado direito, com toggle esconder/mostrar) foi implemen
 - **Renomear** via ✏️ (nome personalizado tem prioridade sobre o lido do DOM)
 - **Remover** conta com o × (o login salvo NÃO é apagado)
 - **Até 4 contas no total** (principal + 3 extras)
-- **Botão "🔔 Notificações"** (v1.3.3) — ativar/desativar, checkmarks escuros por conta, checkboxes por tipo (Lendário, Épico, Missão, Inventário, Nível) e prefixo automático com o nome da conta (vários habilitados: "Mio — Missão concluída!")
+- **Botão "🔔 Notificações"** (v1.3.3) — ativar/desativar, checkmarks escuros por conta, checkboxes por tipo (Lendário, Épico, Missão, Inventário, Nível) e prefixo automático com o nome da conta (vários habilitados: "Yasuo — Missão concluída!")
 - Botão "Contas ▴" esconde/mostra a lista (sem borda cinza residual)
 - Conta ativa lembrada ao reabrir (`ContaAtiva`)
 
@@ -118,4 +118,4 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 
 ---
 
-<sub>Documento gerado a partir do estado atual do app \(v1.3.3\). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site.</sub>
+<sub>Documento gerado a partir do estado atual do app \(v1.3.4\). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site.</sub>

@@ -316,6 +316,8 @@ public partial class MainWindow : Window
     private string _lastFloatingUri = GameUrl;
     private Window? _floatingWindow;
     private Microsoft.Web.WebView2.Wpf.WebView2? _floatingView;
+    // Conta dona da flutuante no momento da criação (evita rótulo errado em notificação)
+    private string _floatingAccountKey = DefaultAccountName;
     private Window? _preparedFloatingWindow;
     private Microsoft.Web.WebView2.Wpf.WebView2? _preparedFloatingView;
     private bool _isPreparingFloatingView;
@@ -894,17 +896,12 @@ public partial class MainWindow : Window
             try
             {
                 var expr = @"(() => { const g = (id) => document.getElementById(id)?.textContent?.trim() || ''; const gt = (id) => { const el = document.getElementById(id); const t = el?.textContent?.trim(); return t ? t : (el?.getAttribute('title') || '').trim(); }; return JSON.stringify({ missoes: g('rastreio-n'), eventos: g('rastreio-ev-n'), passe: gt('rastreio-passe'), tarefa: gt('rastreio-tarefa'), analise: gt('rastreio-analise'), diaria: gt('rastreio-diaria') }); })()";
-                // Prioridade por visibilidade: flutuante visível -> [flutuante, principal]; escondida -> [principal, flutuante].
-                // Se retornar vazio/inválido, tenta a outra fonte.
-                // Evita o "maior JSON" (que podia escolher dado velho) e também evita ficar "Carregando..." quando
-                // apenas a flutuante ainda está sem o tracker no DOM.
+                // Lê sempre o WebView da conta na frente (ActiveView); nunca puxa dados da outra conta.
+                // Se o DOM da conta ativa ainda estiver sem o tracker, mostra vazio/dica em vez de cair na outra conta.
                 string? json = null;
-                bool fonteÉFlutuante = false;
-                bool floatingVisible = IsFloatingVisible();
-                var sources = floatingVisible
-                    ? new[] { (_floatingView?.CoreWebView2, true), (GameView?.CoreWebView2, false) }
-                    : new[] { (GameView?.CoreWebView2, false), (_floatingView?.CoreWebView2, true) };
-                foreach (var (core, isFloating) in sources)
+                var activeView = ActiveView;
+                var sources = new[] { activeView?.CoreWebView2 };
+                foreach (var core in sources)
                 {
                     if (core == null) continue;
                     string raw;
@@ -921,18 +918,15 @@ public partial class MainWindow : Window
                     }
                     catch { continue; }
                     json = candidate;
-                    fonteÉFlutuante = isFloating;
                     break;
                 }
                 if (string.IsNullOrWhiteSpace(json)) return;
                 if (json == _lastMissionsJson) return;
-                // Fallback inicial: se a flutuante está visível mas ainda sem tracker,
-                // e ainda não exibimos nada, permite mostrar o dado da principal
-                // (senão fica preso em "Carregando..."). Depois que algo foi exibido,
-                // o dado de janela oculta não sobrescreve o atual.
+                // No 1º carregamento permite exibir já (o guard em UpdateMissions ignoraria
+                // um fromFloating: false quando a flutuante está visível).
                 bool primeiroCarregamento = _lastMissionsJson == null;
                 _lastMissionsJson = json;
-                UpdateMissions(json, fromFloating: fonteÉFlutuante || primeiroCarregamento);
+                UpdateMissions(json, fromFloating: primeiroCarregamento);
             }
             catch { }
         };
@@ -1721,6 +1715,8 @@ public partial class MainWindow : Window
             (_preparedFloatingWindow != null && _preparedFloatingView?.CoreWebView2 != null))
             return;
 
+        // Captura a conta ativa no momento da preparação (dona da flutuante/popup no jogo)
+        _floatingAccountKey = _settings.ContaAtiva ?? DefaultAccountName;
         _isPreparingFloatingView = true;
         Window? popupWindow = null;
         try
@@ -1913,7 +1909,7 @@ public partial class MainWindow : Window
                     }
                     else if (message != null && message.StartsWith("lol-idle-notify:"))
                     {
-                        HandleNotification(_settings.ContaAtiva, message["lol-idle-notify:".Length..]);
+                        HandleNotification(_floatingAccountKey, message["lol-idle-notify:".Length..]);
                     }
                     else if (message != null && message.StartsWith("lol-idle-missions:"))
                     {
