@@ -679,6 +679,9 @@ public partial class MainWindow : Window
             if (e.Button == Forms.MouseButtons.Left)
                 RestoreFromTray();
         };
+
+        // Clique no balão de notificação da bandeja restaura/abre a janela principal.
+        _trayIcon.BalloonTipClicked += (_, _) => RestoreFromTray();
     }
 
     private bool IsFloatingVisible() => _floatingWindow != null && _floatingWindow.IsVisible;
