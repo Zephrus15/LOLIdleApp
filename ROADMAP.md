@@ -1,6 +1,6 @@
 ﻿# 🗺️ Roadmap — LoL Idle Desktop
 
-> Base: **v1.2.9** · Última atualização: 2026-11-09
+> Base: **v1.3.0** · Última atualização: 2026-11-10
 > Versão web estilizada: [`ROADMAP.html`](./ROADMAP.html) — abra no navegador para visualizar como site.
 
 <p align="center">
@@ -19,7 +19,7 @@
 | 📖 **Missões** | ✅ **Confirmado** | v1.2.5 / v1.2.6 |
 | 🎛️ **Barra lateral (interativa)** | ❌ **Impossível** | — (jogo bloqueia 2ª sessão) |
 | 🧙 **Personagem (interativo)** | ❌ **Impossível** | — (jogo bloqueia 2ª sessão) |
-| 🔔 **Bandeja inteligente (sons)** | ✅ **Confirmado** | v1.2.0 → v1.2.7 |
+| 🔔 **Bandeja inteligente (sons + clique abre app)** | ✅ **Confirmado** | v1.2.0 → v1.3.0 |
 | 📌 **Sempre no topo persistente** | ✅ **Confirmado** | v1.2.7 |
 | 📱 **Android** | 🔵 **Futuro** | — |
 | 🔊 **Áudio separado (música/efeitos)** | 🟡 **Pendente — precisa de decisão** | lógica existe; UI inacessível (`ShowFloatingSettings` sem chamada) |
