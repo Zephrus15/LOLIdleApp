@@ -18,6 +18,9 @@ packages/
 package/
 LoLIdleDesktop-win-x64.zip
 
+# Documentação local (não enviar ao GitHub)
+DOCUMENTACAO.md
+
 # Sistema
 Thumbs.db
 desktop.ini
