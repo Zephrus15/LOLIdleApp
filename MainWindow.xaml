@@ -152,17 +152,25 @@
                                    FontWeight="SemiBold"
                                    Margin="0,0,0,12"/>
 
-                        <Button Content="+ Adicionar conta"
+                        <TextBlock x:Name="ContaConectadaText"
+                                   Foreground="#D8DCE4"
+                                   FontSize="12"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,8"/>
+
+                        <Button x:Name="AddAccountButton"
+                                Content="➕ Adicionar conta"
+                                Click="AddAccount_Click"
                                 Foreground="#D8DCE4"
-                                Background="Transparent"
-                                BorderBrush="#343A46"
+                                Background="#2A2E38"
+                                BorderBrush="#D8B45A"
                                 BorderThickness="1"
                                 Padding="8,6"
                                 Margin="0,0,0,12"
                                 HorizontalAlignment="Left"
                                 Cursor="Hand"/>
 
-                        <TextBlock Text="Nenhuma conta adicionada ainda."
+                        <TextBlock x:Name="ContasCountText" Text="Contas: 0 / 4"
                                    Foreground="#9298A5"
                                    FontSize="12"
                                    TextWrapping="Wrap"/>

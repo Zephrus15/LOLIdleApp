@@ -417,6 +417,7 @@ public partial class MainWindow : Window
         public bool ShowMissions { get; set; }
         public bool SidebarVisible { get; set; } = true;
         public double SidebarWidth { get; set; } = 260;
+        public int ContasAdicionadasCount { get; set; } = 0;
         public bool HasMissionsBounds { get; set; }
         public double MissionsWidth { get; set; } = 360;
         public double MissionsHeight { get; set; } = 320;
@@ -539,6 +540,7 @@ public partial class MainWindow : Window
         ApplySidebarLayout();
         UpdateMaximizeButton();
         SyncTrayMenuChecks();
+        _ = AtualizarContaConectadaUI();
     }
 
     // Salva as preferências no perfil local do Windows.
@@ -719,6 +721,7 @@ public partial class MainWindow : Window
 
         Activate();
         _ = ApplyAudioSettingsAsync();
+        _ = AtualizarContaConectadaUI();
     }
 
     private void ShowMissions()
@@ -2168,6 +2171,92 @@ public partial class MainWindow : Window
             chevron.Text = visible ? "◀" : "▶";
 
         SidebarToggleButton.ToolTip = visible ? "Esconder contas" : "Mostrar contas";
+    }
+
+    // Limite máximo de contas adicionadas.
+    private const int MaxContas = 4;
+
+    // Abre um dialog simples mostrando a conta conectada (se houver) com opção de adicionar.
+    private async void AddAccount_Click(object sender, RoutedEventArgs e)
+    {
+        if (_settings.ContasAdicionadasCount >= MaxContas)
+        {
+            MessageBox.Show(
+                $"Limite de {MaxContas} contas atingido.",
+                "Adicionar conta",
+                MessageBoxButton.OK,
+                MessageBoxImage.Warning);
+            return;
+        }
+
+        var conta = await ObterContaConectadaAsync();
+        if (conta == null)
+        {
+            MessageBox.Show(
+                "Nenhuma conta conectada no jogo.",
+                "Adicionar conta",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        _settings.ContasAdicionadasCount++;
+        SaveWindowSettings();
+
+        await AtualizarContaConectadaUI();
+
+        MessageBox.Show(
+            $"Conta adicionada: {conta}\nContas salvas: {_settings.ContasAdicionadasCount} / {MaxContas}",
+            "Adicionar conta",
+            MessageBoxButton.OK,
+            MessageBoxImage.Information);
+    }
+
+    // Lê o nome da conta logada do DOM do jogo (WebView2) tentando vários seletores.
+    private async Task<string?> ObterContaConectadaAsync()
+    {
+        try
+        {
+            var core = GameView?.CoreWebView2;
+            if (core == null) return null;
+
+            const string script = @"(() => {
+                const pegar = (id) => {
+                    const el = document.getElementById(id);
+                    return el ? (el.textContent || '').trim() : '';
+                };
+                const cls = (sel) => {
+                    const el = document.querySelector(sel);
+                    return el ? (el.textContent || '').trim() : '';
+                };
+                const candidatos = [
+                    pegar('usuario'),
+                    cls('.usuario'),
+                    pegar('nome-usuario')
+                ];
+                for (const t of candidatos) {
+                    if (t) return t;
+                }
+                return '';
+            })()";
+
+            string raw = await core.ExecuteScriptAsync(script);
+            if (string.IsNullOrWhiteSpace(raw)) return null;
+            string valor = System.Text.Json.JsonSerializer.Deserialize<string>(raw) ?? "";
+            return string.IsNullOrWhiteSpace(valor) ? null : valor;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    // Atualiza o texto da conta conectada exibida na barra lateral.
+    private async Task AtualizarContaConectadaUI()
+    {
+        var conta = await ObterContaConectadaAsync();
+        ContaConectadaText.Text = conta != null ? $"Conta conectada: {conta}" : "Nenhuma conta conectada";
+        ContasCountText.Text = $"Contas: {_settings.ContasAdicionadasCount} / {MaxContas}";
     }
 
     private void Close_Click(object sender, RoutedEventArgs e)

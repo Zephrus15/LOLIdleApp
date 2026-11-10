@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.3.0](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.3.0)**
+**[Baixar LoL Idle Desktop v1.3.1](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.3.1)**
 
 ### Instalador (quando disponível na Release)
 
@@ -137,6 +137,11 @@ artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.3.1
+- Barra lateral de contas à direita com toggle esconder/mostrar (ícone bate com o estado).
+- Conta conectada exibida na barra (lida do DOM do jogo via `ExecuteScriptAsync`).
+- Botão "+ Adicionar conta" com limite máximo de 4 contas, estilo visual semelhante ao botão de toggle.
 
 ### v1.3.0
 - Notificação da bandeja: clicar no balão restaura/abre a janela principal (`BalloonTipClicked` → `RestoreFromTray`).
