@@ -1,4 +1,4 @@
-# 🗺️ Roadmap — LoL Idle Desktop
+﻿# 🗺️ Roadmap — LoL Idle Desktop
 
 > Base: **v1.2.9** · Última atualização: 2026-11-09
 > Versão web estilizada: [`ROADMAP.html`](./ROADMAP.html) — abra no navegador para visualizar como site.
@@ -107,4 +107,4 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 
 ---
 
-<sub>Documento gerado a partir do estado atual do app (v1.2.7). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site.</sub>
+<sub>Documento gerado a partir do estado atual do app \(v1.2.9\). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site.</sub>

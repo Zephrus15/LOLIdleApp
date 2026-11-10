@@ -1,4 +1,4 @@
-LoL Idle Desktop - versão 1.2.9
+﻿LoL Idle Desktop - versão 1.2.9
 Aplicativo desktop não oficial para Windows
 
 O que é
@@ -68,7 +68,7 @@ Correções (resolução de bugs na v1.2.9)
   (flutuante visível → flutuante primeiro; escondida → principal primeiro),
   com fallback apenas se a prioritária não tiver dado válido.
 - Alt+F4 / fechar pelo sistema agora oculta na bandeja (antes minimizava).
-- Siempre no topo agora persiste separadamente para a janela flutuante e para
+- Sempre no topo agora persiste separadamente para a janela flutuante e para
   a janela de Missões (ícone dourado sincronizado ao reabrir).
 - A janela flutuante lembra se Missões estava ativa ao ser fechada.
 - Fechar Missões pelo × apaga o caderninho na flutuante (sincronização do ícone).

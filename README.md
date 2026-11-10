@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.2.8](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.2.8)**
+**[Baixar LoL Idle Desktop v1.2.9](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.2.9)**
 
 ### Instalador (quando disponível na Release)
 
@@ -27,14 +27,26 @@ As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinsta
 
 Não é necessário instalar o .NET separadamente para utilizar o pacote publicado.
 
+## 💛 Apoie o projeto
+
+Se o **LoL Idle Desktop** te ajuda, você pode apoiar o desenvolvimento — qualquer valor já ajuda a manter e melhorar o app 🙂
+
+[![Ko-fi](https://img.shields.io/badge/Apoiar%20no%20Ko--fi-13c3e6?style=for-the-badge)](https://ko-fi.com/zephrus)
+
+- **Ko-fi (Pix, cartão ou PayPal):** https://ko-fi.com/zephrus
+
+O projeto é gratuito e feito por um desenvolvedor independente — contribuições são totalmente voluntárias.
+
 ## ✨ Recursos
 
 ### Janela principal
 - Abre o LoL Idle em uma janela própria.
 - Interface sem abas ou barra de endereço do navegador.
 - Sessão e cookies persistidos entre execuções.
-- Links externos (fora de `lolidle.com`) abrem no navegador padrão e não abrem a flutuante.
-- Hosts tratados além de Discord/Kick/Twitch: `discord.com`, `discordapp.com`, `discord.gg`, `accounts.google.com`, `topidle.com/voto`, YouTube, TikTok, Instagram. Na flutuante, link externo abre no navegador e fecha a flutuante.
+- Links externos (fora de `lolidle.com`) abrem no navegador padrão.
+- Na janela principal: o link não abre a flutuante.
+- Na janela flutuante: o link abre no navegador real. Se vier via `window.open` (nova janela), a flutuante fica aberta; se for navegação direta da própria flutuante, ela fecha e o link abre no navegador.
+- Hosts tratados: `discord.com`, `discordapp.com`, `discord.gg`, `accounts.google.com`, `topidle.com/voto`, YouTube, TikTok, Instagram.
 
 ### Janela flutuante
 - A flutuante não é aberta por botão da interface principal. Ela abre quando o jogo solicita nova janela (`window.open` / `NewWindowRequested`, `HandleNewWindowRequested`).
