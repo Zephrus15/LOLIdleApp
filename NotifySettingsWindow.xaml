@@ -10,55 +10,6 @@
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner">
-    <Window.Resources>
-        <Style x:Key="DarkCheckBox" TargetType="CheckBox">
-            <Setter Property="Foreground" Value="#D8DCE4" />
-            <Setter Property="Cursor" Value="Hand" />
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="CheckBox">
-                        <StackPanel Orientation="Horizontal"
-                                    VerticalAlignment="Center">
-                            <Border x:Name="box"
-                                    Width="17" Height="17"
-                                    CornerRadius="4"
-                                    Background="#2A2E38"
-                                    BorderBrush="#3A404C"
-                                    BorderThickness="1"
-                                    VerticalAlignment="Center">
-                                <Path x:Name="check"
-                                      Data="M 3 8.6 L 6.6 12 L 13.5 4.3"
-                                      Stroke="#2BD46A"
-                                      StrokeThickness="2.2"
-                                      StrokeStartLineCap="Round"
-                                      StrokeEndLineCap="Round"
-                                      StrokeLineJoin="Round"
-                                      Fill="Transparent"
-                                      Stretch="Uniform"
-                                      Width="12.5" Height="10"
-                                      Visibility="Collapsed"
-                                      HorizontalAlignment="Center"
-                                      VerticalAlignment="Center" />
-                            </Border>
-                            <ContentPresenter x:Name="content"
-                                              Margin="9,0,0,0"
-                                              VerticalAlignment="Center" />
-                        </StackPanel>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="box" Property="BorderBrush" Value="#4C535F" />
-                            </Trigger>
-                            <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="box" Property="Background" Value="#22442C" />
-                                <Setter TargetName="box" Property="BorderBrush" Value="#2BD46A" />
-                                <Setter TargetName="check" Property="Visibility" Value="Visible" />
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-    </Window.Resources>
     <Border CornerRadius="14"
             Background="#161922"
             BorderBrush="#2F3540"

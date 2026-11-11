@@ -9,7 +9,7 @@
         Background="Transparent"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterOwner">
     <Border CornerRadius="14"
             Background="#161922"
             BorderBrush="#2F3540"
@@ -52,51 +52,58 @@
                         Background="#17292A"
                         BorderBrush="#1F8A4C"
                         BorderThickness="1.5"
-                        CornerRadius="10"
-                        Padding="12,10"
+                        CornerRadius="12"
+                        Padding="12,12"
                         Cursor="Hand"
                         Margin="0,0,0,10"
                         MouseLeftButtonDown="OptionSegundoPlano_MouseLeftButtonDown">
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="58" />
+                            <ColumnDefinition Width="60" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <Grid VerticalAlignment="Center"
-                              HorizontalAlignment="Center"
-                              Background="#173B33"
-                              Width="48" Height="48">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="▶"
-                                       Foreground="#37D067"
-                                       FontSize="18"
-                                       VerticalAlignment="Center"
-                                       HorizontalAlignment="Center" />
-                        </Grid>
-                        <StackPanel Grid.Column="1">
-                            <Grid>
-                                <Ellipse x:Name="RadioSegundoPlano"
-                                         Width="16" Height="16"
-                                         HorizontalAlignment="Left"
-                                         VerticalAlignment="Center"
-                                         Margin="0,1,0,0"
-                                         Stroke="#37D067"
-                                         StrokeThickness="2"
-                                         Fill="#37D067" />
+
+                        <!-- Avatar do app: quadrado arredondado com triângulo de play centralizado -->
+                        <Border Grid.Column="0"
+                                Width="46" Height="46"
+                                CornerRadius="12"
+                                Background="#1E3A2F"
+                                VerticalAlignment="Center"
+                                HorizontalAlignment="Center">
+                            <Viewbox Stretch="Uniform"
+                                     Margin="10,10,10,10"
+                                     HorizontalAlignment="Center"
+                                     VerticalAlignment="Center">
+                                <Path Data="M 2 2 L 20 11 L 2 20 Z"
+                                      Fill="#37D067"
+                                      Stroke="#37D067"
+                                      StrokeThickness="2.2"
+                                      StrokeLineJoin="Round" />
+                            </Viewbox>
+                        </Border>
+
+                        <!-- Mesmo estilo do checkmark das Notificações -->
+                        <StackPanel Grid.Column="1"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center">
+                            <CheckBox x:Name="RadioSegundoPlano"
+                                      Style="{StaticResource DarkCheckBox}"
+                                      IsHitTestVisible="False"
+                                      IsChecked="True"
+                                      Margin="0,0,12,0"
+                                      VerticalAlignment="Center" />
+                            <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="Continuar rodando em segundo plano"
                                            Foreground="#F2F2F2"
                                            FontSize="13"
-                                           FontWeight="SemiBold"
-                                           VerticalAlignment="Center"
-                                           Margin="26,0,0,0" />
-                            </Grid>
-                            <TextBlock Text="A conta ligada segue farmando. O LoL Idle fica no ícone ao lado do relógio."
-                                       Foreground="#9AA3B2"
-                                       FontSize="11.5"
-                                       TextWrapping="Wrap"
-                                       Margin="26,6,0,0" />
+                                           FontWeight="SemiBold" />
+                                <TextBlock Text="A conta ligada segue farmando. O LoL Idle fica no ícone ao lado do relógio."
+                                           Foreground="#9AA3B2"
+                                           FontSize="11.5"
+                                           TextWrapping="Wrap"
+                                           Margin="0,5,0,0"
+                                           MaxWidth="310" />
+                            </StackPanel>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -106,64 +113,57 @@
                         Background="#1B1E27"
                         BorderBrush="#2A2E38"
                         BorderThickness="1"
-                        CornerRadius="10"
-                        Padding="12,10"
+                        CornerRadius="12"
+                        Padding="12,12"
                         Cursor="Hand"
                         MouseLeftButtonDown="OptionSair_MouseLeftButtonDown">
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="58" />
+                            <ColumnDefinition Width="60" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
-                        <Grid VerticalAlignment="Center"
-                              HorizontalAlignment="Center"
-                              Background="#40241F"
-                              Width="48" Height="48">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                            </Grid.ColumnDefinitions>
-                            <!-- Ícone de desligamento: círculo quase completo + linha vertical no topo -->
-                            <Grid Width="22" Height="22"
-                                  VerticalAlignment="Center"
-                                  HorizontalAlignment="Center">
-                                <Ellipse Width="20" Height="20"
-                                         Stroke="#E05B4B"
-                                         StrokeThickness="2.4"
-                                         Fill="Transparent"
-                                         VerticalAlignment="Bottom"
-                                         Margin="0,0,0,-1.2" />
-                                <Rectangle Width="3.6" Height="10"
-                                           Fill="#40241F"
-                                           VerticalAlignment="Top"
-                                           Margin="0,-1,0,0" />
-                                <Rectangle Width="2.8" Height="10"
-                                           Fill="#E05B4B"
-                                           VerticalAlignment="Top"
-                                           HorizontalAlignment="Center"
-                                           Margin="0,-3,0,0" />
-                            </Grid>
-                        </Grid>
-                        <StackPanel Grid.Column="1">
-                            <Grid>
-                                <Ellipse x:Name="RadioSair"
-                                         Width="16" Height="16"
-                                         HorizontalAlignment="Left"
-                                         VerticalAlignment="Center"
-                                         Margin="0,1,0,0"
-                                         Stroke="#6B7280"
-                                         StrokeThickness="2" />
+
+                        <!-- Avatar vermelho escuro: símbolo de desligar centralizado no avatar -->
+                        <Border Grid.Column="0"
+                                Width="46" Height="46"
+                                CornerRadius="12"
+                                Background="#403033"
+                                VerticalAlignment="Center"
+                                HorizontalAlignment="Center">
+                            <Viewbox Stretch="Uniform"
+                                     Margin="7,4,7,11"
+                                     HorizontalAlignment="Center"
+                                     VerticalAlignment="Center">
+                                <Path Data="M 12 8 L 12 18 M 4.5 15 A 10 10 0 1 0 19.5 15"
+                                      Stroke="#E05B4B"
+                                      StrokeThickness="2.4"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round"
+                                      Fill="Transparent" />
+                            </Viewbox>
+                        </Border>
+
+                        <!-- Mesmo estilo do checkmark das Notificações -->
+                        <StackPanel Grid.Column="1"
+                                    Orientation="Horizontal"
+                                    VerticalAlignment="Center">
+                            <CheckBox x:Name="RadioSair"
+                                      Style="{StaticResource DarkCheckBox}"
+                                      IsHitTestVisible="False"
+                                      Margin="0,0,12,0"
+                                      VerticalAlignment="Center" />
+                            <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="Sair e desligar as contas"
                                            Foreground="#EDEDED"
                                            FontSize="13"
-                                           FontWeight="SemiBold"
-                                           VerticalAlignment="Center"
-                                           Margin="26,0,0,0" />
-                            </Grid>
-                            <TextBlock Text="A conta para de farmar. O login continua salvo."
-                                       Foreground="#9AA3B2"
-                                       FontSize="11.5"
-                                       TextWrapping="Wrap"
-                                       Margin="26,6,0,0" />
+                                           FontWeight="SemiBold" />
+                                <TextBlock Text="A conta para de farmar. O login continua salvo."
+                                           Foreground="#9AA3B2"
+                                           FontSize="11.5"
+                                           TextWrapping="Wrap"
+                                           Margin="0,5,0,0"
+                                           MaxWidth="310" />
+                            </StackPanel>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -172,7 +172,7 @@
                 <CheckBox x:Name="RememberCheckbox"
                           Content="Lembrar minha escolha e não perguntar de novo"
                           Margin="2,14,0,0"
-                          Foreground="#C9CDD6"
+                          Style="{StaticResource DarkCheckBox}"
                           FontSize="12"
                           VerticalContentAlignment="Center" />
             </StackPanel>
@@ -188,11 +188,34 @@
                             HorizontalAlignment="Left"
                             Width="110" Height="40"
                             Background="Transparent"
-                            Foreground="#C9CDD6"
                             BorderThickness="0"
+                            Foreground="#C9CDD6"
                             FontSize="13"
                             Cursor="Hand"
-                            Click="Cancel_Click" />
+                            Click="Cancel_Click">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border x:Name="border"
+                                        CornerRadius="10"
+                                        Background="{TemplateBinding Background}">
+                                    <ContentPresenter HorizontalAlignment="Center"
+                                                      VerticalAlignment="Center" />
+                                </Border>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter TargetName="border"
+                                                Property="Background"
+                                                Value="#2A2E38" />
+                                    </Trigger>
+                                    <Trigger Property="IsPressed" Value="True">
+                                        <Setter TargetName="border"
+                                                Property="Background"
+                                                Value="#343A46" />
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
 
                     <Button x:Name="ConfirmButton"
                             HorizontalAlignment="Right"

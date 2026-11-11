@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.3.4](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.3.4)**
+**[Baixar LoL Idle Desktop v1.3.5](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.3.5)**
 
 ### Instalador (quando disponível na Release)
 
@@ -65,7 +65,7 @@ O projeto é gratuito e feito por um desenvolvedor independente — contribuiç�
 - Lembra o último estado ativo/inativo ao reabrir a flutuante.
 
 ### Bandeja do Windows
-- Fechar a janela principal (pelo × ou Alt+F4/fechar pelo sistema, exceto quando o encerramento é permitido) oculta o aplicativo na bandeja do sistema e mostra o ícone.
+- Fechar a janela principal (pelo × ou Alt+F4/fechar pelo sistema) abre o diálogo "Fechar o LoL Idle?" (ou aplica a preferência `CloseBehavior`, se definida) e mostra o ícone na bandeja quando a opção "continuar em segundo plano" é usada.
 - Clique esquerdo no ícone para restaurar a janela.
 - Clique direito para acessar as opções de abrir ou sair (`Restaurar` / `Som > Som do jogo` / `Sair`).
 - A sessão permanece ativa enquanto o aplicativo estiver oculto.
@@ -76,13 +76,14 @@ O projeto é gratuito e feito por um desenvolvedor independente — contribuiç�
 - Restauração das dimensões e da posição da janela principal, da janela flutuante e da janela de Missões.
 - Preferência "sempre no topo" salva separadamente para a janela flutuante e para a janela de Missões.
 - Gerenciamento da sessão do WebView2.
+- Botão ⚙ "Opções de fechamento" na sidebar para trocar a preferência do botão Fechar (perguntar / continuar na bandeja / sair e desligar as contas).
 - Arquivos em `%LOCALAPPDATA%\LoLIdleDesktop`: `window-settings.json` (preferências/geometria), `WebView2\` (sessão/cookies) e `floating-window.log` (log técnico).
 
 ### Limitações desta versão
 - Painéis disponíveis: **Missões** (somente leitura) incluído. **Barra lateral interativa** e **Personagem** não incluídos (o jogo bloqueia a segunda sessão).
 - O controle de áudio disponível silencia todo o áudio do jogo. Não há uma tela acessível pela interface para ajustar música e efeitos separadamente (a tela de configurações de áudio `ShowFloatingSettings` existe no código, mas não é chamada pela interface atual).
 - A janela separada de voto (`ShowVoteWindow` / `PrepareVoteWebViewAsync`) existe no código mas não é exibida; voto e login OAuth usam o navegador real.
-- O botão fechar (×) e o Alt+F4/fechar pelo sistema ocultam o aplicativo na bandeja. Para encerrar, use **Sair** no menu da bandeja.
+- O botão fechar (×) e o Alt+F4/fechar pelo sistema abrem o diálogo "Fechar o LoL Idle?" (a menos que a preferência `CloseBehavior` esteja definida — ajuste pelo botão ⚙ "Opções de fechamento" na sidebar). Para encerrar direto, use **Sair** no menu da bandeja ou a opção "Sair e desligar as contas".
 - `ReopenFloatingWindow_Click` existe no código sem ligação no `MainWindow.xaml` atual — a flutuante só abre via `window.open` do jogo.
 
 ## 🖥️ Requisitos
@@ -137,6 +138,12 @@ artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.3.5
+- Diálogo fechar restaurado: clicar no botão fechar abre novamente o diálogo "Fechar o LoL Idle?" (Continuar em segundo plano / Sair e desligar as contas) com opção "Lembrar minha escolha".
+- Novo botão ⚙ "Opções de fechamento" na sidebar — permite trocar a preferência de fechamento depois (atalho para abrir e editar as 3 opções).
+- Diálogo "Fechar o LoL Idle?" redesenhado: ícones de play/power centralizados com Viewbox, botão Cancelar com estilo escuro discreto, Checkboxes do estilo das Notificações.
+- Diálogo "Remover conta": sem a faixa vermelha do topo.
 
 ### v1.3.4
 - Correção: a janela de Missões lia os dados da conta principal (fallback para `GameView`) em vez da conta na frente. Agora lê sempre a conta ativa (com fallback para a conta principal quando a ativa ainda está sem o tracker/painel indisponível).

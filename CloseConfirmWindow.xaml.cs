@@ -18,10 +18,6 @@ namespace LoLIdleDesktop
             System.Windows.Media.Color.FromRgb(0x1F, 0x8A, 0x4C);
         private static readonly System.Windows.Media.Color CinzaInativo =
             System.Windows.Media.Color.FromRgb(0x2A, 0x2E, 0x38);
-        private static readonly System.Windows.Media.Color VerdeRadio =
-            System.Windows.Media.Color.FromRgb(0x37, 0xD0, 0x67);
-        private static readonly System.Windows.Media.Color CinzaRadio =
-            System.Windows.Media.Color.FromRgb(0x6B, 0x72, 0x80);
 
         private readonly CloseConfirmResult _result = new CloseConfirmResult();
 
@@ -59,10 +55,8 @@ namespace LoLIdleDesktop
             OptionSair.Background = new System.Windows.Media.SolidColorBrush(
                 System.Windows.Media.Color.FromRgb(0x1B, 0x1E, 0x27));
 
-            RadioSegundoPlano.Stroke = new System.Windows.Media.SolidColorBrush(VerdeRadio);
-            RadioSegundoPlano.Fill = new System.Windows.Media.SolidColorBrush(VerdeRadio);
-            RadioSair.Stroke = new System.Windows.Media.SolidColorBrush(CinzaRadio);
-            RadioSair.Fill = System.Windows.Media.Brushes.Transparent;
+            RadioSegundoPlano.IsChecked = true;
+            RadioSair.IsChecked = false;
 
             ConfirmButton.Content = "Fechar e continuar rodando";
             ConfirmButton.Background = new System.Windows.Media.SolidColorBrush(
@@ -85,12 +79,8 @@ namespace LoLIdleDesktop
             OptionSegundoPlano.Background = new System.Windows.Media.SolidColorBrush(
                 System.Windows.Media.Color.FromRgb(0x1B, 0x1E, 0x27));
 
-            RadioSegundoPlano.Stroke = new System.Windows.Media.SolidColorBrush(CinzaRadio);
-            RadioSegundoPlano.Fill = System.Windows.Media.Brushes.Transparent;
-            RadioSair.Stroke = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(0xE0, 0x5B, 0x4B));
-            RadioSair.Fill = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(0xE0, 0x5B, 0x4B));
+            RadioSegundoPlano.IsChecked = false;
+            RadioSair.IsChecked = true;
 
             ConfirmButton.Content = "Sair e desligar";
             ConfirmButton.Background = new System.Windows.Media.SolidColorBrush(

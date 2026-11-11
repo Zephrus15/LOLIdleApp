@@ -259,6 +259,15 @@
                                     Margin="0,16,0,0"
                                     HorizontalAlignment="Left"
                                     FontSize="12"/>
+
+                            <Button x:Name="CloseBehaviorButton"
+                                    Content="⚙ Opções de fechamento"
+                                    Click="CloseBehavior_Click"
+                                    ToolTip="Escolher o que acontece ao clicar em Fechar"
+                                    Style="{StaticResource AddAccountButtonStyle}"
+                                    Margin="0,8,0,0"
+                                    HorizontalAlignment="Left"
+                                    FontSize="12"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>

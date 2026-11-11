@@ -2581,6 +2581,13 @@ public partial class MainWindow : Window
         window.ShowDialog();
     }
 
+    // Abre o painel de Opções de fechamento (preferência do botão Fechar)
+    private void CloseBehavior_Click(object sender, RoutedEventArgs e)
+    {
+        var window = new CloseBehaviorWindow(_settings, SaveWindowSettings, this);
+        window.ShowDialog();
+    }
+
     // Limite total de contas (incluindo a principal): 4 = principal + 3 extras
     private const int MaxContas = 3;
 
@@ -3290,9 +3297,40 @@ public partial class MainWindow : Window
             ContasHideButton.Content = escondido ? "Contas ▴" : "Contas ▾";
     }
 
+    // Fecha com base na preferência CloseBehavior:
+    // 0 = perguntar, 1 = continuar em segundo plano, 2 = sair e desligar as contas.
+    private void RequestClose()
+    {
+        if (_settings.CloseBehavior == 1)
+        {
+            HideToTray();
+            return;
+        }
+        if (_settings.CloseBehavior == 2)
+        {
+            ExitApplication();
+            return;
+        }
+
+        // Perguntar ao usuário
+        var dialog = new CloseConfirmWindow(this);
+        if (dialog.ShowDialog() != true)
+            return; // cancelou ou fechou pelo X
+
+        var result = dialog.Result;
+        if (result.Remember)
+            _settings.CloseBehavior = result.Selected;
+        SaveWindowSettings();
+
+        if (result.Selected == 1)
+            HideToTray();
+        else
+            ExitApplication();
+    }
+
     private void Close_Click(object sender, RoutedEventArgs e)
     {
-        HideToTray();
+        RequestClose();
     }
 
     private void Window_Closing(object? sender, CancelEventArgs e)
@@ -3302,7 +3340,7 @@ public partial class MainWindow : Window
         if (!_allowExit)
         {
             e.Cancel = true;
-            HideToTray();
+            RequestClose();
         }
     }
 
