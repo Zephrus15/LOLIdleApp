@@ -44,17 +44,17 @@ code{background:#0f141f;padding:2px 6px;border-radius:6px;border:1px solid var(-
     <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:center">
       <div>
         <h1>🗺️ Roadmap — LoL Idle Desktop</h1>
-        <p class="sub">Base <strong>v1.3.6</strong> · Missões prontas, contas reais com várias sessões simultâneas, painel de Notificações por conta/tipo, ⚙ Opções de fechamento, avatares por conta (cor/emoji/imagem/campeão) com a janela "Alterar avatar", e foco atual em <strong>polir sons e detalhes</strong>.</p>
+        <p class="sub">Base <strong>v1.3.7</strong> · Missões prontas, contas reais com várias sessões simultâneas, painel de Notificações por conta/tipo, ⚙ Opções de fechamento, avatares por conta (cor/emoji/imagem/campeão) com a janela "Alterar avatar", sinalizações de não lida e últimas notificações na sidebar (v1.3.7), e foco atual em <strong>polir sons e detalhes</strong>.</p>
       </div>
       <div class="badges">
-        <span class="pill p-green">6 feitos</span>
+        <span class="pill p-green">7 feitos</span>
         <span class="pill p-red">1 impossível</span>
         <span class="pill p-amber">2 pendentes/polir</span>
         <span class="pill p-blue">1 futuro</span>
       </div>
     </div>
-    <div class="bar" aria-label="Progresso geral"><div style="width:60%;background:linear-gradient(90deg,#2ea043,#3fb950)"></div></div>
-    <p class="muted" style="margin:0">Progresso geral (feito / total do roadmap): <strong>~60%</strong> — Missões, bandeja, sempre no topo, barra lateral de contas e Notificações por conta/tipo prontos; avatares por conta prontos (v1.3.6); áudio separado precisa de decisão.</p>
+    <div class="bar" aria-label="Progresso geral"><div style="width:65%;background:linear-gradient(90deg,#2ea043,#3fb950)"></div></div>
+    <p class="muted" style="margin:0">Progresso geral (feito / total do roadmap): <strong>~65%</strong> — Missões, bandeja, sempre no topo, barra lateral de contas, Notificações por conta/tipo e avatares por conta prontos; últimas notificações e não lidos na sidebar prontos (v1.3.7); áudio separado precisa de decisão.</p>
   </div>
 
   <div class="grid">
@@ -73,7 +73,7 @@ code{background:#0f141f;padding:2px 6px;border-radius:6px;border:1px solid var(-
 
     <div class="card">
       <h2>🎛️ Barra lateral de contas <span class="tag p-green">FEITO ✅</span></h2>
-      <p class="muted">Sidebar de contas com várias sessões reais ao mesmo tempo (v1.3.2 → v1.3.6).</p>
+      <p class="muted">Sidebar de contas com várias sessões reais ao mesmo tempo (v1.3.2 → v1.3.7).</p>
       <ul>
         <li>✅ Várias contas WebView2 com sessão/partição isolada</li>
         <li>✅ Troca clicando na lista (salva para sempre por conta)</li>
@@ -81,6 +81,7 @@ code{background:#0f141f;padding:2px 6px;border-radius:6px;border:1px solid var(-
         <li>✅ Renomear (✏️), remover (×), até 4 contas</li>
         <li>✅ Painel "🔔 Notificações" (v1.3.3) por conta e por tipo</li>
         <li>✅ ⚙ "Opções de fechamento" (v1.3.5) — diálogo de preferência do botão Fechar</li>
+        <li>✅ Notificações na sidebar (v1.3.7) — bolinha de não lido nos avatares; últimas 4 notificações com tempo relativo; troca de conta ao clicar; botão Limpar; faixas de avatares na lista recolhida e na barra minimizada; clique no balão da bandeja troca para a conta</li>
         <li>✅ Várias fontes de avatar (v1.3.6) — cor + iniciais, emoji, imagem do PC ou campeão do jogo</li>
         <li>✅ Janela "Editar conta" — abrir renomeando/escolhendo avatar pelo ✏ ou clicando no avatar (estilo Facebook)</li>
         <li>✅ Aba "Campeões" com os 12 sprites pixelados do jogo; avatar foca no rosto (16x16, nearest neighbor)</li>
@@ -154,6 +155,7 @@ code{background:#0f141f;padding:2px 6px;border-radius:6px;border:1px solid var(-
         <tr><td>📖 Missões</td><td>✅ Confirmado</td><td>v1.2.5 / v1.2.6</td><td class="muted">só-texto, janela própria</td></tr>
         <tr><td>🎛️ Barra lateral de contas</td><td>✅ Confirmado</td><td>v1.3.2 / v1.3.3 / v1.3.5 / v1.3.6</td><td class="muted">troca real por partição WebView2; avatar + bolinhas de status</td></tr>
         <tr><td>🖼️ Avatares das contas (3 fontes + imagem)</td><td>✅ Confirmado</td><td>v1.3.6</td><td class="muted">cor/emoji/imagem/campeão; zoom e recorte salvos por conta</td></tr>
+        <tr><td>🔴 Últimas notificações e não lidos na sidebar</td><td>✅ Confirmado</td><td>v1.3.7</td><td class="muted">bolinha de não lido, lista com tempo relativo, limpeza animada, clique no balão troca de conta</td></tr>
         <tr><td>🔔 Notificações por conta/tipo</td><td>✅ Confirmado</td><td>v1.3.3</td><td class="muted">checkmarks escuros; prefixo da conta no balão</td></tr>
         <tr><td>🧙 Personagem (interativo)</td><td>❌ Impossível</td><td>—</td><td class="muted">painel vivo no painel lateral bloqueado pelo jogo</td></tr>
         <tr><td>🔔 Bandeja inteligente</td><td>✅ Confirmado</td><td>v1.2.0 → v1\.3\.1</td><td class="muted">clique no balão abre o app</td></tr>
@@ -168,7 +170,7 @@ code{background:#0f141f;padding:2px 6px;border-radius:6px;border:1px solid var(-
   </div>
 
   <div class="footer">
-    <span>Gerado a partir do estado v1.3.6 · Veja <a href="./ROADMAP.md">ROADMAP.md</a> no GitHub</span>
+    <span>Gerado a partir do estado v1.3.7 · Veja <a href="./ROADMAP.md">ROADMAP.md</a> no GitHub</span>
     <span>Polimento atual: sons + detalhes</span>
   </div>
 </div>

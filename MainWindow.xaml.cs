@@ -10,6 +10,7 @@ using Button = System.Windows.Controls.Button;
 using Cursors = System.Windows.Input.Cursors;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using Color = System.Windows.Media.Color;
 using Brushes = System.Windows.Media.Brushes;
@@ -84,9 +85,11 @@ public partial class MainWindow : Window
                     if (prefs.masterMuted && context.state === 'running') {
                         pausedByUs.add(context);
                         await context.suspend();
-                    } else if (!prefs.masterMuted && context.state === 'suspended') {
-                        pausedByUs.delete(context);
-                        await context.resume().catch(() => {});
+                    } else if (!prefs.masterMuted && context.state === 'suspended' && pausedByUs.has(context)) {
+                        try {
+                            await context.resume();
+                            pausedByUs.delete(context);
+                        } catch (_) { /* bloqueado (ex.: autoplay): mantém no set para o gesture tentar de novo */ }
                     }
                 } catch (_) {}
             }
@@ -95,7 +98,9 @@ public partial class MainWindow : Window
             const prefs = window.__lolIdleAudioPrefs;
             if (prefs && !prefs.masterMuted) {
                 for (const context of contexts) {
-                    if (context.state === 'suspended') context.resume().catch(() => {});
+                    if (context.state === 'suspended' && pausedByUs.has(context)) {
+                        context.resume().then(() => pausedByUs.delete(context)).catch(() => {});
+                    }
                 }
             }
         };
@@ -293,11 +298,23 @@ public partial class MainWindow : Window
     })();";
 
     private Forms.NotifyIcon? _trayIcon;
+    private string? _lastBalloonAccount;
     private Forms.ToolStripMenuItem? _trayTrayMuteItem;
     private bool _floatingOpened;
     private bool _allowExit;
     private bool _isHiddenToTray;
     private bool _settingsReady;
+
+    // Notificações recentes (só memória, não persistidas): últimas 4, mais recente primeiro.
+    private sealed class NotificacaoItem
+    {
+        public string Conta = "";
+        public string Kind = "";
+        public DateTime Quando;
+    }
+    private readonly List<NotificacaoItem> _ultimasNotificacoes = new();
+    private readonly HashSet<string> _contasNaoLidas = new(StringComparer.OrdinalIgnoreCase);
+    private bool ContaNaoLida(string conta) => _contasNaoLidas.Contains(conta);
     private System.Windows.Threading.DispatcherTimer? _settingsSaveTimer;
     private System.Drawing.Icon? _appIcon;
     private const string AccountBrowserArguments = "--autoplay-policy=no-user-gesture-required" +
@@ -760,8 +777,13 @@ public partial class MainWindow : Window
                 RestoreFromTray();
         };
 
-        // Clique no balão de notificação da bandeja restaura/abre a janela principal.
-        _trayIcon.BalloonTipClicked += (_, _) => RestoreFromTray();
+        // Clique no balão de notificação da bandeja restaura a janela e troca para a conta da notificação.
+        _trayIcon.BalloonTipClicked += (_, _) =>
+        {
+            RestoreFromTray();
+            if (_lastBalloonAccount is { } conta)
+                _ = SwitchAccountAsync(conta);
+        };
     }
 
     private bool IsFloatingVisible() => _floatingWindow != null && _floatingWindow.IsVisible;
@@ -1436,46 +1458,47 @@ public partial class MainWindow : Window
         if (isDefault)
             GameView = view;
 
-        CoreWebView2Environment env;
-        if (isDefault)
-        {
-            env = _webViewEnvironment
-                ?? throw new InvalidOperationException("Ambiente WebView2 padrão não inicializado.");
-        }
-        else
-        {
-            string baseDir = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "LoLIdleDesktop", "WebView2", "Contas");
-            string folder = Path.Combine(baseDir, Slugify(key));
-            Directory.CreateDirectory(folder);
-
-            var options = new CoreWebView2EnvironmentOptions
-            {
-                AdditionalBrowserArguments = AccountBrowserArguments
-            };
-            env = await CoreWebView2Environment.CreateAsync(
-                userDataFolder: folder, options: options);
-        }
-        _accountEnvs[key] = env;
-
         try
         {
+            CoreWebView2Environment env;
+            if (isDefault)
+            {
+                env = _webViewEnvironment
+                    ?? throw new InvalidOperationException("Ambiente WebView2 padrão não inicializado.");
+            }
+            else
+            {
+                string baseDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    "LoLIdleDesktop", "WebView2", "Contas");
+                string folder = Path.Combine(baseDir, Slugify(key));
+                Directory.CreateDirectory(folder);
+
+                var options = new CoreWebView2EnvironmentOptions
+                {
+                    AdditionalBrowserArguments = AccountBrowserArguments
+                };
+                env = await CoreWebView2Environment.CreateAsync(
+                    userDataFolder: folder, options: options);
+            }
+            _accountEnvs[key] = env;
+
             await view.EnsureCoreWebView2Async(env);
             await ConfigurarAccountViewAsync(view, key);
             view.Source = new Uri(GameUrl);
+
+            return view;
         }
         catch
         {
             _accountViews.Remove(key);
-            _accountViews.Remove(key); // garante remoção nas duas coleções
             _accountEnvs.Remove(key);
             AccountViewHost.Children.Remove(view);
+            if (isDefault && ReferenceEquals(GameView, view))
+                GameView = null;
             try { view.Dispose(); } catch { }
             throw;
         }
-
-        return view;
     }
 
     // Aplica a todas as contas: scripts de áudio/notificação, handlers e settings.
@@ -1562,6 +1585,7 @@ public partial class MainWindow : Window
         {
             await EnsureAccountViewAsync(key);
             _settings.ContaAtiva = key;
+            _contasNaoLidas.Remove(key);
             ApplyAccountVisibility();
             SaveWindowSettings();
 
@@ -2292,6 +2316,25 @@ public partial class MainWindow : Window
         if (_settings.NotifyTypesDisabled.Contains(kind, StringComparer.OrdinalIgnoreCase)) return;
         if (key != null && _settings.NotifyAccountsDisabled.Contains(key, StringComparer.OrdinalIgnoreCase)) return;
 
+        // Registra nas "Últimas notificações" e marca a conta como não lida quando o
+        // usuário não está vendo (outra conta na frente, ou app oculto na bandeja).
+        if (key != null)
+        {
+            // "Adiciona/atualiza": mesmo tipo de evento na mesma conta renova o horário e vai para o final (mais recente embaixo),
+            // em vez de poluir a lista com entradas idênticas.
+            _ultimasNotificacoes.RemoveAll(n =>
+                string.Equals(n.Conta, key, StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(n.Kind, kind, StringComparison.OrdinalIgnoreCase));
+            _ultimasNotificacoes.Add(new NotificacaoItem { Conta = key, Kind = kind, Quando = DateTime.Now });
+            if (_ultimasNotificacoes.Count > 4)
+                _ultimasNotificacoes.RemoveRange(0, _ultimasNotificacoes.Count - 4);
+
+            if (!string.Equals(key, _settings.ContaAtiva, StringComparison.OrdinalIgnoreCase) || _isHiddenToTray)
+                _contasNaoLidas.Add(key);
+
+            _ = AtualizarContaConectadaUIAsync();
+        }
+
         // Se mais de uma conta estiver habilitada, mostra o nome da conta no balão
         string? accountLabel = null;
         if (key != null)
@@ -2304,24 +2347,28 @@ public partial class MainWindow : Window
                 accountLabel = GetAccountDisplayName(key);
         }
 
-        PlayTrayNotification(kind, accountLabel);
+        PlayTrayNotification(kind, accountLabel, key);
     }
 
-    private void PlayTrayNotification(string kind, string? accountLabel = null)
+    // Texto/som compartilhados por tipo de notificação (balão, som e lista "Últimas notificações").
+    private static (string message, string sound) ObterTextoNotificacao(string kind) => kind switch
+    {
+        "legendary" => ("Item lendário obtido!", "Assets/notify_legendary.wav"),
+        "epic" => ("Item épico obtido!", "Assets/notify_epic.wav"),
+        "mission" => ("Missão concluída!", "Assets/notify_mission.wav"),
+        "inventory" => ("Inventário cheio!", "Assets/notify_inventory.wav"),
+        "level" => ("Subiu de nível!", "Assets/notify_level.wav"),
+        _ => ("Evento importante no jogo!", "Assets/notify_mission.wav")
+    };
+
+    private void PlayTrayNotification(string kind, string? accountLabel = null, string? accountKey = null)
     {
         if (!_settings.TrayNotify && !_settings.TrayBalloon)
             return;
 
         var title = accountLabel ?? "LoL Idle";
-        var (titleFinal, message, sound) = kind switch
-        {
-            "legendary" => (title, "Item lendário obtido!", "Assets/notify_legendary.wav"),
-            "epic" => (title, "Item épico obtido!", "Assets/notify_epic.wav"),
-            "mission" => (title, "Missão concluída!", "Assets/notify_mission.wav"),
-            "inventory" => (title, "Inventário cheio!", "Assets/notify_inventory.wav"),
-            "level" => (title, "Subiu de nível!", "Assets/notify_level.wav"),
-            _ => (title, "Evento importante no jogo!", "Assets/notify_mission.wav")
-        };
+        var (message, sound) = ObterTextoNotificacao(kind);
+        var titleFinal = title;
 
         if (_settings.TrayNotify)
         {
@@ -2354,6 +2401,7 @@ public partial class MainWindow : Window
 
         if (_settings.TrayBalloon && _trayIcon != null)
         {
+            _lastBalloonAccount = accountKey;
             try { _trayIcon.ShowBalloonTip(5000, titleFinal, message, Forms.ToolTipIcon.Info); } catch { }
         }
 
@@ -2595,8 +2643,18 @@ public partial class MainWindow : Window
         bool visible = _settings.SidebarVisible;
         double width = _settings.SidebarWidth >= 160 ? _settings.SidebarWidth : 260;
 
+        if (SidebarRailColumn != null)
+            SidebarRailColumn.Width = visible ? new GridLength(28) : new GridLength(52);
+
+        if (SidebarRailPanel != null)
+            SidebarRailPanel.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;
+
         SidebarColumn.Width = visible ? new GridLength(width) : new GridLength(0);
         SidebarPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+
+        // Ao minimizar, reconstrói a faixa de avatares da borda (e a da sidebar recolhida).
+        if (!visible && SidebarRailPanel != null)
+            RebuildContasStrip(_settings.ContaAtiva ?? DefaultAccountName);
 
         // Alterna a visibilidade dos dois ícones vetoriais
         if (SidebarToggleLeftIcon != null && SidebarToggleRightIcon != null)
@@ -2712,7 +2770,360 @@ public partial class MainWindow : Window
         }
 
         ContasCountText.Text = $"Contas: {_settings.ContasAdicionadas.Count + 1} / {MaxContas + 1}";
+
+        RebuildContasStrip(ativa);
+        RebuildUltimasNotificacoes();
         return Task.CompletedTask;
+    }
+
+    // Cria um item de avatar clicável (usado na faixa da sidebar recolhida e na faixa da borda quando minimizada).
+    private Border CriarAvatarStripItem(string conta, string display, bool destacado)
+    {
+        var verde = new SolidColorBrush(Color.FromRgb(0x2B, 0xD4, 0x6A));
+        var fundoApp = new SolidColorBrush(Color.FromRgb(0x16, 0x19, 0x22));
+        var vermelho = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
+
+        var avatar = CriarAvatarVisual(_settings, conta, display, 34, 9, 19);
+        avatar.IsHitTestVisible = false;
+
+        var grid = new Grid
+        {
+            Width = 34,
+            Height = 34,
+            IsHitTestVisible = false
+        };
+        grid.Children.Add(avatar);
+
+        if (ContaNaoLida(conta))
+        {
+            var bolinha = new System.Windows.Shapes.Ellipse
+            {
+                Width = 11,
+                Height = 11,
+                Fill = vermelho,
+                Stroke = fundoApp,
+                StrokeThickness = 2,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+                VerticalAlignment = System.Windows.VerticalAlignment.Top,
+                IsHitTestVisible = false
+            };
+            grid.Children.Add(bolinha);
+        }
+
+        var item = new Border
+        {
+            Width = 40,
+            Height = 40,
+            CornerRadius = new CornerRadius(12),
+            BorderThickness = new Thickness(2),
+            BorderBrush = destacado ? verde : Brushes.Transparent,
+            Background = Brushes.Transparent,
+            Cursor = Cursors.Hand,
+            Margin = new Thickness(0, 0, 0, 6),
+            Tag = conta,
+            ToolTip = "Trocar para " + display,
+            Child = grid
+        };
+        item.MouseLeftButtonUp += StripItem_Click;
+        return item;
+    }
+
+    // Recria a faixa vertical de avatares exibida quando a lista de contas está recolhida.
+    private void RebuildContasStrip(string ativa)
+    {
+        ContasStripPanel.Children.Clear();
+        if (SidebarRailPanel != null)
+            SidebarRailPanel.Children.Clear();
+
+        var todasContas = new List<string> { DefaultAccountName };
+        todasContas.AddRange(_settings.ContasAdicionadas);
+
+        foreach (var conta in todasContas)
+        {
+            bool destacado = string.Equals(ativa, conta, StringComparison.OrdinalIgnoreCase);
+            string display = GetAccountDisplayName(conta);
+
+            ContasStripPanel.Children.Add(CriarAvatarStripItem(conta, display, destacado));
+
+            if (SidebarRailPanel != null)
+                SidebarRailPanel.Children.Add(CriarAvatarStripItem(conta, display, destacado));
+        }
+    }
+
+    // Clique num avatar da faixa recolhida: troca para a conta (limpa a não lida dela).
+    private async void StripItem_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.Tag is string key)
+            await SwitchAccountAsync(key);
+    }
+
+    // Recria a lista "Últimas notificações" (até 4 itens, da mais antiga para a mais recente — novas aparecem embaixo).
+    private void RebuildUltimasNotificacoes()
+    {
+        NotificacoesRecentesList.Children.Clear();
+
+        if (_ultimasNotificacoes.Count == 0)
+        {
+            NotificacoesRecentesVazio.Visibility = Visibility.Visible;
+            NotificacoesRecentesTituloRow.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        NotificacoesRecentesVazio.Visibility = Visibility.Collapsed;
+        NotificacoesRecentesTituloRow.Visibility = Visibility.Visible;
+
+        var fundoApp = new SolidColorBrush(Color.FromRgb(0x16, 0x19, 0x22));
+        var vermelho = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
+
+        foreach (var item in _ultimasNotificacoes.Take(4))
+        {
+            string display = GetAccountDisplayName(item.Conta);
+            var (message, _) = ObterTextoNotificacao(item.Kind);
+            bool naoLida = ContaNaoLida(item.Conta);
+
+            var avatar = CriarAvatarVisual(_settings, item.Conta, display, 30, 8, 18);
+            avatar.IsHitTestVisible = false;
+
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.Children.Add(avatar);
+
+            var textos = new StackPanel
+            {
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0),
+                IsHitTestVisible = false
+            };
+
+            // Linha 1: nome da conta + bolinha de não lida à direita
+            var linha1 = new Grid();
+            linha1.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            linha1.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            linha1.Children.Add(new TextBlock
+            {
+                Text = display,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 11,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            });
+            if (naoLida)
+            {
+                var bolinha = new System.Windows.Shapes.Ellipse
+                {
+                    Width = 8,
+                    Height = 8,
+                    Fill = vermelho,
+                    Stroke = fundoApp,
+                    StrokeThickness = 1,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Margin = new Thickness(6, 0, 0, 0)
+                };
+                Grid.SetColumn(bolinha, 1);
+                linha1.Children.Add(bolinha);
+            }
+            textos.Children.Add(linha1);
+
+            // Linha 2: o que aconteceu
+            textos.Children.Add(new TextBlock
+            {
+                Text = message,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xA7, 0xAD, 0xBA)),
+                FontSize = 10,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                Margin = new Thickness(0, 1, 0, 0)
+            });
+
+            // Linha 3: tempo relativo
+            textos.Children.Add(new TextBlock
+            {
+                Text = FormatarTempoRelativo(item.Quando),
+                Foreground = new SolidColorBrush(Color.FromRgb(0x6E, 0x74, 0x80)),
+                FontSize = 10,
+                Margin = new Thickness(0, 1, 0, 0)
+            });
+
+            Grid.SetColumn(textos, 1);
+            grid.Children.Add(textos);
+
+            // Brush próprio por linha: permite animar só o fundo da linha clicada.
+            var fundoLinha = new SolidColorBrush(Color.FromRgb(0x1B, 0x1E, 0x27));
+
+            var linha = new Border
+            {
+                CornerRadius = new CornerRadius(10),
+                Background = fundoLinha,
+                Padding = new Thickness(8),
+                Margin = new Thickness(0, 0, 0, 6),
+                Cursor = Cursors.Hand,
+                Tag = item,
+                ToolTip = "Trocar para " + display,
+                Child = grid
+            };
+            linha.MouseLeftButtonUp += NotificacaoLinha_Click;
+            NotificacoesRecentesList.Children.Add(linha);
+        }
+    }
+
+    // Botão "Limpar" das Últimas notificações: anima o desaparecimento das linhas (fade + deslize escalonado)
+    // e só então esvazia a lista. Não mexe nas marcações de não lida (_contasNaoLidas).
+    private void LimparNotificacoes_Click(object sender, RoutedEventArgs e)
+    {
+        if (_ultimasNotificacoes.Count == 0)
+            return;
+
+        try
+        {
+            var linhas = NotificacoesRecentesList.Children.OfType<Border>().ToList();
+            if (linhas.Count == 0)
+            {
+                _ultimasNotificacoes.Clear();
+                RebuildUltimasNotificacoes();
+                return;
+            }
+
+            int ultima = linhas.Count - 1;
+            for (int i = 0; i < linhas.Count; i++)
+            {
+                var linha = linhas[i];
+                var translate = new TranslateTransform();
+                linha.RenderTransform = translate;
+
+                var beginTime = TimeSpan.FromMilliseconds(i * 45);
+                var animY = new DoubleAnimation
+                {
+                    From = 0,
+                    To = -10,
+                    Duration = TimeSpan.FromMilliseconds(180),
+                    BeginTime = beginTime,
+                    FillBehavior = FillBehavior.Stop
+                };
+                var animOpacity = new DoubleAnimation
+                {
+                    From = 1,
+                    To = 0,
+                    Duration = TimeSpan.FromMilliseconds(180),
+                    BeginTime = beginTime,
+                    FillBehavior = FillBehavior.Stop
+                };
+
+                if (i == ultima)
+                {
+                    animOpacity.Completed += (_, _) =>
+                    {
+                        _ultimasNotificacoes.Clear();
+                        RebuildUltimasNotificacoes();
+                    };
+                }
+
+                translate.BeginAnimation(TranslateTransform.YProperty, animY);
+                linha.BeginAnimation(UIElement.OpacityProperty, animOpacity);
+            }
+        }
+        catch
+        {
+            // Fallback: se a animação falhar, limpa direto.
+            _ultimasNotificacoes.Clear();
+            RebuildUltimasNotificacoes();
+        }
+    }
+
+    // Clique numa linha de "Últimas notificações": pulso rápido no fundo da linha, anima a saída
+    // (fade + deslize para cima) e só então remove o item da lista e troca para a conta.
+    private async void NotificacaoLinha_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is not Border linha || linha.Tag is not NotificacaoItem item)
+            return;
+
+        try
+        {
+            try
+            {
+                if (linha.Background is SolidColorBrush brush)
+                {
+                    var anim = new ColorAnimation
+                    {
+                        From = Color.FromRgb(0x1B, 0x1E, 0x27),
+                        To = Color.FromRgb(0x2B, 0x3A, 0x55),
+                        Duration = TimeSpan.FromMilliseconds(120),
+                        AutoReverse = true,
+                        FillBehavior = FillBehavior.Stop
+                    };
+                    brush.BeginAnimation(SolidColorBrush.ColorProperty, anim);
+                }
+            }
+            catch
+            {
+                // Se o pulso falhar, segue direto para a animação de saída.
+            }
+
+            await Task.Delay(130);
+
+            var translate = new TranslateTransform();
+            linha.RenderTransform = translate;
+
+            var animY = new DoubleAnimation
+            {
+                From = 0,
+                To = -10,
+                Duration = TimeSpan.FromMilliseconds(160),
+                FillBehavior = FillBehavior.Stop
+            };
+            var animOpacity = new DoubleAnimation
+            {
+                From = 1,
+                To = 0,
+                Duration = TimeSpan.FromMilliseconds(160),
+                FillBehavior = FillBehavior.Stop
+            };
+            animOpacity.Completed += async (_, _) =>
+            {
+                try
+                {
+                    _ultimasNotificacoes.Remove(item);
+                    RebuildUltimasNotificacoes();
+                    await SwitchAccountAsync(item.Conta);
+                }
+                catch
+                {
+                    await RemoverNotificacaoETrocarAsync(item);
+                }
+            };
+
+            translate.BeginAnimation(TranslateTransform.YProperty, animY);
+            linha.BeginAnimation(UIElement.OpacityProperty, animOpacity);
+        }
+        catch
+        {
+            // Falha em qualquer etapa: remove o item e troca de conta direto.
+            await RemoverNotificacaoETrocarAsync(item);
+        }
+    }
+
+    // Fallback direto (sem animação): remove o item, recria a lista e troca para a conta.
+    private async Task RemoverNotificacaoETrocarAsync(NotificacaoItem item)
+    {
+        try
+        {
+            _ultimasNotificacoes.Remove(item);
+            RebuildUltimasNotificacoes();
+        }
+        catch
+        {
+            // Lista pode já estar recriada/vazia; segue para a troca de conta.
+        }
+        await SwitchAccountAsync(item.Conta);
+    }
+
+    // Tempo relativo curto: "agora", "há X min", "há X h" ou "HH:mm" se mais velho que 24h.
+    private static string FormatarTempoRelativo(DateTime quando)
+    {
+        var diff = DateTime.Now - quando;
+        if (diff.TotalMinutes < 1) return "agora";
+        if (diff.TotalMinutes < 60) return $"há {(int)diff.TotalMinutes} min";
+        if (diff.TotalHours < 24) return $"há {(int)diff.TotalHours} h";
+        return quando.ToString("HH:mm");
     }
 
     // Cria um item de conta (lista vertical):
@@ -3024,6 +3435,22 @@ public partial class MainWindow : Window
         };
         avatarStack.Children.Add(avatar);
         avatarStack.Children.Add(bolinha);
+
+        // Bolinha vermelha de notificação não lida (canto SUPERIOR direito do avatar)
+        if (ContaNaoLida(conta))
+        {
+            avatarStack.Children.Add(new System.Windows.Shapes.Ellipse
+            {
+                Width = 11,
+                Height = 11,
+                Fill = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44)),
+                Stroke = new SolidColorBrush(fundoApp),
+                StrokeThickness = 2,
+                HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+                VerticalAlignment = VerticalAlignment.Top,
+                IsHitTestVisible = false
+            });
+        }
 
         // Nome + subtítulo
         var textos = new StackPanel
@@ -3762,10 +4189,36 @@ public partial class MainWindow : Window
         }
         _accountEnvs.Remove(conta);
 
-        if (string.Equals(_settings.ContaAtiva, conta, StringComparison.OrdinalIgnoreCase))
+        // Limpa SEMPRE os dados por conta no settings (independente de ser a ativa).
+        _settings.NotifyAccountsDisabled?.RemoveAll(
+            c => c.Equals(conta, StringComparison.OrdinalIgnoreCase));
+        _settings.ContasAvatarColor?.Remove(conta);
+        _settings.ContasAvatarIcon?.Remove(conta);
+        _settings.ContasAvatarImagePath?.Remove(conta);
+        _settings.ContasAvatarImageOffsets?.Remove(conta);
+
+        // Limpa o estado de notificações em memória dessa conta (não exibir conta removida).
+        _contasNaoLidas.Remove(conta);
+        _ultimasNotificacoes.RemoveAll(n => string.Equals(n.Conta, conta, StringComparison.OrdinalIgnoreCase));
+
+        bool eraAtiva = string.Equals(_settings.ContaAtiva, conta, StringComparison.OrdinalIgnoreCase);
+        if (eraAtiva)
         {
             _settings.ContaAtiva = DefaultAccountName;
+
+            // Fecha a flutuante (mesmo padrão de SwitchAccountAsync): nunca manter
+            // referência à conta removida.
+            if (_floatingWindow != null)
+            {
+                try { _floatingWindow.Close(); } catch { }
+            }
+
+            RestartPreparedFloating();
+            _lastMissionsJson = null;
+
             ApplyAccountVisibility();
+            // Contas em segundo plano voltam a ficar mudas (evita referência a áudio da conta removida).
+            _ = ApplyAudioSettingsAsync();
         }
 
         _settings.ContasAdicionadasCount = _settings.ContasAdicionadas.Count;
@@ -3773,6 +4226,8 @@ public partial class MainWindow : Window
             c => c.Equals(conta, StringComparison.OrdinalIgnoreCase));
         SaveWindowSettings();
         _ = AtualizarContaConectadaUIAsync();
+        if (eraAtiva && _accountViews.ContainsKey(DefaultAccountName))
+            _ = RefreshAccountLabelAsync(DefaultAccountName);
     }
 
     // Esconde/mostra a lista de contas (mantém o título "Contas" visível).
@@ -3781,6 +4236,8 @@ public partial class MainWindow : Window
         if (ContasListPanel == null) return;
         bool escondido = ContasListPanel.Visibility == Visibility.Collapsed;
         ContasListPanel.Visibility = escondido ? Visibility.Visible : Visibility.Collapsed;
+        if (ContasStripPanel != null)
+            ContasStripPanel.Visibility = escondido ? Visibility.Collapsed : Visibility.Visible;
         if (ContasHideButton != null)
             ContasHideButton.Content = escondido ? "Contas ▴" : "Contas ▾";
     }

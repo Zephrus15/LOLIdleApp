@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.3.6](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.3.6)**
+**[Baixar LoL Idle Desktop v1.3.7](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.3.7)**
 
 ### Instalador (quando disponível na Release)
 
@@ -138,6 +138,16 @@ artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.3.7
+- Notificações na sidebar: **bolinha vermelha de não lida** nos avatares de contas que receberam notificação e ainda não foram vistas (na lista expandida e nas faixas recolhidas/minimizadas). Some ao trocar para a conta.
+- Novo bloco **"Últimas notificações"** na parte de baixo da sidebar (modo expandido): as 4 notificações mais recentes, com nome da conta, o que aconteceu e tempo relativo ("agora", "há X min"). A mais antiga fica em cima e a nova entra por baixo.
+- **Clicar numa notificação** troca para a conta dela e ela sai da lista com animação (fade + deslize); a linha tem um pulso de fundo ao ser clicada.
+- Botão **"Limpar"** na seção: esvazia a lista com animação escalonada (não afeta as bolinhas de não lido).
+- **Clicar no balão da bandeja** agora também troca para a conta da notificação (além de restaurar a janela).
+- Com a lista de contas recolhida ("Contas ▴"), a faixa vertical mostra os avatares das contas (clique troca de conta).
+- Com a sidebar inteira minimizada, uma faixinha na borda direita mostra os avatares das contas conectadas (menores, no topo), com o botão de expandir/recolher no meio; clique no avatar troca de conta.
+- Correções de estabilidade: inicialização das contas WebView2 totalmente protegida por tratamento de exceções (falha ao criar o ambiente de uma conta desregistra só aquela conta, sem afetar as outras; sem corrida de dupla criação em clique duplo rápido); ao desmutar, o app só retoma AudioContext que ele próprio suspendeu; ao remover a conta ativa, o app troca para a principal (flutuante, missões e áudio acompanham) e limpa as preferências por conta da conta removida (o login salvo NÃO é apagado).
 
 ### v1.3.6
 - Avatares das contas: nova janela **"Editar conta"** (botão ✏️ na sidebar ou clique direto no avatar da conta, estilo Facebook) — renomear + escolher avatar.
