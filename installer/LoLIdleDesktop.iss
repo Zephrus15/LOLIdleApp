@@ -63,8 +63,8 @@ Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs 
 Source: "redist\MicrosoftEdgeWebView2Setup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall; Check: not WebView2RuntimeInstalled
 
 [Icons]
-Name: "{autoprograms}\LoL Idle Desktop"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\LoL Idle Desktop"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\LoL Idle Desktop"; Filename: "{app}\{#MyAppExeName}"; AppUserModelID: "Zephrus15.LoLIdle.Desktop"
+Name: "{autodesktop}\LoL Idle Desktop"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; AppUserModelID: "Zephrus15.LoLIdle.Desktop"
 
 [Run]
 Filename: "{tmp}\MicrosoftEdgeWebView2Setup.exe"; Parameters: "/silent /install"; StatusMsg: "Instalando o Microsoft Edge WebView2 Runtime..."; Flags: waituntilterminated; Check: not WebView2RuntimeInstalled

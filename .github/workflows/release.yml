@@ -110,13 +110,13 @@ jobs:
             "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
           ) | Where-Object { Test-Path $_ } | Select-Object -First 1
           if (-not $iscc) { throw "ISCC.exe não encontrado." }
-          & $iscc "/DMyAppVersion=$version" "/DMyAppVersion4=$version4" "/DSourceDir=$PWD\bin\Release\net8.0-windows\win-x64\publish" "/O$PWD\artifacts\installer" "installer\LoLIdleDesktop.iss"
+          & $iscc "/DMyAppVersion=$version" "/DMyAppVersion4=$version4" "/DSourceDir=$PWD\bin\Release\net8.0-windows10.0.17763.0\win-x64\publish" "/O$PWD\artifacts\installer" "installer\LoLIdleDesktop.iss"
           if ($LASTEXITCODE -ne 0) { throw "Falha ao compilar o instalador." }
 
       - name: Criar pacote ZIP
         shell: pwsh
         run: |
-          $publish = "bin/Release/net8.0-windows/win-x64/publish"
+          $publish = "bin/Release/net8.0-windows10.0.17763.0/win-x64/publish"
           if (!(Test-Path "$publish/LoL Idle.exe")) {
             throw "Executável não encontrado em $publish"
           }

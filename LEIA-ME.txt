@@ -1,4 +1,4 @@
-﻿LoL Idle Desktop - versão 1.3.9
+﻿LoL Idle Desktop - versão 1.4.0
 Aplicativo desktop não oficial para Windows
 
 O que é
@@ -48,7 +48,7 @@ Como compilar
    COMPILAR.bat
 
 5. O executável será criado em:
-   bin\Release\net8.0-windows\win-x64\publish\LoL Idle.exe
+   bin\Release\net8.0-windows10.0.17763.0\win-x64\publish\LoL Idle.exe
 
 Gerar instalador
 ----------------
@@ -59,6 +59,20 @@ Gerar instalador
 
 O instalador verifica o Microsoft Edge WebView2 Runtime e o instala
 automaticamente quando necessário.
+
+Novidades (v1.4.0)
+------------------
+- Notificações agora são toasts modernos do Windows (o balão antigo da
+  bandeja aposentado). O histórico da Central de Ações virou clicável:
+  com o app aberto ou fechado, clicar restaura a janela e troca para a
+  conta da notificação (e, se for notificação de poção, manda o
+  personagem de volta para a Fonte no modo Automático).
+- O app registra seu AppUserModelID (Zephrus15.LoLIdle.Desktop) no
+  processo e no atalho do Menu Iniciar (o instalador já cuida). Se o
+  toast não aparecer por qualquer motivo, o app cai no balão legado
+  como fallback silencioso.
+- Base do projeto agora é net8.0-windows10.0.17763.0 (Windows 10
+  1809+) para projetar as APIs WinRT de notificações.
 
 Novidades (v1.3.9)
 ------------------

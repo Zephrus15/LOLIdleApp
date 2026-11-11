@@ -1,10 +1,10 @@
 ﻿# 🗺️ Roadmap — LoL Idle Desktop
 
-> Base: **v1.3.9** · Última atualização: 2026-11-11
+> Base: **v1.4.0** · Última atualização: 2026-11-11
 > Versão web estilizada: [`ROADMAP.html`](./ROADMAP.html) — abra no navegador para visualizar como site.
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Status-8%20feitos-2ea043?style=for-the-badge" alt="feitos">
+  <img src="https://img.shields.io/badge/Status-9%20feitos-2ea043?style=for-the-badge" alt="feitos">
   <img src="https://img.shields.io/badge/Status-1%20imposs%C3%ADvel-ff4d4f?style=for-the-badge" alt="impossíveis">
   <img src="https://img.shields.io/badge/Status-1%20futuro-58a6ff?style=for-the-badge" alt="futuro">
   <img src="https://img.shields.io/badge/Status-2%20pendentes%2Fpolir-f0b429?style=for-the-badge" alt="pendentes">
@@ -18,11 +18,12 @@
 |---|---|---|
 | 📖 **Missões** | ✅ **Confirmado** | v1.2.5 / v1.2.6 |
 | 🔔 **Bandeja inteligente (sons + clique abre app e troca de conta)** | ✅ **Confirmado** | v1.2.0 → v1.3.0 / v1.3.7 / v1.3.8 |
+| 🔔 **Toasts modernos + Central de Ações clicável** | ✅ **Feito** | v1.4.0 |
 | 🎛️ **Barra lateral de contas** | ✅ **Feito** | v1.3.2 / v1.3.3 / v1.3.5 / v1.3.6 / v1.3.7 / v1.3.8 / v1.3.9 |
 | 🖼️ **Avatares das contas (3 fontes)** | ✅ **Feito** | v1.3.6 |
 | 🔴 **Sinalizações de não lida / últimas notificações na sidebar** | ✅ **Feito** | v1.3.7 / v1.3.8 / v1.3.9 |
-| 🔔 **Notificações por conta e por tipo** | ✅ **Feito** | v1.3.3 |
-| 🧪 **Poções: notificação + retorno à Fonte (modo Automático)** | ✅ **Feito** | v1.3.8 |
+| 🔔 **Notificações por conta e por tipo** | ✅ **Feito** | v1.3.3 / v1.4.0 (Toasts modernos) |
+| 🧪 **Poções: notificação + retorno à Fonte (modo Automático)** | ✅ **Feito** | v1.3.8 / v1.4.0 (Central de Ações clicável) |
 | 🧙 **Personagem (interativo)** | ❌ **Impossível** | — (jogo bloqueia 2ª sessão) |
 | 📌 **Sempre no topo persistente** | ✅ **Confirmado** | v1.2.7 |
 | 📱 **Android** | 🔵 **Futuro** | — |
@@ -165,7 +166,8 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 - [x] Sinalizações de não lida / últimas notificações na sidebar — **feito na v1.3.7**
 - [x] Poções: notificação + retorno à Fonte (modo Automático) — **feito na v1.3.8**
 - [x] Animações refinadas (sidebar e notificações: deslize lateral, fade, startup sem flash) — **feito na v1.3.9**
+- [x] Toasts modernos e Central de Ações clicável (AppUserModelId `Zephrus15.LoLIdle.Desktop`) — **feito na v1.4.0**
 
 ---
 
-<sub>Documento gerado a partir do estado atual do app (v1.3.9). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site.</sub>
+<sub>Documento gerado a partir do estado atual do app (v1.4.0). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site.</sub>

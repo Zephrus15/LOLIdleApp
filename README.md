@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.3.9](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.3.9)**
+**[Baixar LoL Idle Desktop v1.4.0](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.0)**
 
 ### Instalador (quando disponível na Release)
 
@@ -110,7 +110,7 @@ COMPILAR.bat
 O executável será gerado em:
 
 ```text
-bin\Release\net8.0-windows\win-x64\publish\LoL Idle.exe
+bin\Release\net8.0-windows10.0.17763.0\win-x64\publish\LoL Idle.exe
 ```
 
 As pastas `bin` e `obj` são geradas automaticamente durante a compilação e não precisam ser incluídas no código-fonte.
@@ -138,6 +138,13 @@ artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.4.0
+- **Toasts modernos do Windows (substitui o balão da bandeja)** — as notificações do LoL Idle agora usam **toasts nativos do Windows** (`ToastNotificationManagerCompat` via pacote `Microsoft.Toolkit.Uwp.Notifications 7.1.3`) em vez do balão antigo da bandeja:
+  - **Histórico da Central de Ações 100% clicável**: clicar numa notificação do histórico (com o app aberto ou fechado) restaura a janela, troca para a conta correspondente e, se for notificação de poções, manda o personagem de volta para a Fonte (somente no modo Automático — Summoner's Rift).
+  - **AppUserModelId Fixo**: registro automático do AUMID `Zephrus15.LoLIdle.Desktop` via `SetCurrentProcessExplicitAppUserModelID` no startup e aplicado pelo instalador no atalho do Menu Iniciar e da área de trabalho.
+  - **Fallback silencioso**: se o toast falhar (registro corrompido, Focus Assist), o app volta automaticamente a usar o balão clássico (`ShowBalloonTip`) e loga o motivo.
+  - **Base .NET atualizada**: projeto migrado para `net8.0-windows10.0.17763.0` (Windows 10 1809+) para projetar as APIs WinRT. O caminho de publish agora é `bin\Release\net8.0-windows10.0.17763.0\...`.
 
 ### v1.3.9
 - **Animações refinadas (sidebar e notificações)** — só polimento visual, nenhuma funcionalidade muda:

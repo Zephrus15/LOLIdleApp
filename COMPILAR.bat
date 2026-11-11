@@ -22,5 +22,5 @@ if errorlevel 1 (
 
 echo.
 echo Executavel pronto em:
-echo bin\Release\net8.0-windows\win-x64\publish\LoL Idle.exe
+echo bin\Release\net8.0-windows10.0.17763.0\win-x64\publish\LoL Idle.exe
 pause

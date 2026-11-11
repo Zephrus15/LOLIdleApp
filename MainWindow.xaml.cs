@@ -22,6 +22,7 @@ using System.Runtime.InteropServices;
 using System.Windows.Interop;
 using Forms = System.Windows.Forms;
 using MessageBox = System.Windows.MessageBox;
+using Microsoft.Toolkit.Uwp.Notifications;
 
 namespace LoLIdleDesktop;
 
@@ -516,6 +517,7 @@ public partial class MainWindow : Window
 
     public MainWindow()
     {
+        ToastNotificationManagerCompat.OnActivated += ToastActivated;
         InitializeComponent();
         _settingsSaveTimer = new System.Windows.Threading.DispatcherTimer
         {
@@ -814,6 +816,30 @@ public partial class MainWindow : Window
                 && k.StartsWith("potion", StringComparison.OrdinalIgnoreCase))
                 _ = VoltarParaFonteAsync(c);
         };
+    }
+
+    private void ToastActivated(ToastNotificationActivatedEventArgsCompat e)
+    {
+        try
+        {
+            var toastArgs = ToastArguments.Parse(e.Argument);
+            string? conta = null, kind = null;
+            if (toastArgs.Contains("conta")) conta = toastArgs["conta"];
+            if (toastArgs.Contains("kind"))  kind  = toastArgs["kind"];
+            // O evento roda numa thread COM fora da UI — despachar para a UI thread
+            Dispatcher.Invoke(() =>
+            {
+                RestoreFromTray();
+                if (conta != null) _ = SwitchAccountAsync(conta);
+                if (conta != null && kind != null
+                    && kind.StartsWith("potion", StringComparison.OrdinalIgnoreCase))
+                    _ = VoltarParaFonteAsync(conta);
+            });
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"ToastActivated: erro: {ex.Message}");
+        }
     }
 
     private bool IsFloatingVisible() => _floatingWindow != null && _floatingWindow.IsVisible;
@@ -2433,11 +2459,26 @@ public partial class MainWindow : Window
             }
         }
 
-        if (_settings.TrayBalloon && _trayIcon != null)
+        if (_settings.TrayBalloon)
         {
             _lastBalloonAccount = accountKey;
             _lastBalloonKind = kind;
-            try { _trayIcon.ShowBalloonTip(5000, titleFinal, message, Forms.ToolTipIcon.Info); } catch { }
+            try
+            {
+                var toastContent = new ToastContentBuilder()
+                    .AddText(titleFinal)
+                    .AddText(message)
+                    .AddArgument("conta", accountKey ?? string.Empty)
+                    .AddArgument("kind", kind)
+                    .SetToastScenario(ToastScenario.Default);
+                toastContent.Show();
+                LogFloatingWindowEvent($"Toast: {kind}");
+            }
+            catch (Exception ex)
+            {
+                LogFloatingWindowEvent($"Toast falhou ({kind}): {ex.Message} — caindo no balloon");
+                try { _trayIcon?.ShowBalloonTip(5000, titleFinal, message, Forms.ToolTipIcon.Info); } catch { }
+            }
         }
 
         if (!_isHiddenToTray)
