@@ -1,4 +1,4 @@
-﻿LoL Idle Desktop - versão 1.3.5
+﻿LoL Idle Desktop - versão 1.3.6
 Aplicativo desktop não oficial para Windows
 
 O que é
@@ -59,6 +59,39 @@ Gerar instalador
 
 O instalador verifica o Microsoft Edge WebView2 Runtime e o instala
 automaticamente quando necessário.
+
+Novidades (v1.3.6)
+------------------
+- Avatares das contas: nova janela "Editar conta" (botão ✏️ na sidebar
+  ou clique direto no avatar da conta) — renomear + escolher avatar.
+- O avatar pode ser: cor + iniciais, emoji (12 opções), imagem do PC
+  ou campeão do LoL Idle.
+- Nova aba "Campeões" no editor de avatar, ao lado de "Ícones", com os
+  12 campeões do LoL Idle: Darius, Ezreal, Lux, Yasuo, Katarina, Taric,
+  Zac, Ryze, Rengar, Shaco, Sona e Aphelios. Os ícones são os sprites
+  pixelados extraídos do próprio jogo (in-game 32x32; Rengar 38x38),
+  embutidos no app — sem depender de rede. Clicar no campeão aplica o
+  avatar na hora, sem janela de recorte; o avatar foca no rosto
+  (recorte 16x16 da cabeça, como o HUD do jogo), renderizado com
+  pixels nítidos.
+- Ao escolher uma imagem do PC, abre a janela "Alterar avatar"
+  (estilo Facebook): preview grande quadrado com bordas arredondadas,
+  arrastar com o mouse para reposicionar o recorte e slider de zoom
+  (1.0x–4.0x). Mostra uma pré-visualização do chip (como a conta vai
+  ficar na sidebar, 40x40), atualizando ao vivo a cada ajuste. Só
+  aplica ao clicar "Aplicar" ("Cancelar" descarta); o posicionamento
+  fica salvo por conta e persiste entre sessões.
+- Escolher uma cor agora apenas pinta o fundo do avatar (não apaga
+  mais o campeão/imagem escolhida — ideal para sprites transparentes).
+  Nova cor preta na grade, com borda sutil para ser visível no painel
+  escuro.
+- Clique no avatar abre o editor (antes só havia o botão ✏️);
+  bordas arredondadas em qualquer avatar; ícones de emoji agora em
+  branco; bolinha de status do chip não bloqueia mais cliques no
+  avatar; clique num emoji/cor/campeão funciona clicando em qualquer
+  parte da célula.
+- Diálogos de fechamento: cards de opção com hover destacado e
+  melhor espaçamento interno.
 
 Correções (resolução de bugs na v1.3.5)
 --------------------------------------------------------------

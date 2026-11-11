@@ -95,7 +95,7 @@
                                        Foreground="#F2F2F2"
                                        FontSize="13"
                                        FontWeight="SemiBold" />
-                            <TextBlock Text="Fecha direto para a bandeja; o jogo continua farmando" />
+                            <TextBlock Text="Fecha direto para a bandeja; o jogo continua farmando"
                                        Foreground="#9298A5"
                                        FontSize="11"
                                        TextWrapping="Wrap"

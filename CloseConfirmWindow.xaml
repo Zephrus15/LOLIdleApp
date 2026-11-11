@@ -56,10 +56,12 @@
                         Padding="12,12"
                         Cursor="Hand"
                         Margin="0,0,0,10"
-                        MouseLeftButtonDown="OptionSegundoPlano_MouseLeftButtonDown">
+                        MouseLeftButtonDown="OptionSegundoPlano_MouseLeftButtonDown"
+                        MouseEnter="CardSegundoPlano_MouseEnter"
+                        MouseLeave="CardSegundoPlano_MouseLeave">
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="60" />
+                            <ColumnDefinition Width="70" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
@@ -90,7 +92,7 @@
                                       Style="{StaticResource DarkCheckBox}"
                                       IsHitTestVisible="False"
                                       IsChecked="True"
-                                      Margin="0,0,12,0"
+                                      Margin="0,0,16,0"
                                       VerticalAlignment="Center" />
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="Continuar rodando em segundo plano"
@@ -116,10 +118,12 @@
                         CornerRadius="12"
                         Padding="12,12"
                         Cursor="Hand"
-                        MouseLeftButtonDown="OptionSair_MouseLeftButtonDown">
+                        MouseLeftButtonDown="OptionSair_MouseLeftButtonDown"
+                        MouseEnter="CardSair_MouseEnter"
+                        MouseLeave="CardSair_MouseLeave">
                     <Grid>
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="60" />
+                            <ColumnDefinition Width="70" />
                             <ColumnDefinition Width="*" />
                         </Grid.ColumnDefinitions>
 
@@ -150,7 +154,7 @@
                             <CheckBox x:Name="RadioSair"
                                       Style="{StaticResource DarkCheckBox}"
                                       IsHitTestVisible="False"
-                                      Margin="0,0,12,0"
+                                      Margin="0,0,16,0"
                                       VerticalAlignment="Center" />
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="Sair e desligar as contas"

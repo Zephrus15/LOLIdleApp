@@ -10,8 +10,11 @@ using Button = System.Windows.Controls.Button;
 using Cursors = System.Windows.Input.Cursors;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Color = System.Windows.Media.Color;
 using Brushes = System.Windows.Media.Brushes;
+using ColorConverter = System.Windows.Media.ColorConverter;
+using Image = System.Windows.Controls.Image;
 using Panel = System.Windows.Controls.Panel;
 using CheckBox = System.Windows.Controls.CheckBox;
 using System.Runtime.InteropServices;
@@ -26,7 +29,7 @@ public partial class MainWindow : Window
     private const string GameUrl = "https://lolidle.com/jogar";
     private const string GameHost = "lolidle.com";
     // Rótulo da conta padrão/principal
-    private const string DefaultAccountName = "Conta principal";
+    internal const string DefaultAccountName = "Conta principal";
 
     // Instalado antes dos scripts do jogo para acompanhar AudioContext desde sua criação.
     private const string AudioBootstrapScript = @"(() => {
@@ -452,6 +455,14 @@ public partial class MainWindow : Window
         public Dictionary<string, string> ContasNomes { get; set; } = new();
         // Chaves cujo rótulo foi escolhido manualmente (o DOM não sobrescreve)
         public List<string> ContasNomesPersonalizados { get; set; } = new();
+        // Avatar da conta: cor de fundo (hex), ícone (emoji) e caminho da imagem personalizada
+        public Dictionary<string, string> ContasAvatarColor { get; set; } = new();
+        public Dictionary<string, string> ContasAvatarIcon { get; set; } = new();
+        public Dictionary<string, string> ContasAvatarImagePath { get; set; } = new();
+        // Deslocamento do recorte da imagem do avatar ("x,y" de -1 a 1; 0 = centralizado)
+        public Dictionary<string, string> ContasAvatarImageOffsets { get; set; } = new();
+        // Zoom da imagem do avatar (multiplicador de 1.0 a 4.0 sobre a escala "fill" do recorte)
+        public double ContasAvatarImageScale { get; set; } = 1.0;
         // Notificações: master switch e filtros por conta e por tipo (vazio = todas ativas)
         public bool NotifyEnabled { get; set; } = true;
         // Chaves de contas DESATIVADAS para notificações
@@ -550,6 +561,18 @@ public partial class MainWindow : Window
                 _settings.ContasNomes = new Dictionary<string, string>();
             if (_settings.ContasNomesPersonalizados == null)
                 _settings.ContasNomesPersonalizados = new List<string>();
+            if (_settings.ContasAvatarColor == null)
+                _settings.ContasAvatarColor = new Dictionary<string, string>();
+            if (_settings.ContasAvatarIcon == null)
+                _settings.ContasAvatarIcon = new Dictionary<string, string>();
+            if (_settings.ContasAvatarImagePath == null)
+                _settings.ContasAvatarImagePath = new Dictionary<string, string>();
+            if (_settings.ContasAvatarImageOffsets == null)
+                _settings.ContasAvatarImageOffsets = new Dictionary<string, string>();
+            if (!double.IsFinite(_settings.ContasAvatarImageScale) || _settings.ContasAvatarImageScale < 1.0)
+                _settings.ContasAvatarImageScale = 1.0;
+            else if (_settings.ContasAvatarImageScale > 4.0)
+                _settings.ContasAvatarImageScale = 4.0;
             if (_settings.NotifyAccountsDisabled == null)
                 _settings.NotifyAccountsDisabled = new List<string>();
             if (_settings.NotifyTypesDisabled == null)
@@ -1035,6 +1058,13 @@ public partial class MainWindow : Window
             _preparedVoteView = null;
             preparedVote.Close();
         }
+
+        // Libera as WebViews de conta ao sair do aplicativo (as pastas de sessão NÃO são apagadas).
+        foreach (var accountView in _accountViews.Values)
+        {
+            try { accountView.Dispose(); } catch { }
+        }
+        _accountViews.Clear();
 
         if (_trayIcon != null)
         {
@@ -1640,6 +1670,14 @@ public partial class MainWindow : Window
         }
     }
 
+    // Indica se a conta tem nome editado manualmente (não deve ser sobrescrito pelo DOM).
+    private bool NomePersonalizado(string key)
+    {
+        var personalizados = _settings.ContasNomesPersonalizados;
+        return personalizados != null &&
+               personalizados.Contains(key, StringComparer.OrdinalIgnoreCase);
+    }
+
     // Após navegação/troca, lê o nome do jogador e atualiza o chip dinamicamente.
     // Se vazio (não logada), mantém o rótulo provisório ("Conta N (sem login)").
     private async Task RefreshAccountLabelAsync(string key)
@@ -1659,6 +1697,9 @@ public partial class MainWindow : Window
             if (string.IsNullOrWhiteSpace(name))
             {
                 // Deslogado/sem nome: remove o rótulo antigo -> chip volta ao provisório
+                // (nome editado manualmente é preservado)
+                if (NomePersonalizado(key))
+                    return;
                 var nomesAtual = _settings.ContasNomes;
                 if (nomesAtual != null && nomesAtual.Remove(key))
                 {
@@ -1668,6 +1709,7 @@ public partial class MainWindow : Window
                 return;
             }
             if (!_accountViews.ContainsKey(key)) return;
+            if (NomePersonalizado(key)) return; // nome editado manualmente tem prioridade sobre o DOM
 
             var nomes = _settings.ContasNomes ??= new Dictionary<string, string>();
             string? current = nomes.TryGetValue(key, out var n) ? n : null;
@@ -2596,11 +2638,11 @@ public partial class MainWindow : Window
     {
         if (_settings.ContasAdicionadas.Count >= MaxContas)
         {
-            MessageBox.Show(
-                $"Limite de {MaxContas + 1} contas atingido.",
-                "Adicionar conta",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
+            MostrarMensagemSimples(
+                "Limite de contas",
+                $"Limite de {MaxContas + 1} contas atingido. Remova uma conta existente antes de adicionar outra.",
+                "Entendi",
+                MessageKind.Warning);
             return;
         }
 
@@ -2624,21 +2666,21 @@ public partial class MainWindow : Window
             SaveWindowSettings();
             await AtualizarContaConectadaUIAsync();
             ApplyAccountVisibility();
-            MessageBox.Show(
-                "Não foi possível criar a nova conta.\n\n" + ex.Message,
-                "Adicionar conta",
-                MessageBoxButton.OK,
-                MessageBoxImage.Error);
+            MostrarMensagemSimples(
+                "Não foi possível criar",
+                $"Não foi possível criar a nova conta.\n\n{ex.Message}",
+                "Fechar",
+                MessageKind.Error);
             return;
         }
 
         await AtualizarContaConectadaUIAsync();
 
-        MessageBox.Show(
-            $"Conta criada: {key}\n\nFaça login na conta nesta aba; ela fica salva e o chip troca para o nome do jogador automaticamente.",
-            "Adicionar conta",
-            MessageBoxButton.OK,
-            MessageBoxImage.Information);
+        MostrarMensagemSimples(
+            "Conta adicionada",
+            $"Conta criada: {key}. Faça login na conta nesta aba; ela fica salva e o chip troca para o nome do jogador automaticamente.",
+            "Entendi",
+            MessageKind.Success);
     }
 
     // Lê o nome da conta logada do DOM do jogo (WebView2) tentando vários seletores.
@@ -2674,15 +2716,274 @@ public partial class MainWindow : Window
     }
 
     // Cria um item de conta (lista vertical):
+    // Calcula a posição/tamanho da imagem dentro do recorte quadrado do avatar.
+    // Escala "fill" com multiplicador de zoom (escalaMult > 1 aproxima a imagem);
+    // offset -1 = borda esquerda/superior, +1 = borda direita/inferior.
+    internal static (double Left, double Top, double Width, double Height) CalcularPosicaoAvatar(
+        double imgW, double imgH, double tamanho, double escalaMult, double offsetX, double offsetY)
+    {
+        if (imgW <= 0) imgW = 1;
+        if (imgH <= 0) imgH = 1;
+        if (tamanho <= 0) tamanho = 1;
+
+        double escala = Math.Max(tamanho / imgW, tamanho / imgH);
+        if (double.IsFinite(escalaMult) && escalaMult > 0)
+            escala *= escalaMult;
+
+        double w = imgW * escala;
+        double h = imgH * escala;
+
+        double sobraX = Math.Max(0, w - tamanho);
+        double sobraY = Math.Max(0, h - tamanho);
+        double left = -sobraX * (offsetX + 1) / 2;
+        double top = -sobraY * (offsetY + 1) / 2;
+        return (left, top, w, h);
+    }
+
+    // Cria o visual do avatar de uma conta (usado no chip e no diálogo de avatar).
+    // Prioridade: imagem do arquivo > ícone (emoji sobre a cor) > cor + iniciais > roxo padrão + iniciais.
+    internal static Border CriarAvatarVisual(
+        WindowSettings settings,
+        string conta,
+        string display,
+        double tamanho,
+        double cornerRadius,
+        double fontSizeConteudo)
+    {
+        string iniciais = display.Length >= 2
+            ? display[..2].ToUpperInvariant()
+            : display.ToUpperInvariant();
+
+        var roxoPadrao = Color.FromRgb(0x6E, 0x4F, 0xD8);
+
+        string? corHex = null;
+        settings.ContasAvatarColor?.TryGetValue(conta, out corHex);
+        Color corFundo = roxoPadrao;
+        if (!string.IsNullOrWhiteSpace(corHex))
+        {
+            try
+            {
+                if (ColorConverter.ConvertFromString(corHex) is Color parsed)
+                    corFundo = parsed;
+            }
+            catch
+            {
+                // Cor inválida no settings: cai para o roxo padrão.
+            }
+        }
+
+        string? imagePath = null;
+        settings.ContasAvatarImagePath?.TryGetValue(conta, out imagePath);
+
+        var border = new Border
+        {
+            Width = tamanho,
+            Height = tamanho,
+            MinWidth = tamanho,
+            MaxWidth = tamanho,
+            MinHeight = tamanho,
+            MaxHeight = tamanho,
+            CornerRadius = new CornerRadius(cornerRadius),
+            Background = new SolidColorBrush(corFundo),
+            ClipToBounds = true,
+            // Clip arredondado: recorta o conteúdo (imagem/canvas/texto) nos cantos,
+            // já que ClipToBounds só corta no retângulo.
+            Clip = new RectangleGeometry
+            {
+                Rect = new Rect(0, 0, tamanho, tamanho),
+                RadiusX = cornerRadius,
+                RadiusY = cornerRadius
+            },
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        if (!string.IsNullOrWhiteSpace(imagePath) && File.Exists(imagePath))
+        {
+            try
+            {
+                var bmp = new BitmapImage();
+                bmp.BeginInit();
+                bmp.CacheOption = BitmapCacheOption.OnLoad;
+                bmp.UriSource = new Uri(imagePath, UriKind.Absolute);
+                bmp.EndInit();
+                bmp.Freeze();
+
+                var (offsetX, offsetY) = LerAvatarImageOffset(settings, conta);
+
+                // Sprite de campeão (*-champion-*.png): mostra só a cabeça (região 16x16 do
+                // sprite, como o HUD do LoL Idle), preenchendo toda a área do avatar,
+                // escalada sem suavização. Offsets e escala são ignorados por completo.
+                string nomeArquivo = Path.GetFileName(imagePath);
+                bool isChampion = nomeArquivo.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+                    && nomeArquivo.Contains("-champion-", StringComparison.OrdinalIgnoreCase);
+                if (isChampion)
+                {
+                    try
+                    {
+                        int head = Math.Min(16, Math.Min(bmp.PixelWidth, bmp.PixelHeight));
+                        int x = Math.Max(0, (int)Math.Floor((bmp.PixelWidth - head) / 2.0) - 1);
+                        int y = 0;
+                        if (nomeArquivo.Contains("champion-Zac.png", StringComparison.OrdinalIgnoreCase))
+                            y = 4;
+                        else if (nomeArquivo.Contains("champion-Yasuo.png", StringComparison.OrdinalIgnoreCase))
+                            y = 3;
+                        else if (nomeArquivo.Contains("champion-Rengar.png", StringComparison.OrdinalIgnoreCase))
+                            y = 2;
+                        y = Math.Clamp(y, 0, Math.Max(0, bmp.PixelHeight - head));
+                        x = Math.Clamp(x, 0, Math.Max(0, bmp.PixelWidth - head));
+
+                        var crop = new CroppedBitmap(bmp, new Int32Rect(x, y, head, head));
+                        var headImage = new Image
+                        {
+                            Source = crop,
+                            Width = tamanho,
+                            Height = tamanho,
+                            Stretch = Stretch.Fill,
+                            IsHitTestVisible = false
+                        };
+                        RenderOptions.SetBitmapScalingMode(headImage, BitmapScalingMode.NearestNeighbor);
+                        border.Child = headImage;
+                        return border;
+                    }
+                    catch
+                    {
+                        // Fallback: sprite inteiro 1:1 centralizado (comportamento anterior).
+                        int spriteW = bmp.PixelWidth > 0 ? bmp.PixelWidth : 1;
+                        int spriteH = bmp.PixelHeight > 0 ? bmp.PixelHeight : 1;
+                        var sprite = new Image
+                        {
+                            Source = bmp,
+                            Width = spriteW,
+                            Height = spriteH,
+                            Stretch = Stretch.None,
+                            IsHitTestVisible = false
+                        };
+                        RenderOptions.SetBitmapScalingMode(sprite, BitmapScalingMode.NearestNeighbor);
+                        var spriteCanvas = new Canvas
+                        {
+                            Width = tamanho,
+                            Height = tamanho,
+                            ClipToBounds = true,
+                            IsHitTestVisible = false
+                        };
+                        Canvas.SetLeft(sprite, (tamanho - spriteW) / 2);
+                        Canvas.SetTop(sprite, (tamanho - spriteH) / 2);
+                        spriteCanvas.Children.Add(sprite);
+                        border.Child = spriteCanvas;
+                        return border;
+                    }
+                }
+
+                // Escala "fill" (com multiplicador de zoom): a imagem cobre todo o quadrado, sobra é cortada
+                double imgW = bmp.PixelWidth > 0 ? bmp.PixelWidth : 1;
+                double imgH = bmp.PixelHeight > 0 ? bmp.PixelHeight : 1;
+                var (left, top, w, h) = CalcularPosicaoAvatar(
+                    imgW, imgH, tamanho, settings.ContasAvatarImageScale, offsetX, offsetY);
+
+                var imagem = new Image
+                {
+                    Source = bmp,
+                    Width = w,
+                    Height = h,
+                    Stretch = Stretch.Fill,
+                    IsHitTestVisible = false
+                };
+                var canvas = new Canvas
+                {
+                    Width = tamanho,
+                    Height = tamanho,
+                    ClipToBounds = true,
+                    IsHitTestVisible = false
+                };
+                Canvas.SetLeft(imagem, left);
+                Canvas.SetTop(imagem, top);
+                canvas.Children.Add(imagem);
+                border.Child = canvas;
+                return border;
+            }
+            catch
+            {
+                // Imagem ilegível: cai para ícone/cor/iniciais.
+            }
+        }
+
+        string? icon = null;
+        settings.ContasAvatarIcon?.TryGetValue(conta, out icon);
+
+        bool temIcone = !string.IsNullOrWhiteSpace(icon);
+        var emojiTextBlock = new TextBlock
+        {
+            Text = temIcone ? icon : iniciais,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+            FontWeight = FontWeights.Bold,
+            FontSize = temIcone ? fontSizeConteudo : fontSizeConteudo * 0.55,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsHitTestVisible = false
+        };
+        if (temIcone)
+            emojiTextBlock.FontFamily = new System.Windows.Media.FontFamily("Segoe UI Emoji, Segoe UI, Tahoma");
+        border.Child = emojiTextBlock;
+        return border;
+    }
+
+    // Lê o deslocamento do recorte da imagem do avatar ("x,y" de -1 a 1; 0 = centralizado).
+    internal static (double X, double Y) LerAvatarImageOffset(WindowSettings settings, string conta)
+    {
+        double offsetX = 0, offsetY = 0;
+        if (settings.ContasAvatarImageOffsets != null &&
+            settings.ContasAvatarImageOffsets.TryGetValue(conta, out var offStored))
+        {
+            var partes = (offStored ?? string.Empty).Split(',');
+            if (partes.Length == 2 &&
+                double.TryParse(partes[0], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var ox) &&
+                double.TryParse(partes[1], System.Globalization.NumberStyles.Float,
+                    System.Globalization.CultureInfo.InvariantCulture, out var oy))
+            {
+                offsetX = Math.Clamp(ox, -1, 1);
+                offsetY = Math.Clamp(oy, -1, 1);
+            }
+        }
+        return (offsetX, offsetY);
+    }
+
+    // Salva (ou remove, quando ~zero) o deslocamento do recorte da imagem do avatar.
+    internal static void SalvarAvatarImageOffset(WindowSettings settings, string conta, double offsetX, double offsetY)
+    {
+        offsetX = Math.Clamp(offsetX, -1, 1);
+        offsetY = Math.Clamp(offsetY, -1, 1);
+        settings.ContasAvatarImageOffsets ??= new Dictionary<string, string>();
+
+        if (Math.Abs(offsetX) < 0.001 && Math.Abs(offsetY) < 0.001)
+            settings.ContasAvatarImageOffsets.Remove(conta);
+        else
+            settings.ContasAvatarImageOffsets[conta] = string.Format(
+                System.Globalization.CultureInfo.InvariantCulture, "{0:0.###},{1:0.###}", offsetX, offsetY);
+    }
+
+    // Chave de arquivo segura para a conta (usada ao copiar o avatar para a pasta Avatars).
+    internal static string AvatarSlug(string conta)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (char ch in conta.ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(ch) || ch == '-' || ch == '_')
+                sb.Append(ch);
+            else if (sb.Length > 0 && sb[^1] != '-')
+                sb.Append('-');
+        }
+
+        var slug = sb.ToString().Trim('-');
+        return slug.Length == 0 ? "conta" : slug;
+    }
+
     // avatar quadrado com as iniciais, bolinha de status (verde = na frente, azul = fora),
-    // nome + subtítulo, ✏️ renomear e × remover (somente contas extras).
+    // nome + subtítulo, ✏️ editar (nome + avatar) e × remover (somente contas extras).
     private Border CriarChip(string conta, bool destacado = false)
     {
         bool isDefault = string.Equals(conta, DefaultAccountName, StringComparison.OrdinalIgnoreCase);
         string display = GetAccountDisplayName(conta);
-        string iniciais = display.Length >= 2
-            ? display[..2].ToUpperInvariant()
-            : display.ToUpperInvariant();
 
         // Paleta de destaque
         var bgItem = new SolidColorBrush(Color.FromRgb(0x1F, 0x22, 0x2B));
@@ -2693,24 +2994,13 @@ public partial class MainWindow : Window
         var azul = Color.FromRgb(0x3B, 0x9B, 0xFF);
         var fundoApp = Color.FromRgb(0x16, 0x19, 0x22);
 
-        // Avatar quadrado com iniciais
-        var avatar = new Border
-        {
-            Width = 40,
-            Height = 40,
-            CornerRadius = new CornerRadius(10),
-            Background = new SolidColorBrush(Color.FromRgb(0x6E, 0x4F, 0xD8)),
-            VerticalAlignment = VerticalAlignment.Center,
-            Child = new TextBlock
-            {
-                Text = iniciais,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
-                FontWeight = FontWeights.Bold,
-                FontSize = 14,
-                HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center
-            }
-        };
+        // Avatar quadrado (imagem > ícone > cor > padrão)
+        // Tag "avatar": clique no avatar abre o editor de conta (estilo Facebook),
+        // tratado em Chip_Click via IsInsideAvatar.
+        var avatar = CriarAvatarVisual(_settings, conta, display, 40, 10, 24);
+        avatar.Tag = "avatar";
+        avatar.Cursor = Cursors.Hand;
+        avatar.ToolTip = "Editar conta";
 
         // Bolinha de status (canto inferior do avatar)
         var bolinha = new System.Windows.Shapes.Ellipse
@@ -2722,7 +3012,8 @@ public partial class MainWindow : Window
             StrokeThickness = 2,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Bottom,
-            Margin = new Thickness(29, 0, 0, 0)
+            Margin = new Thickness(29, 0, 0, 0),
+            IsHitTestVisible = false
         };
 
         var avatarStack = new Grid
@@ -2758,7 +3049,7 @@ public partial class MainWindow : Window
             Margin = new Thickness(0, 1, 0, 0)
         });
 
-        // Coluna de botões à direita (renomear + remover)
+        // Coluna de botões à direita (editar + remover)
         var botoes = new StackPanel
         {
             Orientation = System.Windows.Controls.Orientation.Horizontal,
@@ -2766,16 +3057,19 @@ public partial class MainWindow : Window
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right
         };
 
-        // Botão ✏️ para renomear (todas as contas)
-        var btnRenomear = new Button
+        // Botão ✏️ para abrir o editor de conta (renomear + avatar)
+        var btnEditar = new Button
         {
             Content = "✏️",
+            ToolTip = "Editar conta",
+            Style = (Style)System.Windows.Application.Current.Resources["GhostIconButton"],
             VerticalAlignment = VerticalAlignment.Center,
-            ToolTip = "Renomear conta",
-            Style = (Style)System.Windows.Application.Current.Resources["GhostIconButton"]
+            FontSize = 13,
+            Width = 28,
+            Height = 28
         };
-        btnRenomear.Click += (s, e) => RenomearConta(conta);
-        botoes.Children.Add(btnRenomear);
+        btnEditar.Click += (s, e) => EditarConta(conta);
+        botoes.Children.Add(btnEditar);
 
         // Botão × para remover (a conta padrão não pode ser removida)
         if (!isDefault)
@@ -2822,12 +3116,41 @@ public partial class MainWindow : Window
     }
 
     // Alterna para a conta quando o usuário clica no item da lista.
+    // Clique sobre o avatar abre o editor de conta (estilo Facebook) em vez de trocar.
     private async void Chip_Click(object sender, MouseButtonEventArgs e)
     {
+        if (sender is FrameworkElement fe && fe.Tag is string key &&
+            e.OriginalSource is DependencyObject src && IsInsideAvatar(src))
+        {
+            EditarConta(key);
+            return;
+        }
         if (IsInsideButton(e.OriginalSource as DependencyObject))
             return; // clique no × ou ✏️, não troca de conta
-        if (sender is FrameworkElement fe && fe.Tag is string key)
-            await SwitchAccountAsync(key);
+        if (sender is FrameworkElement fe2 && fe2.Tag is string k)
+            await SwitchAccountAsync(k);
+    }
+
+    // Verdadeiro se a origem do clique está dentro do Border do avatar do chip (Tag == "avatar").
+    private static bool IsInsideAvatar(DependencyObject? element)
+    {
+        while (element != null)
+        {
+            if (element is Border b && b.Tag is string s && s == "avatar")
+                return true;
+
+            if (element is System.Windows.Media.Visual ||
+                element is System.Windows.Media.Media3D.Visual3D)
+            {
+                element = System.Windows.Media.VisualTreeHelper.GetParent(element);
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        return false;
     }
 
     // Mostra um prompt simples em código (sem biblioteca externa).
@@ -3216,25 +3539,190 @@ public partial class MainWindow : Window
         return janela.ShowDialog() == true;
     }
 
-    // Renomeia uma conta (o rótulo escolhido tem prioridade sobre o nome lido do DOM).
-    private void RenomearConta(string conta)
+    // Tipo do ícone/cor usado pelo diálogo simples de mensagem.
+    private enum MessageKind { Info, Warning, Error, Success }
+
+    // Diálogo simples de mensagem (estilo do app): ícone + texto + botão único.
+    private void MostrarMensagemSimples(string titulo, string mensagem, string textoBotao, MessageKind kind)
     {
-        string atual = GetAccountDisplayName(conta);
-        string? novo = MostrarPrompt(
-            "Renomear conta",
-            "Novo nome para a conta:",
-            atual);
-        if (novo == null) return;           // cancelou
-        novo = novo.Trim();
-        if (string.IsNullOrWhiteSpace(novo)) return;
+        var janela = new Window
+        {
+            Title = titulo,
+            Width = 440,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            ResizeMode = ResizeMode.NoResize,
+            WindowStyle = WindowStyle.None,
+            AllowsTransparency = true,
+            Background = new SolidColorBrush(Colors.Transparent),
+            ShowInTaskbar = false,
+            Owner = System.Windows.Application.Current.MainWindow
+        };
 
-        _settings.ContasNomes ??= new Dictionary<string, string>();
-        _settings.ContasNomes[conta] = novo;
+        var moldura = new Border
+        {
+            CornerRadius = new CornerRadius(14),
+            Background = new SolidColorBrush(Color.FromRgb(0x16, 0x19, 0x22)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x2F, 0x35, 0x40)),
+            BorderThickness = new Thickness(1)
+        };
 
-        var personalizados = _settings.ContasNomesPersonalizados ??= new List<string>();
-        if (!personalizados.Contains(conta, StringComparer.OrdinalIgnoreCase))
-            personalizados.Add(conta);
+        var stack = new StackPanel();
 
+        // Cabeçalho
+        var header = new Border
+        {
+            Padding = new Thickness(18, 10, 10, 10),
+            Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x21, 0x2B)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x22, 0x26, 0x2F)),
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            CornerRadius = new CornerRadius(14, 14, 0, 0)
+        };
+
+        var headerGrid = new Grid();
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        headerGrid.Children.Add(new TextBlock
+        {
+            Text = titulo,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+            FontSize = 14,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+
+        var btnFechar = new Button
+        {
+            Content = "✕",
+            Width = 30,
+            Height = 30,
+            ToolTip = "Fechar",
+            Style = (Style)System.Windows.Application.Current.Resources["GhostIconButton"]
+        };
+        btnFechar.Click += (s, e) => janela.DialogResult = true;
+        Grid.SetColumn(btnFechar, 1);
+        headerGrid.Children.Add(btnFechar);
+        header.Child = headerGrid;
+        stack.Children.Add(header);
+
+        // Ícone (círculo desenhado) + mensagem
+        var (fundoIcone, corIcone, geometria) = kind switch
+        {
+            MessageKind.Success => (Color.FromRgb(0x16, 0x38, 0x2A), Color.FromRgb(0x2B, 0xD4, 0x6A), "M 5.5 12.5 L 10 17 L 18.5 7.5"),
+            MessageKind.Warning => (Color.FromRgb(0x3E, 0x2C, 0x17), Color.FromRgb(0xE0, 0xA1, 0x3B), "M 12 6.5 L 12 13.2 M 12 16.0 L 12 17.2"),
+            MessageKind.Error   => (Color.FromRgb(0x40, 0x24, 0x1F), Color.FromRgb(0xE0, 0x5B, 0x4B), "M 7 7 L 17 17 M 17 7 L 7 17"),
+            _                   => (Color.FromRgb(0x1F, 0x2A, 0x40), Color.FromRgb(0x3B, 0x9B, 0xFF), "M 12 10.8 L 12 17 M 12 6.4 L 12 7.6"),
+        };
+
+        var corpo = new StackPanel
+        {
+            Orientation = System.Windows.Controls.Orientation.Horizontal,
+            Margin = new Thickness(20, 18, 20, 16)
+        };
+
+        corpo.Children.Add(new Border
+        {
+            Width = 46,
+            Height = 46,
+            CornerRadius = new CornerRadius(23),
+            Background = new SolidColorBrush(fundoIcone),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse(geometria),
+                Stroke = new SolidColorBrush(corIcone),
+                StrokeThickness = 2,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                StrokeLineJoin = PenLineJoin.Round,
+                Width = 24,
+                Height = 24,
+                Stretch = Stretch.Uniform
+            }
+        });
+
+        corpo.Children.Add(new TextBlock
+        {
+            Text = mensagem,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+            FontSize = 13,
+            TextWrapping = TextWrapping.Wrap,
+            VerticalAlignment = VerticalAlignment.Center,
+            MaxWidth = 330,
+            Margin = new Thickness(14, 0, 0, 0)
+        });
+
+        stack.Children.Add(corpo);
+
+        // Rodapé com botão único (verde; vermelho no caso de erro)
+        var rodape = new Border
+        {
+            Padding = new Thickness(14, 12, 14, 12),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x22, 0x26, 0x2F)),
+            BorderThickness = new Thickness(0, 1, 0, 0)
+        };
+
+        ControlTemplate CriarTemplateArredondado(System.Windows.Media.Brush fundo, System.Windows.Media.Brush fundoHover, double raio)
+        {
+            var template = new ControlTemplate(typeof(Button));
+            var borderFactory = new FrameworkElementFactory(typeof(Border), "BorderRoot");
+            borderFactory.SetValue(Border.CornerRadiusProperty, new CornerRadius(raio));
+            borderFactory.SetValue(Border.BackgroundProperty, fundo);
+            borderFactory.SetValue(Border.PaddingProperty, new Thickness(6));
+
+            var presenterFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.ContentPresenter));
+            presenterFactory.SetValue(HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
+            presenterFactory.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
+            borderFactory.AppendChild(presenterFactory);
+            template.VisualTree = borderFactory;
+
+            var trigger = new Trigger { Property = Button.IsMouseOverProperty, Value = true };
+            trigger.Setters.Add(new Setter(Border.BackgroundProperty, fundoHover, "BorderRoot"));
+            template.Triggers.Add(trigger);
+            return template;
+        }
+
+        bool erro = kind == MessageKind.Error;
+        var btnAcao = new Button
+        {
+            Content = textoBotao,
+            Width = 110,
+            Height = 36,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Foreground = new SolidColorBrush(erro ? Colors.White : Color.FromRgb(0x0A, 0x2E, 0x19)),
+            BorderThickness = new Thickness(0),
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Cursor = Cursors.Hand,
+            Template = CriarTemplateArredondado(
+                new SolidColorBrush(erro ? Color.FromRgb(0xE0, 0x5B, 0x4B) : Color.FromRgb(0x2B, 0xD4, 0x6A)),
+                new SolidColorBrush(erro ? Color.FromRgb(0xF2, 0x6F, 0x5E) : Color.FromRgb(0x36, 0xE6, 0x7D)),
+                9)
+        };
+        btnAcao.Click += (s, e) => janela.DialogResult = true;
+        rodape.Child = btnAcao;
+        stack.Children.Add(rodape);
+
+        moldura.Child = stack;
+        janela.Content = moldura;
+
+        janela.MouseLeftButtonDown += (s, e) =>
+        {
+            if (e.LeftButton == MouseButtonState.Pressed &&
+                e.OriginalSource is not Button &&
+                e.OriginalSource is not System.Windows.Controls.Primitives.ButtonBase)
+                janela.DragMove();
+        };
+
+        janela.ShowDialog();
+    }
+
+    // Abre o diálogo de edição de conta (nome + avatar).
+    private void EditarConta(string conta)
+    {
+        var janela = new AccountEditorWindow(_settings, conta, SaveWindowSettings, this);
+        _ = janela.ShowDialog();
         SaveWindowSettings();
         _ = AtualizarContaConectadaUIAsync();
     }

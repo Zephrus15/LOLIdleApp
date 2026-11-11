@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.3.5](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.3.5)**
+**[Baixar LoL Idle Desktop v1.3.6](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.3.6)**
 
 ### Instalador (quando disponível na Release)
 
@@ -138,6 +138,15 @@ artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.3.6
+- Avatares das contas: nova janela **"Editar conta"** (botão ✏️ na sidebar ou clique direto no avatar da conta, estilo Facebook) — renomear + escolher avatar.
+- O avatar pode ser **cor + iniciais**, **emoji** (12 opções), **imagem do PC** ou **campeão do LoL Idle**.
+- Nova aba **"Campeões"** no editor de avatar, ao lado de "Ícones", com os 12 campeões do LoL Idle: Darius, Ezreal, Lux, Yasuo, Katarina, Taric, Zac, Ryze, Rengar, Shaco, Sona e Aphelios. Os ícones são os sprites pixelados extraídos do próprio jogo (in-game 32×32; Rengar 38×38), embutidos no app — sem depender de rede. Clicar no campeão aplica o avatar na hora, sem janela de recorte; o avatar foca no rosto (recorte 16×16 da cabeça, igual ao HUD do jogo), renderizado com pixels nítidos.
+- Ao escolher uma imagem do PC, abre a janela **"Alterar avatar"** (estilo Facebook): preview grande quadrado com bordas arredondadas, **arrastar com o mouse** para reposicionar o recorte e **slider de zoom** (1.0x–4.0x). Mostra uma pré-visualização do chip (como a conta vai ficar na sidebar, 40×40), atualizando ao vivo a cada ajuste. Só aplica ao clicar **"Aplicar"** ("Cancelar" descarta); o posicionamento fica salvo por conta e persiste entre sessões.
+- Escolher uma **cor agora apenas pinta o fundo** do avatar (não apaga mais o campeão/imagem escolhida — ideal para sprites transparentes). Nova **cor preta** na grade, com borda sutil para ser visível no painel escuro.
+- Clique no avatar abre o editor (antes só havia o botão ✏️); **bordas arredondadas em qualquer avatar**; ícones de emoji agora em branco; bolinha de status do chip não bloqueia mais cliques no avatar; clique num emoji/cor/campeão funciona clicando em qualquer parte da célula.
+- Diálogos de fechamento: cards de opção com hover destacado e melhor espaçamento interno.
 
 ### v1.3.5
 - Diálogo fechar restaurado: clicar no botão fechar abre novamente o diálogo "Fechar o LoL Idle?" (Continuar em segundo plano / Sair e desligar as contas) com opção "Lembrar minha escolha".

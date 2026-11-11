@@ -42,18 +42,41 @@ namespace LoLIdleDesktop
             };
         }
 
+        private bool _hoverSegundoPlano, _hoverSair;
+
+        private void AtualizarCardSegundoPlano()
+        {
+            bool sel = _result.Selected == 1;
+            bool hover = _hoverSegundoPlano;
+            System.Windows.Media.Color border = sel ? (hover ? System.Windows.Media.Color.FromRgb(0x2B, 0xB5, 0x5C) : VerdeAtivo)
+                                                    : (hover ? System.Windows.Media.Color.FromRgb(0x3A, 0x42, 0x52) : CinzaInativo);
+            System.Windows.Media.Color bg = sel ? (hover ? System.Windows.Media.Color.FromRgb(0x1E, 0x33, 0x2A) : System.Windows.Media.Color.FromRgb(0x17, 0x29, 0x2A))
+                                                : (hover ? System.Windows.Media.Color.FromRgb(0x22, 0x26, 0x31) : System.Windows.Media.Color.FromRgb(0x1B, 0x1E, 0x27));
+
+            OptionSegundoPlano.BorderBrush = new System.Windows.Media.SolidColorBrush(border);
+            OptionSegundoPlano.BorderThickness = new Thickness(sel ? 1.5 : 1);
+            OptionSegundoPlano.Background = new System.Windows.Media.SolidColorBrush(bg);
+        }
+
+        private void AtualizarCardSair()
+        {
+            bool sel = _result.Selected == 2;
+            bool hover = _hoverSair;
+            System.Windows.Media.Color border = sel ? (hover ? System.Windows.Media.Color.FromRgb(0xF0, 0x6D, 0x5E) : System.Windows.Media.Color.FromRgb(0xE0, 0x5B, 0x4B))
+                                                    : (hover ? System.Windows.Media.Color.FromRgb(0x3A, 0x42, 0x52) : CinzaInativo);
+            System.Windows.Media.Color bg = sel ? (hover ? System.Windows.Media.Color.FromRgb(0x31, 0x24, 0x28) : System.Windows.Media.Color.FromRgb(0x26, 0x1C, 0x20))
+                                                : (hover ? System.Windows.Media.Color.FromRgb(0x22, 0x26, 0x31) : System.Windows.Media.Color.FromRgb(0x1B, 0x1E, 0x27));
+
+            OptionSair.BorderBrush = new System.Windows.Media.SolidColorBrush(border);
+            OptionSair.BorderThickness = new Thickness(sel ? 1.5 : 1);
+            OptionSair.Background = new System.Windows.Media.SolidColorBrush(bg);
+        }
+
         private void SelecionarSegundoPlano()
         {
             _result.Selected = 1;
-            OptionSegundoPlano.BorderBrush = new System.Windows.Media.SolidColorBrush(VerdeAtivo);
-            OptionSegundoPlano.BorderThickness = new Thickness(1.5);
-            OptionSegundoPlano.Background = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(0x17, 0x29, 0x2A));
-
-            OptionSair.BorderBrush = new System.Windows.Media.SolidColorBrush(CinzaInativo);
-            OptionSair.BorderThickness = new Thickness(1);
-            OptionSair.Background = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(0x1B, 0x1E, 0x27));
+            AtualizarCardSegundoPlano();
+            AtualizarCardSair();
 
             RadioSegundoPlano.IsChecked = true;
             RadioSair.IsChecked = false;
@@ -68,16 +91,8 @@ namespace LoLIdleDesktop
         private void SelecionarSair()
         {
             _result.Selected = 2;
-            OptionSair.BorderBrush = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(0xE0, 0x5B, 0x4B));
-            OptionSair.BorderThickness = new Thickness(1.5);
-            OptionSair.Background = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(0x26, 0x1C, 0x20));
-
-            OptionSegundoPlano.BorderBrush = new System.Windows.Media.SolidColorBrush(CinzaInativo);
-            OptionSegundoPlano.BorderThickness = new Thickness(1);
-            OptionSegundoPlano.Background = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(0x1B, 0x1E, 0x27));
+            AtualizarCardSegundoPlano();
+            AtualizarCardSair();
 
             RadioSegundoPlano.IsChecked = false;
             RadioSair.IsChecked = true;
@@ -87,6 +102,30 @@ namespace LoLIdleDesktop
                 System.Windows.Media.Color.FromRgb(0xE0, 0x5B, 0x4B));
             ConfirmButton.Foreground = new System.Windows.Media.SolidColorBrush(
                 System.Windows.Media.Color.FromRgb(0x2E, 0x0E, 0x0A));
+        }
+
+        private void CardSegundoPlano_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            _hoverSegundoPlano = true;
+            AtualizarCardSegundoPlano();
+        }
+
+        private void CardSegundoPlano_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            _hoverSegundoPlano = false;
+            AtualizarCardSegundoPlano();
+        }
+
+        private void CardSair_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            _hoverSair = true;
+            AtualizarCardSair();
+        }
+
+        private void CardSair_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
+        {
+            _hoverSair = false;
+            AtualizarCardSair();
         }
 
         private void OptionSegundoPlano_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) =>
