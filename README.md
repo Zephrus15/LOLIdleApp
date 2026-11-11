@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.4.0](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.0)**
+**[Baixar LoL Idle Desktop v1.4.1](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.1)**
 
 ### Instalador (quando disponível na Release)
 
@@ -138,6 +138,9 @@ artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.4.1
+- Ajuste de experiência: o botão **"Limpar"** na seção **"Últimas notificações"** agora esvazia a lista **e também remove as bolinhas vermelhas de não lida** de todas as contas (lista expandida, faixa recolhida e barra minimizada) — antes, Limpar só esvaziava a lista e as bolinhas continuavam.
 
 ### v1.4.0
 - **Toasts modernos do Windows (substitui o balão da bandeja)** — as notificações do LoL Idle agora usam **toasts nativos do Windows** (`ToastNotificationManagerCompat` via pacote `Microsoft.Toolkit.Uwp.Notifications 7.1.3`) em vez do balão antigo da bandeja:

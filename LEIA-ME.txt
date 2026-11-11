@@ -1,4 +1,4 @@
-﻿LoL Idle Desktop - versão 1.4.0
+﻿LoL Idle Desktop - versão 1.4.1
 Aplicativo desktop não oficial para Windows
 
 O que é
@@ -59,6 +59,11 @@ Gerar instalador
 
 O instalador verifica o Microsoft Edge WebView2 Runtime e o instala
 automaticamente quando necessário.
+
+Novidades (v1.4.1)
+------------------
+- O botão "Limpar" da seção "Últimas notificações" agora esvazia a
+  lista E remove as bolinhas vermelhas de não lida de todas as contas.
 
 Novidades (v1.4.0)
 ------------------

@@ -3135,10 +3135,11 @@ public partial class MainWindow : Window
     }
 
     // Botão "Limpar" das Últimas notificações: anima o desaparecimento das linhas (fade + deslize para a direita, escalonado)
-    // e só então esvazia a lista. Não mexe nas marcações de não lida (_contasNaoLidas).
+    // e só então esvazia a lista. Também marca todas as contas como lidas (_contasNaoLidas) e atualiza a sidebar
+    // (chips/faixas/minimizada) para sumir com as bolinhas de não lido.
     private void LimparNotificacoes_Click(object sender, RoutedEventArgs e)
     {
-        if (_ultimasNotificacoes.Count == 0)
+        if (_ultimasNotificacoes.Count == 0 && _contasNaoLidas.Count == 0)
             return;
 
         try
@@ -3148,6 +3149,8 @@ public partial class MainWindow : Window
             {
                 _ultimasNotificacoes.Clear();
                 RebuildUltimasNotificacoes();
+                _contasNaoLidas.Clear();
+                _ = AtualizarContaConectadaUIAsync(); // fire-and-forget: recria chips/faixas sem as bolinhas
                 return;
             }
 
@@ -3182,6 +3185,8 @@ public partial class MainWindow : Window
                     {
                         _ultimasNotificacoes.Clear();
                         RebuildUltimasNotificacoes();
+                        _contasNaoLidas.Clear();
+                        _ = AtualizarContaConectadaUIAsync(); // fire-and-forget: recria chips/faixas sem as bolinhas
                     };
                 }
 
@@ -3194,6 +3199,8 @@ public partial class MainWindow : Window
             // Fallback: se a animação falhar, limpa direto.
             _ultimasNotificacoes.Clear();
             RebuildUltimasNotificacoes();
+            _contasNaoLidas.Clear();
+            _ = AtualizarContaConectadaUIAsync(); // fire-and-forget: recria chips/faixas sem as bolinhas
         }
     }
 
