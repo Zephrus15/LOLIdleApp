@@ -22,7 +22,8 @@ namespace LoLIdleDesktop
             new("epic", "Item épico"),
             new("mission", "Missão concluída"),
             new("inventory", "Inventário cheio"),
-            new("level", "Subiu de nível")
+            new("level", "Subiu de nível"),
+            new("potion", "Poções de HP ou MP acabaram")
         };
 
         public NotifySettingsWindow(MainWindow.WindowSettings settings,

@@ -97,7 +97,6 @@
                     BorderBrush="#22262F"
                     BorderThickness="0 1 0 0">
                 <Grid>
-                    <!-- Rodapé: apenas o botão Concluído (à direita) -->
                     <Button x:Name="DoneButton"
                             Content="Concluído"
                             HorizontalAlignment="Right"

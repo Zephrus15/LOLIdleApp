@@ -525,10 +525,12 @@ namespace LoLIdleDesktop
             string? imagePath = null;
             _settings.ContasAvatarImagePath?.TryGetValue(_accountKey, out imagePath);
             bool temImagem = !string.IsNullOrWhiteSpace(imagePath) && File.Exists(imagePath);
+            bool ehCampeao = temImagem &&
+                Path.GetFileName(imagePath!).Contains("-champion-", StringComparison.OrdinalIgnoreCase);
             ImageHint.Text = temImagem
                 ? Path.GetFileName(imagePath)
                 : "Nenhuma imagem escolhida";
-            ImageOffsetPanel.Visibility = temImagem ? Visibility.Visible : Visibility.Collapsed;
+            ImageOffsetPanel.Visibility = (temImagem && !ehCampeao) ? Visibility.Visible : Visibility.Collapsed;
 
             // Destaque do campeão selecionado (quando o avatar salvo é uma cópia "-champion-")
             string slug = MainWindow.AvatarSlug(_accountKey);

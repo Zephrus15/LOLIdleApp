@@ -195,8 +195,31 @@ public partial class MainWindow : Window
         window.__lolIdleTrayNotifyInstalled = true;
         const missionRe = /(miss[aã]o.*(conclu|complet)|mission.*(complete|conclu)|quest.*(complete|conclu)|conclu.*miss[aã]o|tarefa.*(conclu|complet))/i;
         const inventoryRe = /(mochila.*chei|invent[áa]rio.*(cheio|lotado|cheia)|inventory.*(full|lotado)|bolsa.*(cheia|lotada)|sem espa[cç]o|no space|not enough space|bag.*full)/i;
-        const last = { legendary: 0, epic: 0, mission: 0, inventory: 0, level: 0 };
+        const last = { legendary: 0, epic: 0, mission: 0, inventory: 0, level: 0, potion_hp: 0, potion_mana: 0 };
         let prevLevel = null;
+        const POCOES_FAM = {
+            potion_hp: ['vida', 'vidaF', 'vidaS'],
+            potion_mana: ['mana', 'manaF']
+        };
+        const somaPocao = (ids) => {
+            let s = 0;
+            for (const id of ids) {
+                const b = document.querySelector('#hud-pocoes .hud-pocao[data-pocao=' + id + '] b');
+                s += b ? (parseInt(b.textContent, 10) || 0) : 0;
+            }
+            return s;
+        };
+        let prevFamilias = { potion_hp: null, potion_mana: null };
+        const checkPocoes = () => {
+            try {
+                for (const kind of Object.keys(POCOES_FAM)) {
+                    const cur = somaPocao(POCOES_FAM[kind]);
+                    if (prevFamilias[kind] === null) { prevFamilias[kind] = cur; continue; }
+                    if (prevFamilias[kind] > 0 && cur === 0) send(kind);
+                    prevFamilias[kind] = cur;
+                }
+            } catch (_) {}
+        };
         const send = (kind) => {
             const now = Date.now();
             if (now - last[kind] < 3000) return;
@@ -278,6 +301,7 @@ public partial class MainWindow : Window
                         }
                     }
                 }
+                checkPocoes();
                 checkBolsa();
                 // Também checa mudança direta do #hud-nivel via childList (texto substituído)
                 for (const n of m.addedNodes || []) {
@@ -292,6 +316,7 @@ public partial class MainWindow : Window
         const start = () => {
             if (!document.body) { setTimeout(start, 500); return; }
             observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+            setTimeout(checkPocoes, 800);
         };
         if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
         else start();
@@ -299,6 +324,7 @@ public partial class MainWindow : Window
 
     private Forms.NotifyIcon? _trayIcon;
     private string? _lastBalloonAccount;
+    private string? _lastBalloonKind;
     private Forms.ToolStripMenuItem? _trayTrayMuteItem;
     private bool _floatingOpened;
     private bool _allowExit;
@@ -783,6 +809,10 @@ public partial class MainWindow : Window
             RestoreFromTray();
             if (_lastBalloonAccount is { } conta)
                 _ = SwitchAccountAsync(conta);
+            // Clique no balão de poção manda o personagem de volta para a fonte
+            if (_lastBalloonAccount is { } c && _lastBalloonKind is { } k
+                && k.StartsWith("potion", StringComparison.OrdinalIgnoreCase))
+                _ = VoltarParaFonteAsync(c);
         };
     }
 
@@ -2313,7 +2343,9 @@ public partial class MainWindow : Window
     private void HandleNotification(string? key, string kind)
     {
         if (!_settings.NotifyEnabled) return;
-        if (_settings.NotifyTypesDisabled.Contains(kind, StringComparer.OrdinalIgnoreCase)) return;
+        // kind é string não-anulável aqui; "potion_hp"/"potion_mana" caem no toggle único "potion".
+        string disabledKey = kind.StartsWith("potion", StringComparison.OrdinalIgnoreCase) ? "potion" : kind;
+        if (_settings.NotifyTypesDisabled.Contains(disabledKey, StringComparer.OrdinalIgnoreCase)) return;
         if (key != null && _settings.NotifyAccountsDisabled.Contains(key, StringComparer.OrdinalIgnoreCase)) return;
 
         // Registra nas "Últimas notificações" e marca a conta como não lida quando o
@@ -2358,6 +2390,8 @@ public partial class MainWindow : Window
         "mission" => ("Missão concluída!", "Assets/notify_mission.wav"),
         "inventory" => ("Inventário cheio!", "Assets/notify_inventory.wav"),
         "level" => ("Subiu de nível!", "Assets/notify_level.wav"),
+        "potion_hp" => ("Poções de HP acabaram! Compre mais com o Lojista.", "Assets/notify_potion.wav"),
+        "potion_mana" => ("Poções de MP acabaram! Compre mais com o Lojista.", "Assets/notify_potion.wav"),
         _ => ("Evento importante no jogo!", "Assets/notify_mission.wav")
     };
 
@@ -2402,12 +2436,32 @@ public partial class MainWindow : Window
         if (_settings.TrayBalloon && _trayIcon != null)
         {
             _lastBalloonAccount = accountKey;
+            _lastBalloonKind = kind;
             try { _trayIcon.ShowBalloonTip(5000, titleFinal, message, Forms.ToolTipIcon.Info); } catch { }
         }
 
         if (!_isHiddenToTray)
             return;
         LogFloatingWindowEvent($"TrayNotify: {kind}");
+    }
+
+    // Simula a tecla B ("Voltar para a Fonte") no WebView2 da conta informada.
+    // O handler do jogo não checa isTrusted, então o keydown sintético funciona,
+    // inclusive para contas em segundo plano; o próprio jogo valida se o recall é permitido.
+    private async Task VoltarParaFonteAsync(string? contaKey)
+    {
+        try
+        {
+            if (contaKey != null
+                && _accountViews.TryGetValue(contaKey, out var view)
+                && view.CoreWebView2 != null)
+            {
+                await view.CoreWebView2.ExecuteScriptAsync(
+                    "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }))");
+                LogFloatingWindowEvent($"VoltarParaFonte: B enviado para a conta '{contaKey}'");
+            }
+        }
+        catch (Exception ex) { LogFloatingWindowEvent($"VoltarParaFonte falhou ({contaKey}): {ex.Message}"); }
     }
 
     private static void AddAudioSetting(Panel parent, string title, bool initialValue, Action<bool> changed)
@@ -2672,12 +2726,7 @@ public partial class MainWindow : Window
         var accountKeys = new List<string> { DefaultAccountName };
         accountKeys.AddRange(_settings.ContasAdicionadas);
 
-        var window = new NotifySettingsWindow(
-            _settings,
-            accountKeys,
-            GetAccountDisplayName,
-            SaveWindowSettings,
-            this);
+        var window = new NotifySettingsWindow(_settings, accountKeys, GetAccountDisplayName, SaveWindowSettings, this);
         window.ShowDialog();
     }
 
@@ -3084,6 +3133,8 @@ public partial class MainWindow : Window
                     _ultimasNotificacoes.Remove(item);
                     RebuildUltimasNotificacoes();
                     await SwitchAccountAsync(item.Conta);
+                    if (item.Kind.StartsWith("potion", StringComparison.OrdinalIgnoreCase))
+                        _ = VoltarParaFonteAsync(item.Conta);
                 }
                 catch
                 {
@@ -3114,6 +3165,8 @@ public partial class MainWindow : Window
             // Lista pode já estar recriada/vazia; segue para a troca de conta.
         }
         await SwitchAccountAsync(item.Conta);
+        if (item.Kind.StartsWith("potion", StringComparison.OrdinalIgnoreCase))
+            _ = VoltarParaFonteAsync(item.Conta);
     }
 
     // Tempo relativo curto: "agora", "há X min", "há X h" ou "HH:mm" se mais velho que 24h.
@@ -4231,15 +4284,83 @@ public partial class MainWindow : Window
     }
 
     // Esconde/mostra a lista de contas (mantém o título "Contas" visível).
+    private bool _contasAnimando = false;
+
     private void ContasHide_Click(object sender, RoutedEventArgs e)
     {
-        if (ContasListPanel == null) return;
-        bool escondido = ContasListPanel.Visibility == Visibility.Collapsed;
-        ContasListPanel.Visibility = escondido ? Visibility.Visible : Visibility.Collapsed;
-        if (ContasStripPanel != null)
-            ContasStripPanel.Visibility = escondido ? Visibility.Collapsed : Visibility.Visible;
-        if (ContasHideButton != null)
-            ContasHideButton.Content = escondido ? "Contas ▴" : "Contas ▾";
+        if (ContasListPanel == null || _contasAnimando) return;
+        _contasAnimando = true;
+
+        bool recolher = ContasListPanel.Visibility == Visibility.Visible;
+        var ease = new CubicEase { EasingMode = recolher ? EasingMode.EaseIn : EasingMode.EaseOut };
+
+        if (recolher)
+        {
+            // Colapsa a lista (MaxHeight -> 0 + Opacity -> 0); a faixa de avatares faz fade-in.
+            double from = ContasListPanel.ActualHeight > 0 ? ContasListPanel.ActualHeight : ContasListPanel.DesiredSize.Height;
+            ContasListPanel.MaxHeight = double.IsNaN(from) || from <= 0 ? 400 : from;
+
+            var animH = new DoubleAnimation
+            {
+                From = ContasListPanel.MaxHeight,
+                To = 0,
+                Duration = TimeSpan.FromMilliseconds(210),
+                EasingFunction = ease,
+                FillBehavior = FillBehavior.Stop
+            };
+            animH.Completed += (_, _) =>
+            {
+                ContasListPanel.Visibility = Visibility.Collapsed;
+                ContasListPanel.MaxHeight = double.PositiveInfinity;
+                ContasListPanel.Opacity = 1;
+                if (ContasStripPanel != null)
+                {
+                    ContasStripPanel.Visibility = Visibility.Visible;
+                    ContasStripPanel.BeginAnimation(UIElement.OpacityProperty,
+                        new DoubleAnimation { From = 0, To = 1, Duration = TimeSpan.FromMilliseconds(160) });
+                }
+                if (ContasHideButton != null)
+                    ContasHideButton.Content = "Contas ▾";
+                _contasAnimando = false;
+            };
+            ContasListPanel.BeginAnimation(FrameworkElement.MaxHeightProperty, animH);
+            ContasListPanel.BeginAnimation(UIElement.OpacityProperty,
+                new DoubleAnimation { From = 1, To = 0, Duration = TimeSpan.FromMilliseconds(180), FillBehavior = FillBehavior.Stop });
+        }
+        else
+        {
+            // Expande: a faixa some na hora e a lista anima de MaxHeight 0 -> altura natural.
+            if (ContasStripPanel != null)
+                ContasStripPanel.Visibility = Visibility.Collapsed;
+            ContasListPanel.Visibility = Visibility.Visible;
+            ContasListPanel.MaxHeight = double.PositiveInfinity;
+            ContasListPanel.Measure(new System.Windows.Size(
+                ContasListPanel.ActualWidth > 0 ? ContasListPanel.ActualWidth : 300,
+                double.PositiveInfinity));
+            double para = ContasListPanel.DesiredSize.Height > 0 ? ContasListPanel.DesiredSize.Height : 400;
+            ContasListPanel.MaxHeight = 0;
+            ContasListPanel.Opacity = 0;
+
+            var animH = new DoubleAnimation
+            {
+                From = 0,
+                To = para,
+                Duration = TimeSpan.FromMilliseconds(210),
+                EasingFunction = ease,
+                FillBehavior = FillBehavior.Stop
+            };
+            animH.Completed += (_, _) =>
+            {
+                ContasListPanel.MaxHeight = double.PositiveInfinity;
+                ContasListPanel.Opacity = 1;
+                if (ContasHideButton != null)
+                    ContasHideButton.Content = "Contas ▴";
+                _contasAnimando = false;
+            };
+            ContasListPanel.BeginAnimation(FrameworkElement.MaxHeightProperty, animH);
+            ContasListPanel.BeginAnimation(UIElement.OpacityProperty,
+                new DoubleAnimation { From = 0, To = 1, Duration = TimeSpan.FromMilliseconds(180), FillBehavior = FillBehavior.Stop });
+        }
     }
 
     // Fecha com base na preferência CloseBehavior:

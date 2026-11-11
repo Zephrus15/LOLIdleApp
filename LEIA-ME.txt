@@ -1,4 +1,4 @@
-﻿LoL Idle Desktop - versão 1.3.7
+﻿LoL Idle Desktop - versão 1.3.8
 Aplicativo desktop não oficial para Windows
 
 O que é
@@ -59,6 +59,32 @@ Gerar instalador
 
 O instalador verifica o Microsoft Edge WebView2 Runtime e o instala
 automaticamente quando necessário.
+
+Novidades (v1.3.8)
+------------------
+- Bolinha vermelha de não lida nos avatares das contas que receberam
+  notificação e você não viu (lista expandida, faixa recolhida e sidebar
+  minimizada); some ao trocar de conta.
+- Seção "Últimas notificações" no rodapé da sidebar (visível nos dois
+  modos): as 4 mais recentes com nome da conta, o que aconteceu e tempo
+  relativo; a mais antiga acima e a nova embaixo. Clique numa notificação
+  troca para a conta e ela sai da lista com animação; botão "Limpar"
+  esvazia a lista (sem afetar as bolinhas de não lido).
+- Lista de contas recolhida: faixa vertical com os avatares (clique
+  troca). Os botões Notificações e Opções de fechamento ficam sempre
+  visíveis abaixo dos avatares; seção de contas recolhe/expande com
+  animação (~210 ms). Sidebar minimizada: faixa na borda com avatares
+  das contas (botão de expandir/recolher no meio).
+- Clique no balão da bandeja volta a janela e troca para a conta da
+  notificação.
+- Notificação de poções: quando as poções acabam, chega aviso com som
+  próprio — "Poções de HP acabaram!" ou "Poções de MP acabaram!" —
+  com toggle único "Poções de HP ou MP acabaram" no painel de
+  Notificações. Clicar no balão/linha da notificação também manda o
+  personagem de volta para a Fonte — somente no modo automático
+  (Summoner's Rift); nas demais áreas, o jogo bloqueia o teleporte.
+- Seção "Ajuste qual pedaço da imagem aparece no avatar" só aparece
+  para fotos do PC.
 
 Novidades (v1.3.7)
 ------------------

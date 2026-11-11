@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.3.7](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.3.7)**
+**[Baixar LoL Idle Desktop v1.3.8](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.3.8)**
 
 ### Instalador (quando disponível na Release)
 
@@ -138,6 +138,18 @@ artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.3.8
+- Sidebar de contas: a seção **"Últimas notificações"** agora fica encostada no **rodapé da sidebar**, visível nos **dois modos** (lista expandida e lista recolhida), com as linhas de borda a borda. As **4 notificações mais recentes** aparecem de cima para baixo (a antiga em cima, a nova entra por baixo), com nome da conta, o que aconteceu e tempo relativo; **clicar** numa notificação troca para a conta dela e ela sai da lista com animação; o botão **"Limpar"** esvazia a lista (sem tocar nas bolinhas de não lido).
+- **Bolinha vermelha de não lida** nos avatares de contas que receberam notificação e ainda não foram vistas — aparece na lista expandida, na faixa recolhida ("Contas ▴") e na barra minimizada; some ao trocar para a conta.
+- Lista recolhida ("Contas ▴"): faixa vertical com os avatares das contas para trocar rápido; os botões **🔔 Notificações** e **⚙ Opções de fechamento** continuam visíveis abaixo dos avatares (sempre visíveis nos dois modos).
+- Sidebar minimizada: faixinha na borda direita com os avatares das contas conectadas (menores, no topo); o botão de expandir/recolher fica **centralizado**; clique no avatar troca de conta.
+- **Animação de recolhimento/expansão** da seção de contas (~210 ms, suavizada).
+- **Clicar no balão da bandeja** volta a janela e troca para a conta da notificação (além de restaurar da bandeja).
+- **Notificação de poções**: novo aviso quando as poções acabam — balão + som próprio (`notify_potion.wav`) com mensagem por família: "Poções de HP acabaram! Compre mais com o Lojista." (HP) / "Poções de MP acabaram! Compre mais com o Lojista." (MP). Detecção no HUD (`#hud-pocoes`, apenas na transição >0 → 0 — sem falso positivo). Um **único toggle** no 🔔 Notificações — "Poções de HP ou MP acabaram" — silencia as duas famílias.
+- **Ao clicar** no balão da bandeja ou na linha da notificação de poções, o personagem também é mandado de volta para a Fonte — **somente no modo automático (Summoner's Rift)**; nas demais áreas/modos o jogo bloqueia o teleporte (mesma regra da tecla B; o aviso do jogo aparece normalmente).
+- A seção **"Ajuste qual pedaço da imagem aparece no avatar"** só aparece para fotos escolhidas do PC (não aparece para avatares de campeão — recorte automático do rosto).
+- A release **não inclui** botão de teste da notificação de poções (o botão "Testar poções" foi removido após a validação).
 
 ### v1.3.7
 - Notificações na sidebar: **bolinha vermelha de não lida** nos avatares de contas que receberam notificação e ainda não foram vistas (na lista expandida e nas faixas recolhidas/minimizadas). Some ao trocar para a conta.

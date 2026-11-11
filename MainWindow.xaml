@@ -248,68 +248,80 @@
                             Margin="0,0,0,8"
                             ToolTip="Esconder/mostrar contas"/>
 
-                        <StackPanel x:Name="ContasStripPanel"
-                                    Grid.Row="1"
-                                    Visibility="Collapsed"
-                                    Margin="0,4,0,0"
-                                    HorizontalAlignment="Left"
-                                    VerticalAlignment="Top"
-                                    Orientation="Vertical"/>
-
-                        <Grid x:Name="ContasListPanel" Grid.Row="1">
+                        <Grid Grid.Row="1">
                             <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
                             <StackPanel Grid.Row="0" VerticalAlignment="Top">
-                                <StackPanel x:Name="ContasWrapPanel"
-                                            Margin="0,4,0,0">
-                                    <!-- Os itens são gerados dinamicamente no code-behind -->
+                                <StackPanel x:Name="ContasStripPanel"
+                                            Visibility="Collapsed"
+                                            Margin="0,4,0,0"
+                                            HorizontalAlignment="Left"
+                                            VerticalAlignment="Top"
+                                            Orientation="Vertical"/>
+
+                                <Grid x:Name="ContasListPanel">
+                                    <StackPanel VerticalAlignment="Top">
+                                        <StackPanel x:Name="ContasWrapPanel"
+                                                    Margin="0,4,0,0">
+                                            <!-- Os itens são gerados dinamicamente no code-behind -->
+                                        </StackPanel>
+
+                                        <Button x:Name="AddAccountButton"
+                                                Content="➕ Adicionar conta"
+                                                Click="AddAccount_Click"
+                                                ToolTip="Cria uma nova aba de conta. Faça login nela; a sessão fica salva neste computador."
+                                                Style="{StaticResource AddAccountButtonStyle}"
+                                                Margin="0,8,0,0"
+                                                HorizontalAlignment="Left"
+                                                FontSize="12"/>
+
+                                        <TextBlock x:Name="ContasCountText" Text="Contas: 1 / 4"
+                                                   Foreground="#9298A5"
+                                                   FontSize="12"
+                                                   Margin="0,8,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+
+                                <StackPanel x:Name="ContasAcoesPanel">
+                                    <Button x:Name="NotificationsButton"
+                                            Content="🔔 Notificações"
+                                            Click="Notifications_Click"
+                                            ToolTip="Configurar como os avisos do jogo chegam (conta, tipo, ativar/desativar)"
+                                            Style="{StaticResource AddAccountButtonStyle}"
+                                            Margin="0,16,0,0"
+                                            HorizontalAlignment="Left"
+                                            FontSize="12"/>
+
+                                    <Button x:Name="CloseBehaviorButton"
+                                            Content="⚙ Opções de fechamento"
+                                            Click="CloseBehavior_Click"
+                                            ToolTip="Escolher o que acontece ao clicar em Fechar"
+                                            Style="{StaticResource AddAccountButtonStyle}"
+                                            Margin="0,8,0,0"
+                                            HorizontalAlignment="Left"
+                                            FontSize="12"/>
                                 </StackPanel>
-
-                                <Button x:Name="AddAccountButton"
-                                        Content="➕ Adicionar conta"
-                                        Click="AddAccount_Click"
-                                        ToolTip="Cria uma nova aba de conta. Faça login nela; a sessão fica salva neste computador."
-                                        Style="{StaticResource AddAccountButtonStyle}"
-                                        Margin="0,8,0,0"
-                                        HorizontalAlignment="Left"
-                                        FontSize="12"/>
-
-                                <TextBlock x:Name="ContasCountText" Text="Contas: 1 / 4"
-                                           Foreground="#9298A5"
-                                           FontSize="12"
-                                           Margin="0,8,0,0"/>
-
-                                <Button x:Name="NotificationsButton"
-                                        Content="🔔 Notificações"
-                                        Click="Notifications_Click"
-                                        ToolTip="Configurar como os avisos do jogo chegam (conta, tipo, ativar/desativar)"
-                                        Style="{StaticResource AddAccountButtonStyle}"
-                                        Margin="0,16,0,0"
-                                        HorizontalAlignment="Left"
-                                        FontSize="12"/>
-
-                                <Button x:Name="CloseBehaviorButton"
-                                        Content="⚙ Opções de fechamento"
-                                        Click="CloseBehavior_Click"
-                                        ToolTip="Escolher o que acontece ao clicar em Fechar"
-                                        Style="{StaticResource AddAccountButtonStyle}"
-                                        Margin="0,8,0,0"
-                                        HorizontalAlignment="Left"
-                                        FontSize="12"/>
                             </StackPanel>
 
                             <StackPanel x:Name="NotificacoesRecentesPanel"
                                         Grid.Row="1"
+                                        HorizontalAlignment="Stretch"
                                         VerticalAlignment="Bottom"
-                                        Margin="0,16,0,0">
-                                <Grid x:Name="NotificacoesRecentesTituloRow" Margin="0,0,0,4" Visibility="Collapsed">
+                                        Margin="-14,16,-14,0">
+                                <Grid x:Name="NotificacoesRecentesTituloRow" Margin="0,0,14,4" Visibility="Collapsed">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
                                     <TextBlock x:Name="NotificacoesRecentesTitulo" Text="ÚLTIMAS NOTIFICAÇÕES"
-                                               Foreground="#E8CF8F" FontSize="11" FontWeight="SemiBold" Margin="2,0,0,0"/>
+                                               Grid.Column="0" HorizontalAlignment="Left" VerticalAlignment="Center"
+                                               Foreground="#E8CF8F" FontSize="11" FontWeight="SemiBold" Margin="14,0,0,0"/>
                                     <Button x:Name="LimparNotificacoesButton"
                                             Content="Limpar"
+                                            Grid.Column="1"
                                             HorizontalAlignment="Right" VerticalAlignment="Center"
                                             Style="{StaticResource GhostIconButton}"
                                             FontSize="11" Padding="8,2"
@@ -317,7 +329,7 @@
                                             Click="LimparNotificacoes_Click"/>
                                 </Grid>
                                 <TextBlock x:Name="NotificacoesRecentesVazio" Text="Nenhuma notificação recente."
-                                           Foreground="#6E7480" FontSize="11" Margin="2,0,0,0"/>
+                                           Foreground="#6E7480" FontSize="11" Margin="14,0,0,0"/>
                                 <StackPanel x:Name="NotificacoesRecentesList" Margin="0,0,0,0"/>
                             </StackPanel>
                         </Grid>

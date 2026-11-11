@@ -1,10 +1,10 @@
 ﻿# 🗺️ Roadmap — LoL Idle Desktop
 
-> Base: **v1.3.7** · Última atualização: 2026-11-11
+> Base: **v1.3.8** · Última atualização: 2026-11-11
 > Versão web estilizada: [`ROADMAP.html`](./ROADMAP.html) — abra no navegador para visualizar como site.
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Status-7%20feitos-2ea043?style=for-the-badge" alt="feitos">
+  <img src="https://img.shields.io/badge/Status-8%20feitos-2ea043?style=for-the-badge" alt="feitos">
   <img src="https://img.shields.io/badge/Status-1%20imposs%C3%ADvel-ff4d4f?style=for-the-badge" alt="impossíveis">
   <img src="https://img.shields.io/badge/Status-1%20futuro-58a6ff?style=for-the-badge" alt="futuro">
   <img src="https://img.shields.io/badge/Status-2%20pendentes%2Fpolir-f0b429?style=for-the-badge" alt="pendentes">
@@ -17,11 +17,12 @@
 | Painel / Recurso | Status | Versão |
 |---|---|---|
 | 📖 **Missões** | ✅ **Confirmado** | v1.2.5 / v1.2.6 |
-| 🔔 **Bandeja inteligente (sons + clique abre app e troca de conta)** | ✅ **Confirmado** | v1.2.0 → v1.3.0 / v1.3.7 |
-| 🎛️ **Barra lateral de contas** | ✅ **Feito** | v1.3.2 / v1.3.3 / v1.3.5 / v1.3.6 / v1.3.7 |
+| 🔔 **Bandeja inteligente (sons + clique abre app e troca de conta)** | ✅ **Confirmado** | v1.2.0 → v1.3.0 / v1.3.7 / v1.3.8 |
+| 🎛️ **Barra lateral de contas** | ✅ **Feito** | v1.3.2 / v1.3.3 / v1.3.5 / v1.3.6 / v1.3.7 / v1.3.8 |
 | 🖼️ **Avatares das contas (3 fontes)** | ✅ **Feito** | v1.3.6 |
-| 🔴 **Sinalizações de não lida / últimas notificações na sidebar** | ✅ **Feito** | v1.3.7 |
+| 🔴 **Sinalizações de não lida / últimas notificações na sidebar** | ✅ **Feito** | v1.3.7 / v1.3.8 |
 | 🔔 **Notificações por conta e por tipo** | ✅ **Feito** | v1.3.3 |
+| 🧪 **Poções: notificação + retorno à Fonte (modo Automático)** | ✅ **Feito** | v1.3.8 |
 | 🧙 **Personagem (interativo)** | ❌ **Impossível** | — (jogo bloqueia 2ª sessão) |
 | 📌 **Sempre no topo persistente** | ✅ **Confirmado** | v1.2.7 |
 | 📱 **Android** | 🔵 **Futuro** | — |
@@ -44,7 +45,7 @@ Painel separado e destacável que **já está pronto** (v1.2.5 / v1.2.6):
 
 > ℹ️ É um painel **só-texto** (igual ao que a Barra lateral poderia ser), sem segunda sessão do jogo.
 
-### 🎛️ Barra lateral de contas — `FEITO` ✅ (v1.3.2 / v1.3.3 / v1.3.5 / v1.3.6 / v1.3.7)
+### 🎛️ Barra lateral de contas — `FEITO` ✅ (v1.3.2 / v1.3.3 / v1.3.5 / v1.3.6 / v1.3.7 / v1.3.8)
 
 A sidebar **de contas** (lado direito, com toggle esconder/mostrar) foi implementada e evoluiu ao longo da v1.3.x:
 
@@ -63,27 +64,42 @@ A sidebar **de contas** (lado direito, com toggle esconder/mostrar) foi implemen
 - **Aba "Campeões"** (v1.3.6) — ao lado de "Ícones", com os 12 campeões do LoL Idle (Darius, Ezreal, Lux, Yasuo, Katarina, Taric, Zac, Ryze, Rengar, Shaco, Sona, Aphelios); sprites pixelados extraídos do próprio jogo (in-game 32×32; Rengar 38×38), embutidos no app; clique aplica na hora, sem recorte, com foco no rosto (recorte 16×16 da cabeça, como o HUD do jogo)
 - **Janela "Alterar avatar"** (v1.3.6) — estilo Facebook: preview quadrado arredondado, **arrastar com o mouse** para reposicionar, **slider de zoom** (1.0x–4.0x) e **pré-visualização do chip ao vivo** (40×40, nome e status); só aplica em "Aplicar" ("Cancelar" descarta); posição/zoom salvos por conta e persistidos
 - **Cor como fundo** (v1.3.6) — escolher cor pinta só o fundo (não apaga campeão/imagem; ideal para sprites transparentes); nova cor **preta** na grade, com borda sutil para divisar no painel escuro
+- **Seção "Ajuste qual pedaço da imagem aparece no avatar" só para fotos do PC** (v1.3.8) — não aparece para avatares de campeão (recorte automático do rosto)
 - **Correções de interação** (v1.3.6) — clique no avatar abre o editor; bolinha de status não bloqueia mais cliques; clique em emoji/cor/campeão funciona em qualquer parte da célula (antes só na borda)
 - **Sinalizações de não lida + "Últimas notificações"** (v1.3.7) — ver seção abaixo
+- **"Últimas notificações" no rodapé, nos dois modos** (v1.3.8) — a seção fica encostada no rodapé da sidebar e visível tanto com a lista expandida quanto recolhida, com linhas de borda a borda
+- **Animação de recolhimento/expansão da seção de contas** (v1.3.8) — ~210 ms, suavizada (`CubicEase`)
+- **Botões 🔔 Notificações e ⚙ Opções de fechamento sempre visíveis** (v1.3.8) — continuam abaixo dos avatares na lista recolhida, nos dois modos
+- **Botão de expandir/recolher centralizado na sidebar minimizada** (v1.3.8) — faixa na borda direita com os avatares (menores, no topo) e o botão no meio; clique no avatar troca de conta
 - **Correções de estabilidade** (v1.3.7) — inicialização das contas WebView2 protegida por exceções (falha em uma conta desregistra só ela, sem afetar as outras); desmute só retoma AudioContext suspenso pelo próprio app; remover a conta ativa troca para a principal e limpa as preferências por conta da conta removida (login salvo preservado)
 - Conta ativa lembrada ao reabrir (`ContaAtiva`)
 
 > ℹ️ **O que continua inviável** é um **painel do jogo interativo dentro da barra** (2ª sessão viva acoplada ao painel) — o LoL Idle bloqueia uma segunda WebView com o jogo absoluto no mesmo momento. A barra feita aqui é **seletor + gerenciador de contas**, não um painel vivo.
 
-### 🔔 Sinalizações de não lida / últimas notificações na sidebar — `FEITO` ✅ (v1.3.7)
+### 🔔 Sinalizações de não lida / últimas notificações na sidebar — `FEITO` ✅ (v1.3.7 / v1.3.8)
 
 A sidebar de contas passou a sinalizar notificações pendentes sem precisar abrir a janela do jogo:
 
 - **Bolinha vermelha de não lida** nos avatares de contas que receberam uma notificação e ainda não foram vistas — aparece tanto na **lista expandida** quanto nas **faixas recolhidas/minimizadas**. Some ao trocar para a conta.
-- **Seção "Últimas notificações"** na parte de baixo da sidebar (modo expandido): as **4 notificações mais recentes**, com nome da conta, o que aconteceu (Missão concluída!, Subiu de nível!, Inventário cheio!, Item épico/lendário obtido!) e tempo relativo ("agora", "há X min"). A mais antiga fica em cima e a nova entra por baixo.
+- **Seção "Últimas notificações"** na parte de baixo da sidebar (v1.3.7: modo expandido; **v1.3.8: visível nos dois modos** — expandida e recolhida —, encostada no rodapé, com linhas de borda a borda): as **4 notificações mais recentes**, com nome da conta, o que aconteceu (Missão concluída!, Subiu de nível!, Inventário cheio!, Item épico/lendário obtido!, Poções de HP/MP acabaram!) e tempo relativo ("agora", "há X min"). A mais antiga fica em cima e a nova entra por baixo.
 - **Clicar numa notificação** troca para a conta dela e ela sai da lista com animação (fade + deslize); a linha tem um **pulso de fundo** ao ser clicada.
 - Botão **"Limpar"** na seção: esvazia a lista com animação escalonada (fade/deslize) — **não afeta** as bolinhas de não lido.
-- **Clicar no balão da bandeja** restaura/abre a janela e troca para a conta da notificação.
+- **Clicar no balão da bandeja** restaura/abre a janela e troca para a conta da notificação (v1.3.7; **v1.3.8**: se o aviso for de poções, o personagem também volta para a Fonte — ver card abaixo).
 - Com a lista de contas recolhida ("Contas ▴"), a faixa vertical mostra os **avatares das contas** (clique troca de conta) no lugar do espaço vazio.
 - Com a sidebar inteira minimizada, uma **faixinha na borda direita** mostra os avatares das contas conectadas (menores, no topo), com o botão de expandir/recolher no meio; clique no avatar troca de conta.
 - Animações: linha de notificação pulsa ao ser clicada; limpar faz as linhas deslizar/desaparecer escalonado.
 
 > ℹ️ O rastreamento das notificações (`_ultimasNotificacoes`, `_contasNaoLidas`) é **somente em memória** — nada é persistido no `window-settings.json`.
+
+### 🧪 Poções de HP/MP — notificação + retorno à Fonte — `FEITO` ✅ (v1.3.8)
+
+Quando as poções acabam, o app avisa e ajuda o personagem a voltar para a Fonte:
+
+- **Balão + som próprio** (`notify_potion.wav`) com mensagem por família: "Poções de HP acabaram! Compre mais com o Lojista." (HP) / "Poções de MP acabaram! Compre mais com o Lojista." (MP)
+- **Detecção no HUD** (`#hud-pocoes`), na transição >0 → 0 (baseline na primeira leitura) — sem falso positivo; throttle de 3s por tipo
+- **Um único toggle** no 🔔 Notificações — "Poções de HP ou MP acabaram" — silencia as duas famílias (`potion_hp`/`potion_mana` caem no `potion`)
+- **Clicar no balão da bandeja ou na linha da notificação** também manda o personagem de volta para a Fonte (simula a tecla B no WebView da conta — `VoltarParaFonteAsync`) — **somente no modo automático (Summoner's Rift)**; nas demais áreas/modos o jogo bloqueia o teleporte (mesma regra da tecla B; o aviso do jogo aparece normalmente)
+- A **release não inclui** botão de teste ("Testar poções" existiu durante o desenvolvimento e foi removido após a validação)
 
 ### 🧙 Personagem — `IMPOSSÍVEL (interativo)` ❌
 
@@ -109,9 +125,10 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
   - 📜 **Missão concluída**
   - 🎒 **Inventário cheio** (só no 30/30)
   - ⭐ **Level up**
+  - 🧪 **Poções de HP ou MP acabaram** (v1.3.8)
 - Detecção via `MutationObserver` no DOM + `postMessage` → toca som e balão na bandeja
 - Sessão permanece ativa enquanto oculto
-- Clicar no balão restaura/abre a janela principal e troca para a conta da notificação (v1.3.0 → v1.3.7)
+- Clicar no balão restaura/abre a janela principal e troca para a conta da notificação (v1.3.0 → v1.3.8); se o aviso for de poções, também manda o personagem de volta para a Fonte (somente no modo automático)
 
 > **Polimento atual:** ajustar volumes/timbre de cada som (lendário, épico, missão, nível, inventário).
 
@@ -145,7 +162,8 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 - [ ] Aviso de nova versão (GitHub)
 - [x] Avatares das contas (3 fontes) + aba Campeões + janela "Alterar avatar" com zoom — **feito na v1.3.6**
 - [x] Sinalizações de não lida / últimas notificações na sidebar — **feito na v1.3.7**
+- [x] Poções: notificação + retorno à Fonte (modo Automático) — **feito na v1.3.8**
 
 ---
 
-<sub>Documento gerado a partir do estado atual do app (v1.3.7). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site.</sub>
+<sub>Documento gerado a partir do estado atual do app (v1.3.8). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site.</sub>
