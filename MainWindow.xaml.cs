@@ -211,8 +211,18 @@ public partial class MainWindow : Window
             return s;
         };
         let prevFamilias = { potion_hp: null, potion_mana: null };
+        let _ultimaPocoes = 0;
+        let _pocoesTimer = null;
         const checkPocoes = () => {
             try {
+                const hud = document.querySelector('#hud-pocoes');
+                if (!hud || hud.querySelectorAll('.hud-pocao').length === 0) return; // ausente ≠ zero
+                const now = Date.now();
+                if (_ultimaPocoes && (now - _ultimaPocoes) < 400) {
+                    if (!_pocoesTimer) _pocoesTimer = setTimeout(() => { _pocoesTimer = null; checkPocoes(); }, 400 - (now - _ultimaPocoes) + 1);
+                    return;
+                }
+                _ultimaPocoes = now;
                 for (const kind of Object.keys(POCOES_FAM)) {
                     const cur = somaPocao(POCOES_FAM[kind]);
                     if (prevFamilias[kind] === null) { prevFamilias[kind] = cur; continue; }
@@ -302,7 +312,6 @@ public partial class MainWindow : Window
                         }
                     }
                 }
-                checkPocoes();
                 checkBolsa();
                 // Também checa mudança direta do #hud-nivel via childList (texto substituído)
                 for (const n of m.addedNodes || []) {
@@ -313,6 +322,7 @@ public partial class MainWindow : Window
                     }
                 }
             }
+            checkPocoes();
         });
         const start = () => {
             if (!document.body) { setTimeout(start, 500); return; }
@@ -326,6 +336,7 @@ public partial class MainWindow : Window
     private Forms.NotifyIcon? _trayIcon;
     private string? _lastBalloonAccount;
     private string? _lastBalloonKind;
+    private System.Windows.Threading.DispatcherTimer? _balloonRestoreTimer;
     private Forms.ToolStripMenuItem? _trayTrayMuteItem;
     private bool _floatingOpened;
     private bool _allowExit;
@@ -806,15 +817,32 @@ public partial class MainWindow : Window
         };
 
         // Clique no balão de notificação da bandeja restaura a janela e troca para a conta da notificação.
+        // Os valores são capturados e LIMPOS aqui: uma notificação antiga não pode mais trocar a conta.
         _trayIcon.BalloonTipClicked += (_, _) =>
         {
+            var conta = _lastBalloonAccount;
+            var kind = _lastBalloonKind;
+            // NULA o estado sempre: um clique fora de hora nunca reutiliza dados de outra notificação.
+            _lastBalloonAccount = null;
+            _lastBalloonKind = null;
+            // Estado já consumido/limpo: ignora silenciosamente (balão antigo não sequestra a ação).
+            if (conta == null && kind == null)
+                return;
             RestoreFromTray();
-            if (_lastBalloonAccount is { } conta)
+            if (conta != null && !ContaExiste(conta))
+            {
+                LogFloatingWindowEvent($"BalloonTipClicked: conta '{conta}' não existe mais — ignorado");
+                // Conta removida: descarta a linha órfã do histórico (nada de restaurar/trocar).
+                RemoverUltimaNotificacao(conta, kind);
+                conta = null;
+            }
+            if (conta != null)
                 _ = SwitchAccountAsync(conta);
             // Clique no balão de poção manda o personagem de volta para a fonte
-            if (_lastBalloonAccount is { } c && _lastBalloonKind is { } k
-                && k.StartsWith("potion", StringComparison.OrdinalIgnoreCase))
-                _ = VoltarParaFonteAsync(c);
+            if (conta != null && kind != null
+                && kind.StartsWith("potion", StringComparison.OrdinalIgnoreCase))
+                _ = VoltarParaFonteAsync(conta);
+            RemoverUltimaNotificacao(conta, kind);
         };
     }
 
@@ -829,8 +857,21 @@ public partial class MainWindow : Window
             // O evento roda numa thread COM fora da UI — despachar para a UI thread
             Dispatcher.Invoke(() =>
             {
+                // Clique no toast consome/limpa também o estado do fallback balloon:
+                // um balão antigo nunca sobrevive a uma interação por toast.
+                // (Notificações novas re-setam o estado ao exibir.)
+                _lastBalloonAccount = null;
+                _lastBalloonKind = null;
+                if (!ContaExiste(conta))
+                {
+                    LogFloatingWindowEvent($"ToastActivated: conta '{conta}' não existe mais — ignorado");
+                    // Conta removida: descarta a linha órfã do histórico.
+                    RemoverUltimaNotificacao(conta, kind);
+                    return;
+                }
                 RestoreFromTray();
                 if (conta != null) _ = SwitchAccountAsync(conta);
+                RemoverUltimaNotificacao(conta, kind);
                 if (conta != null && kind != null
                     && kind.StartsWith("potion", StringComparison.OrdinalIgnoreCase))
                     _ = VoltarParaFonteAsync(conta);
@@ -1425,7 +1466,7 @@ public partial class MainWindow : Window
         if (core == null) return;
         var missions = _settings.ShowMissions.ToString().ToLowerInvariant();
         var topmost = _settings.FloatingTopmost.ToString().ToLowerInvariant();
-        var script = $"(()=>{{const m=document.querySelector('#lol-idle-missions'); if(m){{m.classList.toggle('active',{missions});}} const p=document.querySelector('#lol-idle-pin'); if(p){{p.classList.toggle('active',{topmost}); p.title={_settings.FloatingTopmost}?'Desativar janela sempre no topo':'Ativar janela sempre no topo';}} }})()";
+        var script = $"(()=>{{const m=document.querySelector('#lol-idle-missions'); if(m){{m.classList.toggle('active',{missions});}} const p=document.querySelector('#lol-idle-pin'); if(p){{p.classList.toggle('active',{topmost}); p.title={topmost}?'Desativar janela sempre no topo':'Ativar janela sempre no topo';}} }})()";
         try { _ = core.ExecuteScriptAsync(script); } catch { }
     }
 
@@ -1499,6 +1540,9 @@ public partial class MainWindow : Window
     // As demais ganham sessão isolada em \WebView2\Contas\<slug>.
     private async Task<Microsoft.Web.WebView2.Wpf.WebView2> EnsureAccountViewAsync(string key)
     {
+        if (string.IsNullOrWhiteSpace(key))
+            throw new ArgumentException("Chave de conta vazia.", nameof(key));
+
         if (_accountViews.TryGetValue(key, out var existing))
             return existing;
 
@@ -1639,6 +1683,11 @@ public partial class MainWindow : Window
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                LogFloatingWindowEvent("SwitchAccountAsync: chave vazia — ignorado");
+                return;
+            }
             await EnsureAccountViewAsync(key);
             _settings.ContaAtiva = key;
             _contasNaoLidas.Remove(key);
@@ -2374,23 +2423,26 @@ public partial class MainWindow : Window
         if (_settings.NotifyTypesDisabled.Contains(disabledKey, StringComparer.OrdinalIgnoreCase)) return;
         if (key != null && _settings.NotifyAccountsDisabled.Contains(key, StringComparer.OrdinalIgnoreCase)) return;
 
+        // App em 1º plano + conta ativa em uso → nada de aviso (redundante com o jogo).
+        // Contas em segundo plano continuam notificando; o histórico ("Últimas notificações") é preservado.
+        if (key != null
+            && string.Equals(key, _settings.ContaAtiva, StringComparison.OrdinalIgnoreCase)
+            && AppEmPrimeiroPlano())
+        {
+            // Mesmo assim registra no histórico (sem bolinha nem som/balão):
+            RegistrarNotificacao(key, kind);
+            return;
+        }
+
         // Registra nas "Últimas notificações" e marca a conta como não lida quando o
         // usuário não está vendo (outra conta na frente, ou app oculto na bandeja).
         if (key != null)
         {
-            // "Adiciona/atualiza": mesmo tipo de evento na mesma conta renova o horário e vai para o final (mais recente embaixo),
-            // em vez de poluir a lista com entradas idênticas.
-            _ultimasNotificacoes.RemoveAll(n =>
-                string.Equals(n.Conta, key, StringComparison.OrdinalIgnoreCase) &&
-                string.Equals(n.Kind, kind, StringComparison.OrdinalIgnoreCase));
-            _ultimasNotificacoes.Add(new NotificacaoItem { Conta = key, Kind = kind, Quando = DateTime.Now });
-            if (_ultimasNotificacoes.Count > 4)
-                _ultimasNotificacoes.RemoveRange(0, _ultimasNotificacoes.Count - 4);
+            RegistrarNotificacao(key, kind);
 
-            if (!string.Equals(key, _settings.ContaAtiva, StringComparison.OrdinalIgnoreCase) || _isHiddenToTray)
+            // Só conta como "não lida" quando você NÃO está vendo a conta (nem app visível nem flutuante nem minimizada visível).
+            if (!(string.Equals(key, _settings.ContaAtiva, StringComparison.OrdinalIgnoreCase) && AppEmPrimeiroPlano()))
                 _contasNaoLidas.Add(key);
-
-            _ = AtualizarContaConectadaUIAsync();
         }
 
         // Se mais de uma conta estiver habilitada, mostra o nome da conta no balão
@@ -2406,6 +2458,40 @@ public partial class MainWindow : Window
         }
 
         PlayTrayNotification(kind, accountLabel, key);
+    }
+
+    // true quando o app está visível e o usuário consegue ver o jogo:
+    // janela principal visível e não minimizada (mesmo sem foco) ou janela flutuante visível.
+    private bool AppEmPrimeiroPlano()
+    {
+        // A flutuante (janela do jogo) também conta como "no app" — não avisa a conta ativa.
+        if (IsFloatingVisible()) return true;
+        return !_isHiddenToTray && WindowState != WindowState.Minimized && IsVisible;
+    }
+
+    // true quando a conta ainda existe (principal ou adicionada). Usado para ignorar toasts/balões de contas removidas.
+    private bool ContaExiste(string? key)
+    {
+        if (string.IsNullOrWhiteSpace(key)) return false;
+        if (string.Equals(key, DefaultAccountName, StringComparison.OrdinalIgnoreCase)) return true;
+        return _settings.ContasAdicionadas?.Contains(key, StringComparer.OrdinalIgnoreCase) ?? false;
+    }
+
+    // Registra o evento em "Últimas notificações" (até 4, mais recente embaixo), sem marcar bolinha e sem tocar som/balão.
+    private void RegistrarNotificacao(string? key, string kind)
+    {
+        if (key == null) return;
+
+        // "Adiciona/atualiza": mesmo tipo de evento na mesma conta renova o horário e vai para o final (mais recente embaixo),
+        // em vez de poluir a lista com entradas idênticas.
+        _ultimasNotificacoes.RemoveAll(n =>
+            string.Equals(n.Conta, key, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(n.Kind, kind, StringComparison.OrdinalIgnoreCase));
+        _ultimasNotificacoes.Add(new NotificacaoItem { Conta = key, Kind = kind, Quando = DateTime.Now });
+        if (_ultimasNotificacoes.Count > 4)
+            _ultimasNotificacoes.RemoveRange(0, _ultimasNotificacoes.Count - 4);
+
+        _ = AtualizarContaConectadaUIAsync();
     }
 
     // Texto/som compartilhados por tipo de notificação (balão, som e lista "Últimas notificações").
@@ -2477,7 +2563,30 @@ public partial class MainWindow : Window
             catch (Exception ex)
             {
                 LogFloatingWindowEvent($"Toast falhou ({kind}): {ex.Message} — caindo no balloon");
+                // Mesma semântica da regra A: app visível na janela principal OU flutuante suprime
+                // notificação da conta ativa — o HandleNotification já faz esse cedo retorno,
+                // então este bloco trata apenas os demais casos (outras contas, conta ativa
+                // minimizada/oculta etc.). App MINIMIZADO propositalmente conta como "visível"
+                // aqui: minimizado não é bandeja, então o balão pode aparecer.
+                bool appOuMinimizadoVisivel = !_isHiddenToTray;
+                if (appOuMinimizadoVisivel && _trayIcon != null && !_trayIcon.Visible)
+                    _trayIcon.Visible = true;
                 try { _trayIcon?.ShowBalloonTip(5000, titleFinal, message, Forms.ToolTipIcon.Info); } catch { }
+                if (appOuMinimizadoVisivel && _trayIcon != null)
+                {
+                    _balloonRestoreTimer?.Stop();
+                    _balloonRestoreTimer = new System.Windows.Threading.DispatcherTimer
+                    {
+                        Interval = TimeSpan.FromSeconds(6)
+                    };
+                    _balloonRestoreTimer.Tick += (_, _) =>
+                    {
+                        _balloonRestoreTimer?.Stop();
+                        if (_trayIcon != null)
+                            _trayIcon.Visible = _isHiddenToTray;
+                    };
+                    _balloonRestoreTimer.Start();
+                }
             }
         }
 
@@ -2491,10 +2600,14 @@ public partial class MainWindow : Window
     // inclusive para contas em segundo plano; o próprio jogo valida se o recall é permitido.
     private async Task VoltarParaFonteAsync(string? contaKey)
     {
+        if (string.IsNullOrWhiteSpace(contaKey))
+        {
+            LogFloatingWindowEvent("VoltarParaFonte: conta vazia — ignorado");
+            return;
+        }
         try
         {
-            if (contaKey != null
-                && _accountViews.TryGetValue(contaKey, out var view)
+            if (_accountViews.TryGetValue(contaKey, out var view)
                 && view.CoreWebView2 != null)
             {
                 await view.CoreWebView2.ExecuteScriptAsync(
@@ -3021,8 +3134,21 @@ public partial class MainWindow : Window
     // Clique num avatar da faixa recolhida: troca para a conta (limpa a não lida dela).
     private async void StripItem_Click(object sender, MouseButtonEventArgs e)
     {
-        if (sender is FrameworkElement fe && fe.Tag is string key)
+        if (sender is FrameworkElement fe && fe.Tag is string key && !string.IsNullOrWhiteSpace(key))
             await SwitchAccountAsync(key);
+    }
+
+    // Remove a linha correspondente da lista "Últimas notificações" (ex.: após clique no toast/balão).
+    private void RemoverUltimaNotificacao(string? conta, string? kind)
+    {
+        if (string.IsNullOrWhiteSpace(conta) || string.IsNullOrWhiteSpace(kind))
+            return;
+        _ultimasNotificacoes.RemoveAll(n =>
+            string.Equals(n.Conta, conta, StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(n.Kind, kind, StringComparison.OrdinalIgnoreCase));
+        RebuildUltimasNotificacoes();
+        // Rebuild dos chips/listas (dots rebuild) — fire and forget como nas outras chamadas
+        _ = AtualizarContaConectadaUIAsync();
     }
 
     // Recria a lista "Últimas notificações" (até 4 itens, da mais antiga para a mais recente — novas aparecem embaixo).
@@ -3142,9 +3268,15 @@ public partial class MainWindow : Window
         if (_ultimasNotificacoes.Count == 0 && _contasNaoLidas.Count == 0)
             return;
 
+        // Captura as linhas animadas (e seus itens) ANTES de animar: notificação recém-chegada
+        // durante a animação não pode ser apagada junto. Declarado fora do try para o catch usar.
+        var itensAnimados = new List<NotificacaoItem>();
         try
         {
             var linhas = NotificacoesRecentesList.Children.OfType<Border>().ToList();
+            foreach (var linha in linhas)
+                if (linha.Tag is NotificacaoItem it)
+                    itensAnimados.Add(it);
             if (linhas.Count == 0)
             {
                 _ultimasNotificacoes.Clear();
@@ -3183,7 +3315,10 @@ public partial class MainWindow : Window
                 {
                     animOpacity.Completed += (_, _) =>
                     {
-                        _ultimasNotificacoes.Clear();
+                        // Remove só os itens que estavam nas linhas animadas (por referência);
+                        // notificações que chegaram durante a animação são preservadas.
+                        foreach (var it in itensAnimados)
+                            _ultimasNotificacoes.Remove(it);
                         RebuildUltimasNotificacoes();
                         _contasNaoLidas.Clear();
                         _ = AtualizarContaConectadaUIAsync(); // fire-and-forget: recria chips/faixas sem as bolinhas
@@ -3196,8 +3331,10 @@ public partial class MainWindow : Window
         }
         catch
         {
-            // Fallback: se a animação falhar, limpa direto.
-            _ultimasNotificacoes.Clear();
+            // Fallback: se a animação falhar, remove direto — mas SÓ os itens capturados
+            // antes da animação. Notificações que chegaram durante a tentativa são preservadas.
+            foreach (var it in itensAnimados)
+                _ultimasNotificacoes.Remove(it);
             RebuildUltimasNotificacoes();
             _contasNaoLidas.Clear();
             _ = AtualizarContaConectadaUIAsync(); // fire-and-forget: recria chips/faixas sem as bolinhas
@@ -3210,6 +3347,14 @@ public partial class MainWindow : Window
     {
         if (sender is not Border linha || linha.Tag is not NotificacaoItem item)
             return;
+
+        // Conta inválida/vazia na tag: remove a linha sem trocar de conta.
+        if (string.IsNullOrWhiteSpace(item.Conta))
+        {
+            LogFloatingWindowEvent("NotificacaoLinha_Click: conta vazia — item removido sem troca de conta");
+            try { _ultimasNotificacoes.Remove(item); RebuildUltimasNotificacoes(); } catch { }
+            return;
+        }
 
         try
         {

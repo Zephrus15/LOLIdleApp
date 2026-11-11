@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.4.1](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.1)**
+**[Baixar LoL Idle Desktop v1.4.2](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.2)**
 
 ### Instalador (quando disponível na Release)
 
@@ -138,6 +138,13 @@ artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.4.2
+- **Notificações por conta refinadas de ponta a ponta**: a conta ativa na frente (janela principal ou flutuante) não toca som nem mostra toast/balão/bolinha — a notificação vai apenas para o histórico; minimizada/na bandeja, volta a avisar. Contas em segundo plano seguem notificando em todos os estados.
+- **Clique no toast/balão** também remove a linha correspondente das "Últimas notificações"; clicar num aviso de conta já removida remove a linha órfã (sem recriar a conta).
+- **"Limpar"** em "Últimas notificações" agora só remove as linhas animadas — notificações que chegarem durante a animação sobrevivem, inclusive em caso de erro.
+- Conta vazia/inválida nunca é usada (o app rejeita silenciosamente, com log).
+- **Notificação de poções**: seletores do HUD confirmados por análise estática do código servido hoje; o app ignora a verificação quando o HUD está ausente e faz `checkPocoes` uma vez por callback do MutationObserver com throttle de 400ms (trailing). **Verificação ao vivo no jogo ainda pendente.**
 
 ### v1.4.1
 - Ajuste de experiência: o botão **"Limpar"** na seção **"Últimas notificações"** agora esvazia a lista **e também remove as bolinhas vermelhas de não lida** de todas as contas (lista expandida, faixa recolhida e barra minimizada) — antes, Limpar só esvaziava a lista e as bolinhas continuavam.

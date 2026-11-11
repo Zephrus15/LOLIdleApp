@@ -1,4 +1,4 @@
-﻿LoL Idle Desktop - versão 1.4.1
+﻿LoL Idle Desktop - versão 1.4.2
 Aplicativo desktop não oficial para Windows
 
 O que é
@@ -59,6 +59,24 @@ Gerar instalador
 
 O instalador verifica o Microsoft Edge WebView2 Runtime e o instala
 automaticamente quando necessário.
+
+Novidades (v1.4.2)
+------------------
+- Conta ativa vendo o jogo (janela principal ou flutuante): o aviso não
+  toca som nem exibe toast/balão/bolinha — só registra no histórico de
+  "Últimas notificações". Minimizado/na bandeja, volta a avisar.
+- Clique no toast/balão agora também remove a linha correspondente das
+  "Últimas notificações" — e ao clicar num aviso de conta já removida,
+  a linha órfã é removida junto (nada é recriado).
+- Toast falhando com o app visível: o balão clássico aparece como antes
+  (ícone da bandeja fica visível ~6s e depois some, como antes).
+- "Limpar" em Últimas notificações agora só apaga as linhas animadas —
+  notificações que chegarem durante a animação sobrevivem, inclusive se
+  algo falhar no meio.
+- Guarda: chave de conta vazia/inválida nunca é usada (log e ignora).
+- Notificação de poções: detecção no HUD verificada por análise
+  estática (seletores atuais do jogo); verificação ao vivo pendente;
+  throttle de 400ms + ignora quando o HUD some do DOM.
 
 Novidades (v1.4.1)
 ------------------

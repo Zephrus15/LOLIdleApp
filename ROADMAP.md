@@ -1,6 +1,6 @@
 ﻿# 🗺️ Roadmap — LoL Idle Desktop
 
-> Base: **v1.4.1** · Última atualização: 2026-11-11
+> Base: **v1.4.2** · Última atualização: 2026-11-11
 > Versão web estilizada: [`ROADMAP.html`](./ROADMAP.html) — abra no navegador para visualizar como site.
 
 <p align="center">
@@ -18,7 +18,7 @@
 |---|---|---|
 | 📖 **Missões** | ✅ **Confirmado** | v1.2.5 / v1.2.6 |
 | 🔔 **Bandeja inteligente (sons + clique abre app e troca de conta)** | ✅ **Confirmado** | v1.2.0 → v1.3.0 / v1.3.7 / v1.3.8 |
-| 🔔 **Toasts modernos + Central de Ações clicável** | ✅ **Feito** | v1.4.0 / v1.4.1 (Limpar também marca não lidos) |
+| 🔔 **Toasts modernos + Central de Ações clicável** | ✅ **Feito** | v1.4.0 / v1.4.1 (Limpar também marca não lidos) / v1.4.2 (conta ativa na frente não notifica) |
 | 🎛️ **Barra lateral de contas** | ✅ **Feito** | v1.3.2 / v1.3.3 / v1.3.5 / v1.3.6 / v1.3.7 / v1.3.8 / v1.3.9 |
 | 🖼️ **Avatares das contas (3 fontes)** | ✅ **Feito** | v1.3.6 |
 | 🔴 **Sinalizações de não lida / últimas notificações na sidebar** | ✅ **Feito** | v1.3.7 / v1.3.8 / v1.3.9 |
@@ -168,7 +168,8 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 - [x] Animações refinadas (sidebar e notificações: deslize lateral, fade, startup sem flash) — **feito na v1.3.9**
 - [x] Toasts modernos e Central de Ações clicável (AppUserModelId `Zephrus15.LoLIdle.Desktop`) — **feito na v1.4.0**
 - [x] Botão "Limpar" em "Últimas notificações" também remove as bolinhas de não lida — **feito na v1.4.1**
+- [x] Conta ativa na frente não notifica; limpeza preserva recém-chegadas; toast/balão remove item correspondente e linha órfã de conta removida; HUD de poções analisado estaticamente — **feito na v1.4.2**
 
 ---
 
-<sub>Documento gerado a partir do estado atual do app (v1.4.1). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site.</sub>
+<sub>Documento gerado a partir do estado atual do app (v1.4.2). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site.</sub>
