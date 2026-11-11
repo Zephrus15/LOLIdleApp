@@ -2688,6 +2688,10 @@ public partial class MainWindow : Window
         ApplySidebarLayout();
     }
 
+    // Primeira aplicação do layout (inicialização) é instantânea; chamadas
+    // seguintes (toggle) animam fade + deslize lateral do painel.
+    private bool _sidebarLayoutInitialized;
+
     // Aplica a largura/visibilidade da barra lateral com base na preferência salva.
     private void ApplySidebarLayout()
     {
@@ -2697,18 +2701,16 @@ public partial class MainWindow : Window
         bool visible = _settings.SidebarVisible;
         double width = _settings.SidebarWidth >= 160 ? _settings.SidebarWidth : 260;
 
+        // Cancela animações pendentes do painel antes de aplicar o novo estado.
+        SidebarPanel.BeginAnimation(UIElement.OpacityProperty, null);
+        if (SidebarPanel.RenderTransform is TranslateTransform sidebarTt)
+            sidebarTt.BeginAnimation(TranslateTransform.XProperty, null);
+
         if (SidebarRailColumn != null)
             SidebarRailColumn.Width = visible ? new GridLength(28) : new GridLength(52);
 
         if (SidebarRailPanel != null)
             SidebarRailPanel.Visibility = visible ? Visibility.Collapsed : Visibility.Visible;
-
-        SidebarColumn.Width = visible ? new GridLength(width) : new GridLength(0);
-        SidebarPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-
-        // Ao minimizar, reconstrói a faixa de avatares da borda (e a da sidebar recolhida).
-        if (!visible && SidebarRailPanel != null)
-            RebuildContasStrip(_settings.ContaAtiva ?? DefaultAccountName);
 
         // Alterna a visibilidade dos dois ícones vetoriais
         if (SidebarToggleLeftIcon != null && SidebarToggleRightIcon != null)
@@ -2718,6 +2720,82 @@ public partial class MainWindow : Window
         }
 
         SidebarToggleButton.ToolTip = visible ? "Esconder contas" : "Mostrar contas";
+
+        // Ao minimizar, reconstrói a faixa de avatares da borda (e a da sidebar recolhida).
+        if (!visible && SidebarRailPanel != null)
+            RebuildContasStrip(_settings.ContaAtiva ?? DefaultAccountName);
+
+        if (!_sidebarLayoutInitialized)
+        {
+            // Inicialização: aplica o estado salvo sem animação (evita flash na abertura).
+            _sidebarLayoutInitialized = true;
+            SidebarColumn.Width = visible ? new GridLength(width) : new GridLength(0);
+            SidebarPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+            SidebarPanel.Opacity = 1;
+            SidebarPanel.RenderTransform = null;
+            return;
+        }
+
+        if (!visible)
+        {
+            if (SidebarPanel.Visibility != Visibility.Visible)
+            {
+                // Já está escondido: garante o estado final sem animar.
+                SidebarColumn.Width = new GridLength(0);
+                SidebarPanel.Visibility = Visibility.Collapsed;
+                SidebarPanel.Opacity = 1;
+                SidebarPanel.RenderTransform = null;
+                return;
+            }
+
+            // Esconder: fade-out + deslize para a direita; só colapsa no fim.
+            var panel = SidebarPanel;
+            panel.RenderTransform = new TranslateTransform { X = 0 };
+            panel.Opacity = 1;
+
+            var animX = new DoubleAnimation
+            {
+                From = 0,
+                To = 80,
+                Duration = TimeSpan.FromMilliseconds(160),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
+                FillBehavior = FillBehavior.Stop
+            };
+            animX.Completed += (_, _) =>
+            {
+                SidebarColumn.Width = new GridLength(0);
+                panel.Visibility = Visibility.Collapsed;
+                panel.Opacity = 1;
+                panel.RenderTransform = null;
+            };
+            panel.BeginAnimation(UIElement.OpacityProperty,
+                new DoubleAnimation { From = 1, To = 0, Duration = TimeSpan.FromMilliseconds(160), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }, FillBehavior = FillBehavior.Stop });
+            ((TranslateTransform)panel.RenderTransform).BeginAnimation(TranslateTransform.XProperty, animX);
+            return;
+        }
+
+        // Mostrar: abre o espaço na hora e anima fade-in + deslize de volta.
+        SidebarColumn.Width = new GridLength(width);
+        SidebarPanel.Visibility = Visibility.Visible;
+        SidebarPanel.Opacity = 0;
+        SidebarPanel.RenderTransform = new TranslateTransform { X = 80 };
+
+        var animShowX = new DoubleAnimation
+        {
+            From = 80,
+            To = 0,
+            Duration = TimeSpan.FromMilliseconds(160),
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            FillBehavior = FillBehavior.Stop
+        };
+        animShowX.Completed += (_, _) =>
+        {
+            SidebarPanel.Opacity = 1;
+            SidebarPanel.RenderTransform = null;
+        };
+        SidebarPanel.BeginAnimation(UIElement.OpacityProperty,
+            new DoubleAnimation { From = 0, To = 1, Duration = TimeSpan.FromMilliseconds(160), EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }, FillBehavior = FillBehavior.Stop });
+        ((TranslateTransform)SidebarPanel.RenderTransform).BeginAnimation(TranslateTransform.XProperty, animShowX);
     }
 
     // Abre o painel de Notificações (onde o usuário escolhe contas/tipos)
@@ -3015,7 +3093,7 @@ public partial class MainWindow : Window
         }
     }
 
-    // Botão "Limpar" das Últimas notificações: anima o desaparecimento das linhas (fade + deslize escalonado)
+    // Botão "Limpar" das Últimas notificações: anima o desaparecimento das linhas (fade + deslize para a direita, escalonado)
     // e só então esvazia a lista. Não mexe nas marcações de não lida (_contasNaoLidas).
     private void LimparNotificacoes_Click(object sender, RoutedEventArgs e)
     {
@@ -3040,11 +3118,11 @@ public partial class MainWindow : Window
                 linha.RenderTransform = translate;
 
                 var beginTime = TimeSpan.FromMilliseconds(i * 45);
-                var animY = new DoubleAnimation
+                var animX = new DoubleAnimation
                 {
                     From = 0,
-                    To = -10,
-                    Duration = TimeSpan.FromMilliseconds(180),
+                    To = 320,
+                    Duration = TimeSpan.FromMilliseconds(240),
                     BeginTime = beginTime,
                     FillBehavior = FillBehavior.Stop
                 };
@@ -3052,7 +3130,7 @@ public partial class MainWindow : Window
                 {
                     From = 1,
                     To = 0,
-                    Duration = TimeSpan.FromMilliseconds(180),
+                    Duration = TimeSpan.FromMilliseconds(240),
                     BeginTime = beginTime,
                     FillBehavior = FillBehavior.Stop
                 };
@@ -3066,7 +3144,7 @@ public partial class MainWindow : Window
                     };
                 }
 
-                translate.BeginAnimation(TranslateTransform.YProperty, animY);
+                translate.BeginAnimation(TranslateTransform.XProperty, animX);
                 linha.BeginAnimation(UIElement.OpacityProperty, animOpacity);
             }
         }
@@ -3079,7 +3157,7 @@ public partial class MainWindow : Window
     }
 
     // Clique numa linha de "Últimas notificações": pulso rápido no fundo da linha, anima a saída
-    // (fade + deslize para cima) e só então remove o item da lista e troca para a conta.
+    // (fade + deslize para a direita) e só então remove o item da lista e troca para a conta.
     private async void NotificacaoLinha_Click(object sender, MouseButtonEventArgs e)
     {
         if (sender is not Border linha || linha.Tag is not NotificacaoItem item)
@@ -3112,18 +3190,18 @@ public partial class MainWindow : Window
             var translate = new TranslateTransform();
             linha.RenderTransform = translate;
 
-            var animY = new DoubleAnimation
+            var animX = new DoubleAnimation
             {
                 From = 0,
-                To = -10,
-                Duration = TimeSpan.FromMilliseconds(160),
+                To = 320,
+                Duration = TimeSpan.FromMilliseconds(220),
                 FillBehavior = FillBehavior.Stop
             };
             var animOpacity = new DoubleAnimation
             {
                 From = 1,
                 To = 0,
-                Duration = TimeSpan.FromMilliseconds(160),
+                Duration = TimeSpan.FromMilliseconds(220),
                 FillBehavior = FillBehavior.Stop
             };
             animOpacity.Completed += async (_, _) =>
@@ -3142,7 +3220,7 @@ public partial class MainWindow : Window
                 }
             };
 
-            translate.BeginAnimation(TranslateTransform.YProperty, animY);
+            translate.BeginAnimation(TranslateTransform.XProperty, animX);
             linha.BeginAnimation(UIElement.OpacityProperty, animOpacity);
         }
         catch
@@ -4296,15 +4374,16 @@ public partial class MainWindow : Window
 
         if (recolher)
         {
-            // Colapsa a lista (MaxHeight -> 0 + Opacity -> 0); a faixa de avatares faz fade-in.
+            // Colapsa a lista (MaxHeight -> 0 + Opacity -> 0 + deslize para a direita); a faixa de avatares faz fade-in.
             double from = ContasListPanel.ActualHeight > 0 ? ContasListPanel.ActualHeight : ContasListPanel.DesiredSize.Height;
             ContasListPanel.MaxHeight = double.IsNaN(from) || from <= 0 ? 400 : from;
+            ContasListPanel.RenderTransform = new TranslateTransform { X = 0 };
 
             var animH = new DoubleAnimation
             {
                 From = ContasListPanel.MaxHeight,
                 To = 0,
-                Duration = TimeSpan.FromMilliseconds(210),
+                Duration = TimeSpan.FromMilliseconds(300),
                 EasingFunction = ease,
                 FillBehavior = FillBehavior.Stop
             };
@@ -4313,11 +4392,12 @@ public partial class MainWindow : Window
                 ContasListPanel.Visibility = Visibility.Collapsed;
                 ContasListPanel.MaxHeight = double.PositiveInfinity;
                 ContasListPanel.Opacity = 1;
+                ContasListPanel.RenderTransform = null;
                 if (ContasStripPanel != null)
                 {
                     ContasStripPanel.Visibility = Visibility.Visible;
                     ContasStripPanel.BeginAnimation(UIElement.OpacityProperty,
-                        new DoubleAnimation { From = 0, To = 1, Duration = TimeSpan.FromMilliseconds(160) });
+                        new DoubleAnimation { From = 0, To = 1, Duration = TimeSpan.FromMilliseconds(200) });
                 }
                 if (ContasHideButton != null)
                     ContasHideButton.Content = "Contas ▾";
@@ -4325,7 +4405,9 @@ public partial class MainWindow : Window
             };
             ContasListPanel.BeginAnimation(FrameworkElement.MaxHeightProperty, animH);
             ContasListPanel.BeginAnimation(UIElement.OpacityProperty,
-                new DoubleAnimation { From = 1, To = 0, Duration = TimeSpan.FromMilliseconds(180), FillBehavior = FillBehavior.Stop });
+                new DoubleAnimation { From = 1, To = 0, Duration = TimeSpan.FromMilliseconds(300), FillBehavior = FillBehavior.Stop });
+            ((TranslateTransform)ContasListPanel.RenderTransform).BeginAnimation(TranslateTransform.XProperty,
+                new DoubleAnimation { From = 0, To = 140, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = ease, FillBehavior = FillBehavior.Stop });
         }
         else
         {
@@ -4340,12 +4422,13 @@ public partial class MainWindow : Window
             double para = ContasListPanel.DesiredSize.Height > 0 ? ContasListPanel.DesiredSize.Height : 400;
             ContasListPanel.MaxHeight = 0;
             ContasListPanel.Opacity = 0;
+            ContasListPanel.RenderTransform = new TranslateTransform { X = 140 };
 
             var animH = new DoubleAnimation
             {
                 From = 0,
                 To = para,
-                Duration = TimeSpan.FromMilliseconds(210),
+                Duration = TimeSpan.FromMilliseconds(300),
                 EasingFunction = ease,
                 FillBehavior = FillBehavior.Stop
             };
@@ -4353,13 +4436,16 @@ public partial class MainWindow : Window
             {
                 ContasListPanel.MaxHeight = double.PositiveInfinity;
                 ContasListPanel.Opacity = 1;
+                ContasListPanel.RenderTransform = null;
                 if (ContasHideButton != null)
                     ContasHideButton.Content = "Contas ▴";
                 _contasAnimando = false;
             };
             ContasListPanel.BeginAnimation(FrameworkElement.MaxHeightProperty, animH);
             ContasListPanel.BeginAnimation(UIElement.OpacityProperty,
-                new DoubleAnimation { From = 0, To = 1, Duration = TimeSpan.FromMilliseconds(180), FillBehavior = FillBehavior.Stop });
+                new DoubleAnimation { From = 0, To = 1, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = ease, FillBehavior = FillBehavior.Stop });
+            ((TranslateTransform)ContasListPanel.RenderTransform).BeginAnimation(TranslateTransform.XProperty,
+                new DoubleAnimation { From = 140, To = 0, Duration = TimeSpan.FromMilliseconds(300), EasingFunction = ease, FillBehavior = FillBehavior.Stop });
         }
     }
 

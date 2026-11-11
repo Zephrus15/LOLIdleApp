@@ -1,6 +1,6 @@
 ﻿# 🗺️ Roadmap — LoL Idle Desktop
 
-> Base: **v1.3.8** · Última atualização: 2026-11-11
+> Base: **v1.3.9** · Última atualização: 2026-11-11
 > Versão web estilizada: [`ROADMAP.html`](./ROADMAP.html) — abra no navegador para visualizar como site.
 
 <p align="center">
@@ -18,9 +18,9 @@
 |---|---|---|
 | 📖 **Missões** | ✅ **Confirmado** | v1.2.5 / v1.2.6 |
 | 🔔 **Bandeja inteligente (sons + clique abre app e troca de conta)** | ✅ **Confirmado** | v1.2.0 → v1.3.0 / v1.3.7 / v1.3.8 |
-| 🎛️ **Barra lateral de contas** | ✅ **Feito** | v1.3.2 / v1.3.3 / v1.3.5 / v1.3.6 / v1.3.7 / v1.3.8 |
+| 🎛️ **Barra lateral de contas** | ✅ **Feito** | v1.3.2 / v1.3.3 / v1.3.5 / v1.3.6 / v1.3.7 / v1.3.8 / v1.3.9 |
 | 🖼️ **Avatares das contas (3 fontes)** | ✅ **Feito** | v1.3.6 |
-| 🔴 **Sinalizações de não lida / últimas notificações na sidebar** | ✅ **Feito** | v1.3.7 / v1.3.8 |
+| 🔴 **Sinalizações de não lida / últimas notificações na sidebar** | ✅ **Feito** | v1.3.7 / v1.3.8 / v1.3.9 |
 | 🔔 **Notificações por conta e por tipo** | ✅ **Feito** | v1.3.3 |
 | 🧪 **Poções: notificação + retorno à Fonte (modo Automático)** | ✅ **Feito** | v1.3.8 |
 | 🧙 **Personagem (interativo)** | ❌ **Impossível** | — (jogo bloqueia 2ª sessão) |
@@ -45,7 +45,7 @@ Painel separado e destacável que **já está pronto** (v1.2.5 / v1.2.6):
 
 > ℹ️ É um painel **só-texto** (igual ao que a Barra lateral poderia ser), sem segunda sessão do jogo.
 
-### 🎛️ Barra lateral de contas — `FEITO` ✅ (v1.3.2 / v1.3.3 / v1.3.5 / v1.3.6 / v1.3.7 / v1.3.8)
+### 🎛️ Barra lateral de contas — `FEITO` ✅ (v1.3.2 / v1.3.3 / v1.3.5 / v1.3.6 / v1.3.7 / v1.3.8 / v1.3.9)
 
 A sidebar **de contas** (lado direito, com toggle esconder/mostrar) foi implementada e evoluiu ao longo da v1.3.x:
 
@@ -68,26 +68,27 @@ A sidebar **de contas** (lado direito, com toggle esconder/mostrar) foi implemen
 - **Correções de interação** (v1.3.6) — clique no avatar abre o editor; bolinha de status não bloqueia mais cliques; clique em emoji/cor/campeão funciona em qualquer parte da célula (antes só na borda)
 - **Sinalizações de não lida + "Últimas notificações"** (v1.3.7) — ver seção abaixo
 - **"Últimas notificações" no rodapé, nos dois modos** (v1.3.8) — a seção fica encostada no rodapé da sidebar e visível tanto com a lista expandida quanto recolhida, com linhas de borda a borda
-- **Animação de recolhimento/expansão da seção de contas** (v1.3.8) — ~210 ms, suavizada (`CubicEase`)
+- **Animação de recolhimento/expansão da seção de contas** (v1.3.8; **refinada na v1.3.9**) — deslize lateral + fade (a lista desliza para a direita e desvanece ao recolher, e volta deslizando ao expandir), junto com o encolhimento/crescimento; faixa de avatares com fade. Duração **~300 ms** (v1.3.9; antes ~210 ms), suavizada (`CubicEase`)
 - **Botões 🔔 Notificações e ⚙ Opções de fechamento sempre visíveis** (v1.3.8) — continuam abaixo dos avatares na lista recolhida, nos dois modos
+- **Sidebar inteira com fade + deslize lateral** (v1.3.9) — esconder/mostrar a barra pelo chevron da borda anima fade + deslize para a direita (~160 ms); na primeira chamada (startup) o estado salvo é aplicado sem flash
 - **Botão de expandir/recolher centralizado na sidebar minimizada** (v1.3.8) — faixa na borda direita com os avatares (menores, no topo) e o botão no meio; clique no avatar troca de conta
 - **Correções de estabilidade** (v1.3.7) — inicialização das contas WebView2 protegida por exceções (falha em uma conta desregistra só ela, sem afetar as outras); desmute só retoma AudioContext suspenso pelo próprio app; remover a conta ativa troca para a principal e limpa as preferências por conta da conta removida (login salvo preservado)
 - Conta ativa lembrada ao reabrir (`ContaAtiva`)
 
 > ℹ️ **O que continua inviável** é um **painel do jogo interativo dentro da barra** (2ª sessão viva acoplada ao painel) — o LoL Idle bloqueia uma segunda WebView com o jogo absoluto no mesmo momento. A barra feita aqui é **seletor + gerenciador de contas**, não um painel vivo.
 
-### 🔔 Sinalizações de não lida / últimas notificações na sidebar — `FEITO` ✅ (v1.3.7 / v1.3.8)
+### 🔔 Sinalizações de não lida / últimas notificações na sidebar — `FEITO` ✅ (v1.3.7 / v1.3.8 / v1.3.9)
 
 A sidebar de contas passou a sinalizar notificações pendentes sem precisar abrir a janela do jogo:
 
 - **Bolinha vermelha de não lida** nos avatares de contas que receberam uma notificação e ainda não foram vistas — aparece tanto na **lista expandida** quanto nas **faixas recolhidas/minimizadas**. Some ao trocar para a conta.
 - **Seção "Últimas notificações"** na parte de baixo da sidebar (v1.3.7: modo expandido; **v1.3.8: visível nos dois modos** — expandida e recolhida —, encostada no rodapé, com linhas de borda a borda): as **4 notificações mais recentes**, com nome da conta, o que aconteceu (Missão concluída!, Subiu de nível!, Inventário cheio!, Item épico/lendário obtido!, Poções de HP/MP acabaram!) e tempo relativo ("agora", "há X min"). A mais antiga fica em cima e a nova entra por baixo.
-- **Clicar numa notificação** troca para a conta dela e ela sai da lista com animação (fade + deslize); a linha tem um **pulso de fundo** ao ser clicada.
-- Botão **"Limpar"** na seção: esvazia a lista com animação escalonada (fade/deslize) — **não afeta** as bolinhas de não lido.
+- **Clicar numa notificação** troca para a conta dela e ela sai da lista com animação (fade + deslize para a direita; v1.3.9, antes deslize para cima); a linha tem um **pulso de fundo** ao ser clicada.
+- Botão **"Limpar"** na seção: esvazia a lista com animação escalonada (fade/deslize para a direita, 240 ms, escalonamento de 45 ms) — **não afeta** as bolinhas de não lido.
 - **Clicar no balão da bandeja** restaura/abre a janela e troca para a conta da notificação (v1.3.7; **v1.3.8**: se o aviso for de poções, o personagem também volta para a Fonte — ver card abaixo).
 - Com a lista de contas recolhida ("Contas ▴"), a faixa vertical mostra os **avatares das contas** (clique troca de conta) no lugar do espaço vazio.
 - Com a sidebar inteira minimizada, uma **faixinha na borda direita** mostra os avatares das contas conectadas (menores, no topo), com o botão de expandir/recolher no meio; clique no avatar troca de conta.
-- Animações: linha de notificação pulsa ao ser clicada; limpar faz as linhas deslizar/desaparecer escalonado.
+- Animações: linha de notificação pulsa ao ser clicada; limpar faz as linhas deslizar para a direita e desaparecer escalonado (v1.3.9).
 
 > ℹ️ O rastreamento das notificações (`_ultimasNotificacoes`, `_contasNaoLidas`) é **somente em memória** — nada é persistido no `window-settings.json`.
 
@@ -163,7 +164,8 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 - [x] Avatares das contas (3 fontes) + aba Campeões + janela "Alterar avatar" com zoom — **feito na v1.3.6**
 - [x] Sinalizações de não lida / últimas notificações na sidebar — **feito na v1.3.7**
 - [x] Poções: notificação + retorno à Fonte (modo Automático) — **feito na v1.3.8**
+- [x] Animações refinadas (sidebar e notificações: deslize lateral, fade, startup sem flash) — **feito na v1.3.9**
 
 ---
 
-<sub>Documento gerado a partir do estado atual do app (v1.3.8). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site.</sub>
+<sub>Documento gerado a partir do estado atual do app (v1.3.9). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site.</sub>

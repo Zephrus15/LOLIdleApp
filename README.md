@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.3.8](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.3.8)**
+**[Baixar LoL Idle Desktop v1.3.9](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.3.9)**
 
 ### Instalador (quando disponível na Release)
 
@@ -138,6 +138,12 @@ artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.3.9
+- **Animações refinadas (sidebar e notificações)** — só polimento visual, nenhuma funcionalidade muda:
+  - **"Últimas notificações"**: ao clicar numa linha ou em **"Limpar"**, as linhas agora **saem deslizando para o lado (direita)** em vez de subir, e um pouco mais devagar — clique na linha **220 ms**; **Limpar** **240 ms** (escalonamento de **45 ms** mantido).
+  - **Recolher/expandir a seção de contas**: a lista agora **desliza para a direita e desvanece** ao recolher (e volta deslizando ao expandir), junto com o encolhimento/crescimento; a faixa de avatares aparece com fade. Duração **~300 ms** (contas mais lenta a pedido do usuário) — antes ~210 ms.
+  - **Sidebar inteira (botão chevron da borda)**: esconder/mostrar a barra agora tem **fade + deslize lateral** (~**160 ms**) — e na primeira chamada (startup) o estado salvo é aplicado **sem flash** de aparecimento/sumida.
 
 ### v1.3.8
 - Sidebar de contas: a seção **"Últimas notificações"** agora fica encostada no **rodapé da sidebar**, visível nos **dois modos** (lista expandida e lista recolhida), com as linhas de borda a borda. As **4 notificações mais recentes** aparecem de cima para baixo (a antiga em cima, a nova entra por baixo), com nome da conta, o que aconteceu e tempo relativo; **clicar** numa notificação troca para a conta dela e ela sai da lista com animação; o botão **"Limpar"** esvazia a lista (sem tocar nas bolinhas de não lido).
