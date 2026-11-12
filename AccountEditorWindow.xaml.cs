@@ -27,9 +27,9 @@ namespace LoLIdleDesktop
             "#EAB308", "#EF4444", "#EC4899", "#6E4FD8", "#64748B", "#000000"
         };
 
-        // Borda sutil para swatches muito escuros (ex.: o preto), visíveis no painel #161922.
+        // Borda sutil para swatches muito escuros (ex.: o preto), visíveis no painel #1C2129.
         private static readonly SolidColorBrush BordaSwatchEscuro =
-            new SolidColorBrush(Color.FromRgb(0x2F, 0x35, 0x40));
+            new SolidColorBrush(Color.FromRgb(0x2B, 0x31, 0x3F));
 
         private static bool SwatchEscuro(string hex)
         {
@@ -174,7 +174,7 @@ namespace LoLIdleDesktop
                     Height = 36,
                     Margin = new Thickness(0, 0, 6, 6),
                     CornerRadius = new CornerRadius(8),
-                    Background = new SolidColorBrush(Color.FromRgb(0x1B, 0x1E, 0x27)),
+                    Background = new SolidColorBrush(Color.FromRgb(0x22, 0x27, 0x33)),
                     BorderBrush = Brushes.Transparent,
                     BorderThickness = new Thickness(1),
                     Cursor = Cursors.Hand,
@@ -183,7 +183,7 @@ namespace LoLIdleDesktop
                     {
                         Text = icon,
                         FontSize = 17,
-                        Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+                        Foreground = new SolidColorBrush(Color.FromRgb(0xD6, 0xDA, 0xE6)),
                         FontFamily = new System.Windows.Media.FontFamily("Segoe UI Emoji, Segoe UI, Tahoma"),
                         HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
                         VerticalAlignment = VerticalAlignment.Center,
@@ -269,7 +269,7 @@ namespace LoLIdleDesktop
                     Height = 60,
                     Margin = new Thickness(0, 0, 6, 6),
                     CornerRadius = new CornerRadius(8),
-                    Background = new SolidColorBrush(Color.FromRgb(0x1B, 0x1E, 0x27)),
+                    Background = new SolidColorBrush(Color.FromRgb(0x22, 0x27, 0x33)),
                     BorderBrush = Brushes.Transparent,
                     BorderThickness = new Thickness(1),
                     Cursor = Cursors.Hand,
@@ -305,7 +305,7 @@ namespace LoLIdleDesktop
                     {
                         Text = champion,
                         FontSize = 10,
-                        Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+                        Foreground = new SolidColorBrush(Color.FromRgb(0xD6, 0xDA, 0xE6)),
                         HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
                         VerticalAlignment = VerticalAlignment.Center,
                         TextAlignment = TextAlignment.Center,
@@ -324,12 +324,12 @@ namespace LoLIdleDesktop
             IconsPanel.Visibility = campeoes ? Visibility.Collapsed : Visibility.Visible;
             ChampionsPanel.Visibility = campeoes ? Visibility.Visible : Visibility.Collapsed;
 
-            var ativo = new SolidColorBrush(Color.FromRgb(0x26, 0x2B, 0x3D));
-            var inativo = new SolidColorBrush(Color.FromRgb(0x1E, 0x21, 0x2B));
-            var bordaAtiva = new SolidColorBrush(Color.FromRgb(0x2B, 0xD4, 0x6A));
-            var bordaInativa = new SolidColorBrush(Color.FromRgb(0x2F, 0x35, 0x40));
-            var textoAtivo = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2));
-            var textoInativo = new SolidColorBrush(Color.FromRgb(0x92, 0x98, 0xA5));
+            var ativo = new SolidColorBrush(Color.FromRgb(0x26, 0x2C, 0x39));
+            var inativo = new SolidColorBrush(Color.FromRgb(0x22, 0x27, 0x33));
+            var bordaAtiva = new SolidColorBrush(Color.FromRgb(0xD9, 0x7B, 0x36));
+            var bordaInativa = new SolidColorBrush(Color.FromRgb(0x2B, 0x31, 0x3F));
+            var textoAtivo = new SolidColorBrush(Color.FromRgb(0xD6, 0xDA, 0xE6));
+            var textoInativo = new SolidColorBrush(Color.FromRgb(0x93, 0xA0, 0xB4));
 
             IconsTabButton.Background = campeoes ? inativo : ativo;
             IconsTabButton.BorderBrush = campeoes ? bordaInativa : bordaAtiva;
@@ -499,7 +499,7 @@ namespace LoLIdleDesktop
                 {
                     bool selected = string.Equals(hex, corSelecionada, StringComparison.OrdinalIgnoreCase);
                     circle.BorderBrush = selected
-                        ? new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2))
+                        ? new SolidColorBrush(Color.FromRgb(0xD6, 0xDA, 0xE6))
                         : BordaPadraoDoSwatch(hex);
                 }
             }
@@ -513,10 +513,10 @@ namespace LoLIdleDesktop
                 {
                     bool selected = string.Equals(icon, iconeSelecionado, StringComparison.Ordinal);
                     cell.Background = new SolidColorBrush(selected
-                        ? Color.FromRgb(0x26, 0x2B, 0x3D)
-                        : Color.FromRgb(0x1B, 0x1E, 0x27));
+                        ? Color.FromRgb(0x26, 0x2C, 0x39)
+                        : Color.FromRgb(0x22, 0x27, 0x33));
                     cell.BorderBrush = selected
-                        ? new SolidColorBrush(Color.FromRgb(0x2B, 0xD4, 0x6A))
+                        ? new SolidColorBrush(Color.FromRgb(0xD9, 0x7B, 0x36))
                         : Brushes.Transparent;
                 }
             }
@@ -542,10 +542,10 @@ namespace LoLIdleDesktop
                     bool selected = nomeArquivo != null &&
                         string.Equals(nomeArquivo, $"{slug}-champion-{champion}.png", StringComparison.OrdinalIgnoreCase);
                     cell.Background = new SolidColorBrush(selected
-                        ? Color.FromRgb(0x26, 0x2B, 0x3D)
-                        : Color.FromRgb(0x1B, 0x1E, 0x27));
+                        ? Color.FromRgb(0x26, 0x2C, 0x39)
+                        : Color.FromRgb(0x22, 0x27, 0x33));
                     cell.BorderBrush = selected
-                        ? new SolidColorBrush(Color.FromRgb(0x2B, 0xD4, 0x6A))
+                        ? new SolidColorBrush(Color.FromRgb(0xD9, 0x7B, 0x36))
                         : Brushes.Transparent;
                 }
             }

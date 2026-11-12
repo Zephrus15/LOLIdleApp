@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Collections.Generic;
 using Microsoft.Web.WebView2.Core;
 using System;
@@ -19,6 +20,7 @@ using Image = System.Windows.Controls.Image;
 using Panel = System.Windows.Controls.Panel;
 using CheckBox = System.Windows.Controls.CheckBox;
 using System.Runtime.InteropServices;
+using System.Management;
 using System.Windows.Interop;
 using Forms = System.Windows.Forms;
 using MessageBox = System.Windows.MessageBox;
@@ -121,9 +123,9 @@ public partial class MainWindow : Window
                     display:flex; gap:6px; padding:0; user-select:none; }
                 #lol-idle-floating-controls button { width:30px; height:30px; padding:0;
                     border:none; border-radius:50%;
-                    color:#fff; background:#191c23; cursor:pointer;
+                    color:#fff; background:#1C2129; cursor:pointer;
                     display:grid; place-items:center; }
-                #lol-idle-floating-controls button:hover { background:#2a2e38; }
+                #lol-idle-floating-controls button:hover { background:#2B313F; }
                 #lol-idle-floating-controls button.active { color:#e8cf8f; }
                 #lol-idle-floating-controls svg { width:16px; height:16px; fill:none; stroke:currentColor;
                     stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; pointer-events:none; }
@@ -379,7 +381,6 @@ public partial class MainWindow : Window
     private Window? _preparedFloatingWindow;
     private Microsoft.Web.WebView2.Wpf.WebView2? _preparedFloatingView;
     private bool _isPreparingFloatingView;
-    private Window? _floatingSettingsWindow;
     private const string VoteButtonScript = @"(() => {
         if (window.__lolIdleVoteButtonInstalled) return;
         window.__lolIdleVoteButtonInstalled = true;
@@ -401,12 +402,6 @@ public partial class MainWindow : Window
         new MutationObserver(bind).observe(document.documentElement, { childList: true, subtree: true });
     })();";
 
-    // Janela separada de voto (TopIdle) - independente da janela flutuante.
-    private Window? _voteWindow;
-    private Microsoft.Web.WebView2.Wpf.WebView2? _voteView;
-    private Window? _preparedVoteWindow;
-    private Microsoft.Web.WebView2.Wpf.WebView2? _preparedVoteView;
-    private bool _isPreparingVoteView;
     private const string MissionsScript = @"(() => {
         if (window.__lolIdleMissionsInstalled) return;
         window.__lolIdleMissionsInstalled = true;
@@ -452,13 +447,58 @@ public partial class MainWindow : Window
     private string? _lastMissionsJson;
     private System.Windows.Threading.DispatcherTimer? _missionsPollTimer;
 
+    // Painel "Consumo total": RAM/CPU totais + barra/pill (via WMI + WorkingSet64), RAM/CPU por conta e limpeza de cache.
+    private System.Windows.Threading.DispatcherTimer? _usoTimer;
+    private readonly Dictionary<int, TimeSpan> _ultimoCpu = new();
+    private DateTime _ultimoCpuSample = DateTime.MinValue;
+    private bool _usoColetando;
+    private bool _usoEncerrando;
+    private CancellationTokenSource? _usoCts;
+    // Totais globais (processo principal + todas as WebViews2) usados pela barra de status
+    private double? _footerCpuPercent;
+    private long _footerRamBytes;
+
+    // Linhas visuais do painel (criadas uma única vez; a cada tick só o texto muda).
+    private sealed class LinhaUsoVisual
+    {
+        public required Grid Root { get; init; }
+        public required TextBlock Nome { get; init; }
+        public required TextBlock Valor { get; init; }
+    }
+
+    private readonly List<LinhaUsoVisual> _usoLinhasVisual = new();
+
+    // Meta de referência de RAM do dispositivo/app (bloco "Consumo total").
+    // 1,0 GB por conta conectada (incluindo a principal).
+    private double MetaRamBytes()
+    {
+        int totalContas = (_settings.ContasAdicionadas?.Count ?? 0) + 1; // +1 para principal
+        return totalContas * 1024.0 * 1024.0 * 1024.0; // 1 GB por conta
+    }
+    private static readonly CultureInfo PtBrCulture = CultureInfo.GetCultureInfo("pt-BR");
+    private System.Windows.Threading.DispatcherTimer? _consumoRevertTimer;
+
+    // DTO pequeno devolvido pela coleta de uso (fora da UI thread).
+    private sealed class ContasUsoEntry
+    {
+        public string Conta { get; init; } = "";
+        public long RamBytes { get; init; }
+        public double? CpuPercent { get; init; }
+    }
+
+    // Resultado agregado da coleta (entradas por conta + totais do aplicativo inteiro).
+    private sealed class ContasUsoResultado
+    {
+        public List<ContasUsoEntry> Contas { get; } = new();
+        public long TotalRamBytes { get; set; }
+        public double? FooterCpuPercent { get; set; }
+    }
+
     private WindowSettings _settings = new();
     private string SettingsPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "LoLIdleDesktop", "window-settings.json");
 
-    private const int WM_GETMINMAXINFO = 0x0024;
-    private const uint MONITOR_DEFAULTTONEAREST = 0x00000002;
     private const int WM_NCLBUTTONDOWN = 0x00A1;
     private const int HTCAPTION = 0x0002;
 
@@ -495,14 +535,12 @@ public partial class MainWindow : Window
         public bool ShowMissions { get; set; }
         public bool SidebarVisible { get; set; } = true;
         public double SidebarWidth { get; set; } = 260;
-        public int ContasAdicionadasCount { get; set; } = 0;
         public bool HasMissionsBounds { get; set; }
         public double MissionsWidth { get; set; } = 360;
         public double MissionsHeight { get; set; } = 320;
         public double MissionsLeft { get; set; } = 200;
         public double MissionsTop { get; set; } = 200;
         public bool IsMaximized { get; set; }
-        public bool RememberWindowState { get; set; } = true;
         // Comportamento ao fechar (0 = perguntar, 1 = continuar em segundo plano, 2 = sair)
         public int CloseBehavior { get; set; } = 0;
         public List<string> ContasAdicionadas { get; set; } = new();
@@ -540,49 +578,7 @@ public partial class MainWindow : Window
             SaveWindowSettings();
         };
         InitializeTrayIcon();
-        SourceInitialized += Window_SourceInitialized;
     }
-
-    private void Window_SourceInitialized(object? sender, EventArgs e)
-    { }
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
-
-    [DllImport("user32.dll", SetLastError = true)]
-    private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct POINT { public int x; public int y; }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MINMAXINFO
-    {
-        public POINT ptReserved;
-        public POINT ptMaxSize;
-        public POINT ptMaxPosition;
-        public POINT ptMinTrackSize;
-        public POINT ptMaxTrackSize;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RECT { public int left; public int top; public int right; public int bottom; }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct MONITORINFO
-    {
-        public int cbSize;
-        public RECT rcMonitor;
-        public RECT rcWork;
-        public uint dwFlags;
-    }
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
-
-    [DllImport("user32.dll", CharSet = CharSet.Auto)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
 
     // Lê as preferências e recupera a posição/tamanho usados anteriormente.
     private void RestoreWindowSettings()
@@ -606,13 +602,12 @@ public partial class MainWindow : Window
         {
             _settings = settings;
 
-            // Sincroniza contagem com a lista de contas persistidas
+            // Normaliza a lista de contas persistidas
             if (_settings.ContasAdicionadas == null)
                 _settings.ContasAdicionadas = new List<string>();
             _settings.ContasAdicionadas = _settings.ContasAdicionadas
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
-            _settings.ContasAdicionadasCount = _settings.ContasAdicionadas.Count;
             if (_settings.ContasNomes == null)
                 _settings.ContasNomes = new Dictionary<string, string>();
             if (_settings.ContasNomesPersonalizados == null)
@@ -656,7 +651,7 @@ public partial class MainWindow : Window
                 Top = Math.Clamp(settings.Top, minTop, Math.Max(minTop, maxTop));
             }
 
-            if (settings.RememberWindowState && settings.IsMaximized)
+            if (settings.IsMaximized)
             {
                 _restoreLeft = Left; _restoreTop = Top;
                 _restoreWidth = Width; _restoreHeight = Height;
@@ -943,7 +938,7 @@ public partial class MainWindow : Window
             ShowInTaskbar = false,
             ShowActivated = false,
             Topmost = _settings.MissionsTopmost,
-            Background = new SolidColorBrush(Color.FromRgb(25, 28, 35)),
+            Background = new SolidColorBrush(Color.FromRgb(28, 33, 41)),
             BorderBrush = new SolidColorBrush(Color.FromRgb(242, 192, 58)),
             BorderThickness = new Thickness(1)
         };
@@ -952,7 +947,7 @@ public partial class MainWindow : Window
         win.Top = _settings.HasMissionsBounds ? _settings.MissionsTop : 200;
         win.LocationChanged += (_, _) => { _settings.MissionsLeft = win.Left; _settings.MissionsTop = win.Top; _settings.HasMissionsBounds = true; SaveWindowSettings(); };
         win.SizeChanged += (_, _) => { _settings.MissionsWidth = win.Width; _settings.MissionsHeight = win.Height; _settings.HasMissionsBounds = true; SaveWindowSettings(); };
-        var root = new StackPanel { Margin = new Thickness(10), Background = new SolidColorBrush(Color.FromRgb(25, 28, 35)) };
+        var root = new StackPanel { Margin = new Thickness(10), Background = new SolidColorBrush(Color.FromRgb(28, 33, 41)) };
         _missionsRoot = root;
         var top = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 6) };
         var pinBtn = new Button { Content = "📌", Width = 20, Height = 20, Background = Brushes.Transparent, Foreground = win.Topmost ? new SolidColorBrush(Color.FromRgb(232, 207, 143)) : Brushes.White, BorderThickness = new Thickness(0) };
@@ -971,7 +966,7 @@ public partial class MainWindow : Window
         closeBtn.Click += (_, _) => { win.Hide(); _settings.ShowMissions = false; SaveWindowSettings(); SyncFloatingControls(); };
         top.Children.Add(closeBtn);
         root.Children.Add(top);
-        _missionsTitle = new TextBlock { Text = "Missões", Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143)), FontSize = 14, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 0, 0, 8) };
+        _missionsTitle = new TextBlock { Text = "Missões", Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143)), FontSize = 14, FontWeight = FontWeights.SemiBold, FontFamily = new System.Windows.Media.FontFamily("pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"), Margin = new Thickness(0, 0, 0, 8) };
         root.Children.Add(_missionsTitle);
         _missionsPasseTxt = new TextBlock { Text = "Passe", Foreground = Brushes.White, FontSize = 12, Margin = new Thickness(0, 0, 0, 4) };
         _missionsPasseBar = new System.Windows.Controls.ProgressBar { Height = 14, Margin = new Thickness(0, 0, 0, 10), Foreground = new LinearGradientBrush { GradientStops = new GradientStopCollection { new GradientStop(Color.FromRgb(180, 132, 26), 0), new GradientStop(Color.FromRgb(242, 192, 58), 1) }, StartPoint = new System.Windows.Point(0, 0), EndPoint = new System.Windows.Point(0, 1) }, Background = new SolidColorBrush(Color.FromRgb(30, 34, 42)) };
@@ -1024,8 +1019,8 @@ public partial class MainWindow : Window
         win.GotFocus += (_, _) => win.BorderThickness = new Thickness(1);
         win.LostFocus += (_, _) => win.BorderThickness = new Thickness(0);
         win.Opacity = 1.0;
-        win.MouseEnter += (_, _) => { root.Background = new SolidColorBrush(Color.FromRgb(25, 28, 35)); };
-        win.MouseLeave += (_, _) => { root.Background = new SolidColorBrush(Color.FromRgb(25, 28, 35)); };
+        win.MouseEnter += (_, _) => { root.Background = new SolidColorBrush(Color.FromRgb(28, 33, 41)); };
+        win.MouseLeave += (_, _) => { root.Background = new SolidColorBrush(Color.FromRgb(28, 33, 41)); };
         _missionsWindow = win;
         _lastMissionsJson = null;
         win.Show();
@@ -1143,10 +1138,14 @@ public partial class MainWindow : Window
     {
         SaveWindowSettings();
         _allowExit = true;
+        _usoEncerrando = true;
+        try { _usoTimer?.Stop(); } catch { }
+        _usoTimer = null;
+        try { _consumoRevertTimer?.Stop(); } catch { }
+        try { _usoCts?.Cancel(); } catch { }
+        _usoCts = null;
         try { _missionsWindow?.Close(); } catch { }
         _missionsWindow = null;
-
-        _floatingSettingsWindow?.Close();
 
         // Fecha a janela flutuante junto com o processo quando o usuário escolhe Sair.
         if (_floatingWindow != null)
@@ -1163,21 +1162,6 @@ public partial class MainWindow : Window
             _preparedFloatingView = null;
             prepared.Close();
         }
-        if (_voteWindow != null)
-        {
-            var vote = _voteWindow;
-            _voteWindow = null;
-            _voteView = null;
-            vote.Close();
-        }
-        if (_preparedVoteWindow != null)
-        {
-            var preparedVote = _preparedVoteWindow;
-            _preparedVoteWindow = null;
-            _preparedVoteView = null;
-            preparedVote.Close();
-        }
-
         // Libera as WebViews de conta ao sair do aplicativo (as pastas de sessão NÃO são apagadas).
         foreach (var accountView in _accountViews.Values)
         {
@@ -1201,6 +1185,7 @@ public partial class MainWindow : Window
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
         RestoreWindowSettings();
+        IniciarUsoRecursosTimer();
 
         try
         {
@@ -1251,12 +1236,9 @@ public partial class MainWindow : Window
             ApplyAccountVisibility();
             _ = AtualizarContaConectadaUIAsync();
             _ = PrepareFloatingWebViewAsync(this);
-            _ = PrepareVoteWebViewAsync(this);
         }
         catch (Exception ex)
         {
-            StatusText.Text = "Erro ao iniciar o WebView2. Consulte o LEIA-ME.";
-
             MessageBox.Show(
                 "Não foi possível iniciar o componente WebView2.\n\n" +
                 ex.Message +
@@ -1388,28 +1370,6 @@ public partial class MainWindow : Window
         }
     }
 
-    // Mostra a janela separada de voto com decoração normal do Windows,
-    // em estilo mobile (estreita, vertical, centrada).
-    private void ShowVoteWindow(Window window)
-    {
-        window.Title = "Votar no LoL Idle — TopIdle";
-        window.WindowState = WindowState.Normal;
-        window.WindowStyle = WindowStyle.SingleBorderWindow;
-        window.ResizeMode = ResizeMode.CanResize;
-        window.ShowInTaskbar = true;
-        window.ShowActivated = true;
-        window.Topmost = false;
-        window.Opacity = 1;
-        window.Width = 420;
-        window.Height = 800;
-        window.MinWidth = 320;
-        window.MinHeight = 600;
-        window.WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        if (!window.IsVisible)
-            window.Show();
-        window.Activate();
-    }
-
     // Restaura a última geometria da janela flutuante sem deixá-la fora da tela.
     private void ShowFloatingWindow(Window window)
     {
@@ -1507,34 +1467,6 @@ public partial class MainWindow : Window
         }
     }
 
-    private static System.Windows.Shapes.Path CreateToolbarIcon(string name, System.Windows.Media.Brush color)
-    {
-        var data = name switch
-        {
-            "volume" => "M3,9 L7,9 L12,5 L12,19 L7,15 L3,15 Z M15,9 C17.5,11 17.5,13 15,15 M17.5,6.5 C21.5,10 21.5,14 17.5,17.5",
-            "mute" => "M3,9 L7,9 L12,5 L12,19 L7,15 L3,15 Z M16,9 L21,15 M21,9 L16,15",
-            "pin" => "M9,3 L15,3 L14,8 L17,11 L17,13 L13,13 L12,21 L10,13 L6,13 L6,11 L9,8 Z",
-            "pin-filled" => "M9,3 L15,3 L14,8 L17,11 L17,13 L13,13 L12,21 L10,13 L6,13 L6,11 L9,8 Z",
-            _ => "M6,6 L18,18 M18,6 L6,18"
-        };
-
-        return new System.Windows.Shapes.Path
-        {
-            Data = Geometry.Parse(data),
-            Fill = name == "pin-filled" ? color : Brushes.Transparent,
-            Stroke = color,
-            StrokeThickness = 1.7,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round,
-            StrokeLineJoin = PenLineJoin.Round,
-            Width = 17,
-            Height = 17,
-            Stretch = System.Windows.Media.Stretch.Uniform,
-            SnapsToDevicePixels = true,
-            IsHitTestVisible = false
-        };
-    }
-
     // Cria (se necessário) e retorna a WebView da conta indicada.
     // A conta padrão reutiliza a sessão salva (\LoLIdleDesktop\WebView2).
     // As demais ganham sessão isolada em \WebView2\Contas\<slug>.
@@ -1550,7 +1482,7 @@ public partial class MainWindow : Window
 
         var view = new Microsoft.Web.WebView2.Wpf.WebView2
         {
-            DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24),
+            DefaultBackgroundColor = System.Drawing.Color.FromArgb(23, 26, 33),
             Visibility = Visibility.Collapsed
         };
         AccountViewHost.Children.Add(view);
@@ -1646,15 +1578,10 @@ public partial class MainWindow : Window
                 }
                 catch { }
             }
-
-            StatusText.Text = "Carregando LoL Idle...";
         };
 
         core.NavigationCompleted += (_, args) =>
         {
-            StatusText.Text = args.IsSuccess
-                ? "LoL Idle pronto  •  Sua sessão fica salva neste computador"
-                : "Não foi possível carregar. Verifique sua conexão e tente atualizar.";
             if (args.IsSuccess)
             {
                 _ = ApplyAudioSettingsAsync();
@@ -1691,6 +1618,11 @@ public partial class MainWindow : Window
             await EnsureAccountViewAsync(key);
             _settings.ContaAtiva = key;
             _contasNaoLidas.Remove(key);
+            var itensConta = _ultimasNotificacoes
+                .Where(n => string.Equals(n.Conta, key, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (itensConta.Count > 0)
+                await RemoverNotificacoesComAnimacaoAsync(itensConta);
             ApplyAccountVisibility();
             SaveWindowSettings();
 
@@ -1729,6 +1661,670 @@ public partial class MainWindow : Window
         var s = sb.ToString().Trim('-');
         while (s.Contains("--")) s = s.Replace("--", "-");
         return string.IsNullOrWhiteSpace(s) ? "conta" : s;
+    }
+
+    // ===== Consumo total + RAM/CPU por conta + limpeza de cache =====
+
+    private void IniciarUsoRecursosTimer()
+    {
+        try
+        {
+            if (_usoTimer != null) return;
+            _usoCts ??= new CancellationTokenSource();
+            _usoTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(5)
+            };
+            _usoTimer.Tick += UsoTimer_Tick;
+            _usoTimer.Start();
+            // Coleta inicial imediata (também fora da UI thread).
+            UsoTimer_Tick(null, EventArgs.Empty);
+        }
+        catch { }
+    }
+
+    // Tick do timer de uso: coleta em background e só atualiza a UI ao voltar.
+    // Se um tick anterior ainda estiver rodando (ou o app estiver saindo), ignora.
+    private async void UsoTimer_Tick(object? sender, EventArgs e)
+    {
+        if (_usoColetando || _usoEncerrando) return;
+        _usoColetando = true;
+        try
+        {
+            var contas = ObterContasOrdem();
+            var ct = _usoCts?.Token ?? CancellationToken.None;
+            var resultado = await ColetarUsoAsync(contas, ct);
+            if (_usoEncerrando) return;
+            AtualizarSidebarComUso(resultado);
+            AtualizarFooterBarCom(resultado);
+        }
+        catch (OperationCanceledException)
+        {
+            // Saída do app: coleta cancelada — não atualiza nada.
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"UsoRecursos: falha: {ex.Message}");
+        }
+        finally
+        {
+            _usoColetando = false;
+        }
+    }
+
+    private List<string> ObterContasOrdem()
+    {
+        var contas = new List<string> { DefaultAccountName };
+        if (_settings.ContasAdicionadas != null)
+        {
+            foreach (var c in _settings.ContasAdicionadas)
+            {
+                if (!string.IsNullOrWhiteSpace(c) &&
+                    !contas.Contains(c, StringComparer.OrdinalIgnoreCase))
+                    contas.Add(c);
+            }
+        }
+        return contas;
+    }
+
+    private Dictionary<string, List<int>> ColetarPidsPorConta(List<string> contas)
+    {
+        var resultado = new Dictionary<string, List<int>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var c in contas)
+            resultado[c] = new List<int>();
+
+        try
+        {
+            using var searcher = new ManagementObjectSearcher(
+                "SELECT ProcessId, CommandLine FROM Win32_Process WHERE Name='msedgewebview2.exe'");
+            foreach (ManagementObject obj in searcher.Get())
+            {
+                try
+                {
+                    string? cmd = obj["CommandLine"] as string;
+                    if (string.IsNullOrWhiteSpace(cmd)) continue;
+                    int pid = Convert.ToInt32(obj["ProcessId"], System.Globalization.CultureInfo.InvariantCulture);
+
+                    // Conta principal: pasta WebView2 do app, mas NÃO a de contas extras.
+                    if (cmd.Contains(@"LoLIdleDesktop\WebView2", StringComparison.OrdinalIgnoreCase) &&
+                        !cmd.Contains(@"\WebView2\Contas\", StringComparison.OrdinalIgnoreCase))
+                    {
+                        resultado[DefaultAccountName].Add(pid);
+                        continue;
+                    }
+
+                    // Conta extra: casa pelo slug da pasta usada na criação (Slugify)
+                    // e também pelo AvatarSlug, para cobrir chaves com caracteres especiais.
+                    foreach (var conta in contas)
+                    {
+                        if (string.Equals(conta, DefaultAccountName, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        string slugCriacao = Slugify(conta);
+                        string slugAvatar = AvatarSlug(conta);
+                        bool match =
+                            cmd.Contains(@"\WebView2\Contas\" + slugCriacao, StringComparison.OrdinalIgnoreCase) ||
+                            cmd.Contains(@"\WebView2\Contas\" + slugAvatar, StringComparison.OrdinalIgnoreCase);
+                        if (match)
+                        {
+                            resultado[conta].Add(pid);
+                            break;
+                        }
+                    }
+                }
+                catch { }
+                finally { obj.Dispose(); }
+            }
+        }
+        catch { }
+
+        return resultado;
+    }
+
+    // Coleta fora da UI thread: WMI (Win32_Process) + GetProcessById + delta de CPU.
+    private async Task<ContasUsoResultado> ColetarUsoAsync(List<string> contas, CancellationToken ct)
+    {
+        return await Task.Run(() => ColetarUsoInterno(contas, ct), ct).ConfigureAwait(false);
+    }
+
+    private ContasUsoResultado ColetarUsoInterno(List<string> contas, CancellationToken ct)
+    {
+        var pidsPorConta = ColetarPidsPorConta(contas);
+        ct.ThrowIfCancellationRequested();
+        var agora = DateTime.UtcNow;
+        bool primeira = _ultimoCpuSample == DateTime.MinValue;
+        double segundos = primeira ? 0 : (agora - _ultimoCpuSample).TotalSeconds;
+        double segundosValidos = segundos > 0.2 ? segundos : 0;
+        int nucleos = Math.Max(1, Environment.ProcessorCount);
+
+        var novosCpu = new Dictionary<int, TimeSpan>();
+        var resultado = new ContasUsoResultado();
+
+        // Nota sobre WorkingSet64: ele soma páginas compartilhadas entre processos
+        // WebView2 (ex.: chrome.dll, DLLs do Edge), portanto reflete o footprint de
+        // memória total do aplicativo — não memória física exclusiva por processo.
+        // É a métrica intencional aqui; não trocar por PrivateMemorySize64.
+        // Acumuladores para o total global (WebViews + processo principal),
+        // usado tanto pelo rodapé quanto pela linha "Total" do painel.
+        long totalRamGlobal = 0;
+        double totalCpuMsGlobal = 0;
+        bool algumComBaseGlobal = false;
+
+        foreach (var conta in contas)
+        {
+            ct.ThrowIfCancellationRequested();
+            long ram = 0;
+            double cpuSomaMs = 0;
+            bool algumComBase = false;
+
+            foreach (var pid in pidsPorConta[conta])
+            {
+                try
+                {
+                    using var proc = System.Diagnostics.Process.GetProcessById(pid);
+                    ram += proc.WorkingSet64;
+                    TimeSpan cpuNow = proc.TotalProcessorTime;
+                    novosCpu[pid] = cpuNow;
+                    if (segundosValidos > 0 &&
+                        _ultimoCpu.TryGetValue(pid, out var anterior))
+                    {
+                        double deltaMs = (cpuNow - anterior).TotalMilliseconds;
+                        if (deltaMs < 0) deltaMs = 0;
+                        cpuSomaMs += deltaMs;
+                        algumComBase = true;
+                    }
+                }
+                catch { }
+            }
+
+            totalRamGlobal += ram;
+            if (segundosValidos > 0)
+            {
+                totalCpuMsGlobal += cpuSomaMs;
+                if (algumComBase) algumComBaseGlobal = true;
+            }
+
+            double? cpu = null;
+            if (segundosValidos > 0)
+                cpu = algumComBase
+                    ? Math.Clamp(cpuSomaMs / (segundosValidos * 1000.0) / nucleos * 100.0, 0, 100)
+                    : 0.0;
+
+            resultado.Contas.Add(new ContasUsoEntry { Conta = conta, RamBytes = ram, CpuPercent = cpu });
+        }
+
+        // Processo principal do app (tudo que não é WebView2): entra apenas no total
+        // global (linha "Total" do painel e barra de status), nunca nas linhas por conta.
+        // novosCpu[self.Id] é registrado em um único lugar — aqui — e cobre o processo
+        // principal no mesmo conjunto de CPUs usado pelo total agregado.
+        try
+        {
+            using var self = System.Diagnostics.Process.GetCurrentProcess();
+            long selfRam = self.WorkingSet64;
+            TimeSpan selfCpuNow = self.TotalProcessorTime;
+            totalRamGlobal += selfRam;
+            novosCpu[self.Id] = selfCpuNow;
+            if (segundosValidos > 0 && _ultimoCpu.TryGetValue(self.Id, out var selfPrev))
+            {
+                double selfDeltaMs = (selfCpuNow - selfPrev).TotalMilliseconds;
+                if (selfDeltaMs < 0) selfDeltaMs = 0;
+                totalCpuMsGlobal += selfDeltaMs;
+                algumComBaseGlobal = true;
+            }
+        }
+        catch { }
+
+        ct.ThrowIfCancellationRequested();
+        resultado.TotalRamBytes = totalRamGlobal;
+        resultado.FooterCpuPercent = (segundosValidos > 0 && algumComBaseGlobal)
+            ? Math.Clamp(totalCpuMsGlobal / (segundosValidos * 1000.0) / nucleos * 100.0, 0, 100)
+            : null;
+
+        _ultimoCpu.Clear();
+        foreach (var kv in novosCpu)
+            _ultimoCpu[kv.Key] = kv.Value;
+        _ultimoCpuSample = agora;
+
+        return resultado;
+    }
+
+    private static string FormatarRam(long bytes)
+    {
+        double mb = bytes / (1024.0 * 1024.0);
+        return mb >= 1024
+            ? $"{mb / 1024.0:0.0} GB"
+            : $"{mb:0} MB";
+    }
+
+    // RAM do bloco "Consumo total", sempre em pt-BR (vírgula decimal).
+    private static string FormatarRamPtBr(long bytes)
+    {
+        double mb = bytes / (1024.0 * 1024.0);
+        return mb >= 1024
+            ? $"{(mb / 1024.0).ToString("0.0", PtBrCulture)} GB"
+            : $"{mb.ToString("0", PtBrCulture)} MB";
+    }
+
+    // Bytes liberados pelo limpar cache (pt-BR). Nunca dizer "RAM liberada".
+    private static string FormatarBytesCachePtBr(long bytes)
+    {
+        double gb = bytes / (1024.0 * 1024.0 * 1024.0);
+        if (gb >= 1) return $"{gb.ToString("0.0", PtBrCulture)} GB";
+        double mb = bytes / (1024.0 * 1024.0);
+        return $"{mb.ToString("0", PtBrCulture)} MB";
+    }
+
+    private static string FormatarCpuPtBr(double percent)
+        => $"{percent.ToString("0.#", PtBrCulture)}%";
+
+    // Cria a linha visual do painel (mesma aparência de sempre) e devolve
+    // referências aos TextBlocks para que os próximos ticks só atualizem texto.
+    private LinhaUsoVisual CriarLinhaUsoVisual(string nome, string ram, string cpu, bool negrito, bool destaque, string? tooltip = null)
+    {
+        var grid = new Grid
+        {
+            Margin = negrito ? new Thickness(0, 4, 0, 2) : new Thickness(0, 1, 0, 1),
+            ToolTip = tooltip
+        };
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var nomeTb = new TextBlock
+        {
+            Text = nome,
+            FontSize = 11,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xD6, 0xDA, 0xE6)),
+            FontWeight = negrito ? FontWeights.Bold : FontWeights.Normal,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+
+        var valorTb = new TextBlock
+        {
+            Text = $"{ram} · {cpu}",
+            FontSize = 10,
+            Foreground = new SolidColorBrush(destaque
+                ? Color.FromRgb(0xE8, 0xCF, 0x8F)
+                : Color.FromRgb(0x93, 0xA0, 0xB4)),
+            FontWeight = negrito ? FontWeights.SemiBold : FontWeights.Normal,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 0, 0)
+        };
+
+        Grid.SetColumn(valorTb, 1);
+        grid.Children.Add(nomeTb);
+        grid.Children.Add(valorTb);
+        return new LinhaUsoVisual { Root = grid, Nome = nomeTb, Valor = valorTb };
+    }
+
+    private void AtualizarFooterBar()
+    {
+        try
+        {
+            if (FooterCpuText != null)
+            {
+                FooterCpuText.Text = _footerCpuPercent.HasValue
+                    ? $"{_footerCpuPercent.Value:0.0}%"
+                    : "—";
+
+                if (FooterCpuFill != null)
+                {
+                    double pctCpu = _footerCpuPercent.HasValue
+                        ? Math.Clamp(_footerCpuPercent.Value, 0, 100)
+                        : 0;
+                    FooterCpuFill.Width = pctCpu * 26.0 / 100.0;
+                }
+            }
+
+            if (FooterRamText != null)
+            {
+                FooterRamText.Text = FormatarRam(_footerRamBytes);
+            }
+        }
+        catch { }
+    }
+
+    // Atualiza a barra de status a partir da coleta (roda na UI thread, sem coleta).
+    private void AtualizarFooterBarCom(ContasUsoResultado resultado)
+    {
+        _footerRamBytes = resultado.TotalRamBytes;
+        _footerCpuPercent = resultado.FooterCpuPercent;
+        AtualizarFooterBar();
+    }
+
+    // Garante que a estrutura do painel corresponde às contas atuais;
+    // só recria os Grids quando a quantidade/ordem de contas muda.
+    // Nos demais ticks, apenas os textos são atualizados.
+    private void GarantirEstruturaSidebar(List<string> contas)
+    {
+        if (ContasUsoList == null) return;
+
+        bool mesmaEstrutura =
+            _usoLinhasVisual.Count == contas.Count &&
+            _usoLinhasVisual.Zip(contas, (linha, conta) =>
+                string.Equals(linha.Root.Tag as string, conta, StringComparison.OrdinalIgnoreCase))
+                .All(ok => ok);
+
+        if (mesmaEstrutura) return;
+
+        ContasUsoList.Children.Clear();
+        _usoLinhasVisual.Clear();
+
+        foreach (var conta in contas)
+        {
+            var linha = CriarLinhaUsoVisual(
+                GetAccountDisplayName(conta),
+                FormatarRam(0),
+                "—",
+                negrito: false,
+                destaque: false);
+            linha.Root.Tag = conta;
+            _usoLinhasVisual.Add(linha);
+            ContasUsoList.Children.Add(linha.Root);
+        }
+    }
+
+    // Atualiza apenas os textos dos TextBlocks já existentes (nada de Clear/Add por tick).
+    private void AtualizarSidebarComUso(ContasUsoResultado resultado)
+    {
+        try
+        {
+            if (ContasUsoList == null) return;
+
+            var contas = resultado.Contas.Select(c => c.Conta).ToList();
+            GarantirEstruturaSidebar(contas);
+
+            for (int i = 0; i < resultado.Contas.Count && i < _usoLinhasVisual.Count; i++)
+            {
+                var entrada = resultado.Contas[i];
+                var linha = _usoLinhasVisual[i];
+                linha.Nome.Text = GetAccountDisplayName(entrada.Conta);
+                linha.Valor.Text = $"{FormatarRam(entrada.RamBytes)} · {(entrada.CpuPercent.HasValue ? $"{entrada.CpuPercent.Value:0.0}%" : "—")}";
+            }
+
+            // Total do app (WebViews + processo principal): reflete no bloco "Consumo total".
+            AtualizarConsumoTotalVisual(resultado.TotalRamBytes, resultado.FooterCpuPercent);
+        }
+        catch { }
+    }
+
+    // ===== Consumo total: bloco "Consumo total" (estado normal / resultado da limpeza) =====
+
+    // Atualiza CPU/RAM, barra e pill no mesmo tick (5s) da coleta.
+    private void AtualizarConsumoTotalVisual(long totalRamBytes, double? cpuPercent)
+    {
+        try
+        {
+            var brushIce    = System.Windows.Application.Current.Resources["AccentIce"] as SolidColorBrush
+                              ?? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#4FD1D9"));
+            var brushDanger = System.Windows.Application.Current.Resources["Danger"]    as SolidColorBrush
+                              ?? new SolidColorBrush((Color)ColorConverter.ConvertFromString("#E05B4B"));
+
+            if (ConsumoCpuText != null)
+            {
+                ConsumoCpuText.Text = cpuPercent.HasValue
+                    ? FormatarCpuPtBr(cpuPercent.Value)
+                    : "—";
+            }
+
+            if (ConsumoRamText != null)
+                ConsumoRamText.Text = FormatarRamPtBr(totalRamBytes);
+
+            int totalContas = (_settings.ContasAdicionadas?.Count ?? 0) + 1; // +1 para principal
+            double metaRamBytes = MetaRamBytes();
+            double ratio = Math.Clamp(totalRamBytes / metaRamBytes, 0, 1);
+            bool acimaDaMeta = totalRamBytes > metaRamBytes;
+
+            if (ConsumoMetaRefText != null)
+                ConsumoMetaRefText.Text = $"Meta de referência: {totalContas},0 GB";
+
+            if (ConsumoRamFillScale != null)
+                ConsumoRamFillScale.ScaleX = ratio;
+            if (ConsumoRamFill != null)
+                ConsumoRamFill.Background = acimaDaMeta ? brushDanger : brushIce;
+
+            if (ConsumoMetaPill != null && ConsumoMetaPillText != null)
+            {
+                if (acimaDaMeta)
+                {
+                    ConsumoMetaPill.Background = new SolidColorBrush(Color.FromArgb(0x33, brushDanger.Color.R, brushDanger.Color.G, brushDanger.Color.B));
+                    ConsumoMetaPillText.Foreground = brushDanger;
+                    ConsumoMetaPillText.Text = "Acima da meta";
+                }
+                else
+                {
+                    ConsumoMetaPill.Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#2E2BD46A"));
+                    ConsumoMetaPillText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#2BD46A"));
+                    ConsumoMetaPillText.Text = "Normal";
+                }
+            }
+        }
+        catch { }
+    }
+
+    // Troca para o estado "Limpeza de cache" (substitui temporariamente o estado normal).
+    private void MostrarConsumoTotalResult(string bytesLiberados, int falhas)
+    {
+        try
+        {
+            if (ConsumoResultValorText != null)
+                ConsumoResultValorText.Text = bytesLiberados;
+            if (ConsumoResultNotaText != null)
+            {
+                ConsumoResultNotaText.Text = falhas > 0
+                    ? $"Cookies, logins e progresso preservados.\n{falhas} pasta(s) em uso não puderam ser limpas."
+                    : "Cookies, logins e progresso preservados.";
+            }
+            if (ConsumoTotalNormal != null) ConsumoTotalNormal.Visibility = Visibility.Collapsed;
+            if (ConsumoTotalResult != null) ConsumoTotalResult.Visibility = Visibility.Visible;
+
+            _consumoRevertTimer ??= new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(4)
+            };
+            _consumoRevertTimer.Tick -= ConsumoRevertTimer_Tick;
+            _consumoRevertTimer.Tick += ConsumoRevertTimer_Tick;
+            _consumoRevertTimer.Stop();
+            _consumoRevertTimer.Start();
+        }
+        catch { }
+    }
+
+    private void ConsumoRevertTimer_Tick(object? sender, EventArgs e)
+    {
+        try { _consumoRevertTimer?.Stop(); } catch { }
+        VoltarConsumoTotalNormal();
+    }
+
+    private void VoltarConsumoTotalNormal()
+    {
+        try
+        {
+            if (ConsumoTotalResult != null) ConsumoTotalResult.Visibility = Visibility.Collapsed;
+            if (ConsumoTotalNormal != null) ConsumoTotalNormal.Visibility = Visibility.Visible;
+        }
+        catch { }
+    }
+
+    private void ConsumoResultOk_Click(object sender, RoutedEventArgs e)
+    {
+        try { _consumoRevertTimer?.Stop(); } catch { }
+        VoltarConsumoTotalNormal();
+    }
+
+    private static List<string> EnumerarPastasCache(string root)
+    {
+        var pastas = new List<string>();
+        string[] nomes = { "Cache", "Code Cache", "GPUCache" };
+
+        void Adicionar(string defaultDir)
+        {
+            foreach (var nome in nomes)
+            {
+                string p = Path.Combine(defaultDir, nome);
+                if (Directory.Exists(p))
+                    pastas.Add(p);
+            }
+        }
+
+        // Conta principal: <root>\EBWebView\Default\{Cache,Code Cache,GPUCache}
+        Adicionar(Path.Combine(root, "EBWebView", "Default"));
+
+        // Contas extras: <root>\Contas\<slug>\EBWebView\Default\{...}
+        try
+        {
+            string contasDir = Path.Combine(root, "Contas");
+            if (Directory.Exists(contasDir))
+            {
+                foreach (var dir in Directory.EnumerateDirectories(contasDir))
+                    Adicionar(Path.Combine(dir, "EBWebView", "Default"));
+            }
+        }
+        catch { }
+
+        return pastas;
+    }
+
+    private static long CalcularTamanho(string pasta)
+    {
+        long total = 0;
+        var stack = new Stack<string>();
+        stack.Push(pasta);
+
+        while (stack.Count > 0)
+        {
+            string atual = stack.Pop();
+            try
+            {
+                foreach (var arquivo in Directory.EnumerateFiles(atual))
+                {
+                    try { total += new FileInfo(arquivo).Length; } catch { }
+                }
+                foreach (var dir in Directory.EnumerateDirectories(atual))
+                    stack.Push(dir);
+            }
+            catch { }
+        }
+
+        return total;
+    }
+
+    // Resultado da limpeza de cache (executada fora da UI thread).
+    private sealed class LimpezaCacheResultado
+    {
+        public long Bytes { get; init; }
+        public int Removidas { get; init; }
+        public int Falhas { get; init; }
+    }
+
+    private static LimpezaCacheResultado ExecutarLimpezaCache(List<string> pastas)
+    {
+        long tamanhoAntesTotal = 0;
+        int removidas = 0;
+        int falhas = 0;
+
+        foreach (var pasta in pastas)
+        {
+            try
+            {
+                if (!Directory.Exists(pasta))
+                {
+                    LogFloatingWindowEvent($"LimparCache: pasta sumiu antes da limpeza, ignorada: {pasta}");
+                    continue;
+                }
+
+                long tamanho = CalcularTamanho(pasta);
+                LogFloatingWindowEvent($"LimparCache: {pasta} ~{tamanho / (1024.0 * 1024.0):0.0} MB — tentando remover");
+                Directory.Delete(pasta, recursive: true);
+                tamanhoAntesTotal += tamanho;
+                removidas++;
+                LogFloatingWindowEvent($"LimparCache: Directory.Delete OK em {pasta} ({tamanho / (1024.0 * 1024.0):0.0} MB)");
+            }
+            catch (Exception ex)
+            {
+                // Pasta em uso pelo WebView2 (arquivos travados): registra e segue para as demais.
+                falhas++;
+                LogFloatingWindowEvent($"LimparCache: falha ao deletar {pasta}: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        return new LimpezaCacheResultado
+        {
+            Bytes = tamanhoAntesTotal,
+            Removidas = removidas,
+            Falhas = falhas
+        };
+    }
+
+    private async void LiberarEspaco_Click(object sender, RoutedEventArgs e)
+    {
+        bool confirmar = MostrarConfirmacaoRemover(
+            "Limpar cache?",
+            "Limpar o cache do WebView2?",
+            "Isso remove só o cache (arquivos temporários do WebView2). Cookies, sessão e progresso do jogo ficam intactos.",
+            "Limpar cache");
+        if (!confirmar) return;
+
+        string root = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "LoLIdleDesktop", "WebView2");
+
+        var pastas = EnumerarPastasCache(root);
+        LogFloatingWindowEvent($"LimparCache: root={root}; pastas encontradas={pastas.Count}; varridas: {string.Join(" | ", pastas)}");
+
+        if (pastas.Count == 0)
+        {
+            LogFloatingWindowEvent("LimparCache: nenhuma pasta de cache encontrada (nada a limpar)");
+            MostrarMensagemSimples(
+                "Limpar cache",
+                "Nada a limpar — nenhum cache encontrado (o perfil já está sem arquivos temporários, ou a limpeza anterior já os removeu).",
+                "OK",
+                MessageKind.Warning);
+            return;
+        }
+
+        // Desabilita só durante a operação; a UI fica livre (limpeza em background).
+        if (LiberarEspacoButton != null) LiberarEspacoButton.IsEnabled = false;
+        LimpezaCacheResultado resultado;
+        try
+        {
+            resultado = await Task.Run(() => ExecutarLimpezaCache(pastas));
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"LimparCache: falha inesperada: {ex.GetType().Name}: {ex.Message}");
+            resultado = new LimpezaCacheResultado();
+        }
+        finally
+        {
+            if (LiberarEspacoButton != null) LiberarEspacoButton.IsEnabled = true;
+        }
+
+        LogFloatingWindowEvent($"LimparCache: concluído — liberado {resultado.Bytes / (1024.0 * 1024.0):0.0} MB em {resultado.Removidas} pasta(s); falhas={resultado.Falhas}");
+
+        if (resultado.Removidas == 0 && resultado.Falhas == 0)
+        {
+            // Nada foi removido e nada falhou: não afirmar sucesso de um não-evento.
+            MostrarMensagemSimples(
+                "Limpar cache",
+                "Nada a limpar — nenhum cache encontrado (o perfil já está sem arquivos temporários, ou a limpeza anterior já os removeu).",
+                "OK",
+                MessageKind.Warning);
+            return;
+        }
+
+        if (resultado.Removidas > 0)
+        {
+            // Estado "Limpeza de cache": volta sozinho para o normal em ~4s (ou via botão Ok).
+            MostrarConsumoTotalResult(FormatarBytesCachePtBr(resultado.Bytes), resultado.Falhas);
+            return;
+        }
+
+        // removidas == 0 e falhas > 0: aviso honesto, sem falar em sucesso.
+        MostrarMensagemSimples(
+            "Limpar cache",
+            $"{resultado.Falhas} pasta(s) não puderam ser limpas (em uso pelo navegador — tente após fechar o jogo).\nNada foi removido.",
+            "OK",
+            MessageKind.Warning);
     }
 
     // Próxima chave automática para conta extra: "Conta 2", "Conta 3", ...
@@ -1910,14 +2506,14 @@ public partial class MainWindow : Window
                 WindowStyle = WindowStyle.None,
                 ResizeMode = ResizeMode.NoResize,
                 Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(17, 19, 24))
+                    System.Windows.Media.Color.FromRgb(23, 26, 33))
             };
 
             var root = new Grid();
 
             var view = new Microsoft.Web.WebView2.Wpf.WebView2
             {
-                DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24)
+                DefaultBackgroundColor = System.Drawing.Color.FromArgb(23, 26, 33)
             };
             root.Children.Add(view);
 
@@ -2163,129 +2759,6 @@ public partial class MainWindow : Window
         }
     }
 
-    // Prepara a janela separada de voto (TopIdle) — decoração normal,
-    // sem scripts de arraste/controles da flutuante.
-    private async Task PrepareVoteWebViewAsync(Window? owner)
-    {
-        if (_webViewEnvironment == null || _isPreparingVoteView ||
-            (_preparedVoteWindow != null && _preparedVoteView?.CoreWebView2 != null))
-            return;
-
-        _isPreparingVoteView = true;
-        Window? voteWindow = null;
-        try
-        {
-            LogFloatingWindowEvent("PrepareVote: iniciando criação da janela separada de voto.");
-            voteWindow = new Window
-            {
-                Title = "Votar no LoL Idle — TopIdle",
-                Width = 420,
-                Height = 800,
-                MinWidth = 320,
-                MinHeight = 600,
-                WindowStartupLocation = WindowStartupLocation.CenterScreen,
-                ShowInTaskbar = true,
-                ShowActivated = true,
-                WindowStyle = WindowStyle.SingleBorderWindow,
-                ResizeMode = ResizeMode.CanResize,
-                Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(17, 19, 24))
-            };
-            // Ajusta se a tela for menor que 800px de altura
-            voteWindow.MaxWidth = SystemParameters.VirtualScreenWidth * 0.9;
-            voteWindow.MaxHeight = SystemParameters.VirtualScreenHeight * 0.9;
-            var root = new Grid();
-            var view = new Microsoft.Web.WebView2.Wpf.WebView2
-            {
-                DefaultBackgroundColor = System.Drawing.Color.FromArgb(17, 19, 24)
-            };
-            root.Children.Add(view);
-            voteWindow.Content = root;
-            _preparedVoteWindow = voteWindow;
-            _preparedVoteView = view;
-            voteWindow.Closed += (_, _) =>
-            {
-                bool wasActive = ReferenceEquals(_voteWindow, voteWindow);
-                bool wasPrepared = ReferenceEquals(_preparedVoteWindow, voteWindow);
-                if (wasPrepared)
-                {
-                    _preparedVoteWindow = null;
-                    _preparedVoteView = null;
-                    LogFloatingWindowEvent("PrepareVote: host preparado de voto fechado.");
-                }
-                if (wasActive)
-                {
-                    _voteWindow = null;
-                    _voteView?.Dispose();
-                    _voteView = null;
-                    LogFloatingWindowEvent("PrepareVote: janela separada de voto fechada.");
-                    _ = PrepareVoteWebViewAsync(this);
-                }
-            };
-            voteWindow.Show();
-            await voteWindow.Dispatcher.InvokeAsync(() => { },
-                System.Windows.Threading.DispatcherPriority.Loaded);
-            await view.EnsureCoreWebView2Async(_webViewEnvironment);
-            view.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
-            view.CoreWebView2.Settings.IsStatusBarEnabled = false;
-            view.CoreWebView2.Settings.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36";
-            view.CoreWebView2.NavigationStarting += (_, navArgs) =>
-            {
-                if (Uri.TryCreate(navArgs.Uri, UriKind.Absolute, out var nu) &&
-                    (nu.Host.Contains("accounts.google.com") || nu.Host.Contains("accounts.google") || nu.Host.Contains("discord.com") || nu.Host.Contains("discordapp")))
-                {
-                    navArgs.Cancel = true;
-                    LogFloatingWindowEvent($"PopupVote: OAuth ({nu.Host}) redirecionado ao navegador real.");
-                    try
-                    {
-                        System.Diagnostics.Process.Start(
-                            new System.Diagnostics.ProcessStartInfo
-                            {
-                                FileName = nu.ToString(),
-                                UseShellExecute = true
-                            });
-                    }
-                    catch { }
-                }
-            };
-            view.CoreWebView2.NewWindowRequested += (_, popupArgs) =>
-            {
-                if (Uri.TryCreate(popupArgs.Uri, UriKind.Absolute, out var uri) &&
-                    (uri.Scheme == "http" || uri.Scheme == "https"))
-                {
-                    popupArgs.Handled = true;
-                    LogFloatingWindowEvent($"PopupVote: janela aninhada ({uri.Host}) reutilizando WebView de voto.");
-                    var voteViewRef = view;
-                    _ = Dispatcher.InvokeAsync(() =>
-                    {
-                        if (_voteWindow != null && !_voteWindow.IsVisible) _voteWindow.Show();
-                        _voteWindow?.Activate();
-                        var target = uri.ToString();
-                        _ = Task.Run(() => voteViewRef.CoreWebView2.Navigate(target));
-                    });
-                }
-                else popupArgs.Handled = true;
-            };
-            voteWindow.Hide();
-            LogFloatingWindowEvent("PrepareVote: janela separada de voto pronta e oculta.");
-        }
-        catch (Exception ex)
-        {
-            LogFloatingWindowEvent($"PrepareVote: falha ao inicializar: {ex.Message}");
-            if (ReferenceEquals(_preparedVoteWindow, voteWindow))
-            {
-                _preparedVoteWindow = null;
-                _preparedVoteView = null;
-            }
-            voteWindow?.Close();
-        }
-        finally
-        {
-            _isPreparingVoteView = false;
-        }
-    }
-
-
     private static bool IsInsideButton(DependencyObject? element)
     {
         while (element != null)
@@ -2307,112 +2780,6 @@ public partial class MainWindow : Window
         return false;
     }
 
-    // Abre o centro de controle dos painéis independentes e do áudio.
-    private void ShowFloatingSettings()
-    {
-        if (_floatingSettingsWindow != null)
-        {
-            _floatingSettingsWindow.Activate();
-            return;
-        }
-
-        var window = new Window
-        {
-            Title = "LoL Idle - Configurações",
-            Width = 430,
-            Height = 650,
-            MinWidth = 380,
-            MinHeight = 500,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Owner = _floatingWindow ?? this,
-            ShowInTaskbar = false,
-            Background = new SolidColorBrush(Color.FromRgb(17, 19, 24)),
-            Foreground = Brushes.White
-        };
-        _floatingSettingsWindow = window;
-        window.Closed += (_, _) => _floatingSettingsWindow = null;
-
-        var scroll = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
-        var stack = new StackPanel { Margin = new Thickness(18) };
-        scroll.Content = stack;
-
-        stack.Children.Add(new TextBlock
-        {
-            Text = "ÁUDIO",
-            Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143)),
-            FontWeight = FontWeights.Bold,
-            FontSize = 13,
-            Margin = new Thickness(0, 0, 0, 10)
-        });
-
-        AddAudioSetting(stack, "Silenciar música", _settings.MusicMuted, value =>
-        {
-            _settings.MusicMuted = value;
-            SaveWindowSettings();
-            _ = ApplyAudioSettingsAsync();
-        });
-        AddAudioSetting(stack, "Silenciar efeitos sonoros", _settings.EffectsMuted, value =>
-        {
-            _settings.EffectsMuted = value;
-            SaveWindowSettings();
-            _ = ApplyAudioSettingsAsync();
-        });
-        AddAudioSetting(stack, "Silenciar todo o áudio", _settings.MasterMuted, value =>
-        {
-            _settings.MasterMuted = value;
-            SaveWindowSettings();
-            _ = ApplyAudioSettingsAsync();
-        });
-
-        stack.Children.Add(new TextBlock
-        {
-            Text = "BANDEJA",
-            Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143)),
-            FontWeight = FontWeights.Bold,
-            FontSize = 13,
-            Margin = new Thickness(0, 14, 0, 10)
-        });
-
-        AddAudioSetting(stack, "Mutar jogo na bandeja", _settings.TrayMuted, value =>
-        {
-            _settings.TrayMuted = value;
-            SaveWindowSettings();
-            _ = ApplyAudioSettingsAsync();
-        });
-        AddAudioSetting(stack, "Som de notificação na bandeja", _settings.TrayNotify, value =>
-        {
-            _settings.TrayNotify = value;
-            SaveWindowSettings();
-        });
-        AddAudioSetting(stack, "Balão de notificação na bandeja", _settings.TrayBalloon, value =>
-        {
-            _settings.TrayBalloon = value;
-            SaveWindowSettings();
-        });
-
-        stack.Children.Add(new TextBlock
-        {
-            Text = "Na bandeja, o jogo fica mutado e só toca um som (com balão opcional) quando: item lendário, missão concluída, inventário cheio ou up de nível.",
-            Foreground = new SolidColorBrush(Color.FromRgb(145, 153, 168)),
-            FontSize = 11,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 4, 0, 0)
-        });
-
-        stack.Children.Add(new TextBlock
-        {
-            Text = "Música e efeitos separados só podem ser controlados quando o jogo identifica cada canal. O silenciamento geral também pausa os contextos Web Audio detectados; sons criados antes da instalação do controle ou por mecanismos externos podem ter limitações.",
-            Foreground = new SolidColorBrush(Color.FromRgb(145, 153, 168)),
-            FontSize = 11,
-            TextWrapping = TextWrapping.Wrap,
-            Margin = new Thickness(0, 14, 0, 0)
-        });
-
-        window.Content = scroll;
-        window.Show();
-        window.Activate();
-    }
-
     // Tratamento central de notificação: aplica os filtros das preferências.
     // `key` = chave da conta que gerou o evento; `kind` = tipo do evento.
     private void HandleNotification(string? key, string kind)
@@ -2423,14 +2790,12 @@ public partial class MainWindow : Window
         if (_settings.NotifyTypesDisabled.Contains(disabledKey, StringComparer.OrdinalIgnoreCase)) return;
         if (key != null && _settings.NotifyAccountsDisabled.Contains(key, StringComparer.OrdinalIgnoreCase)) return;
 
-        // App em 1º plano + conta ativa em uso → nada de aviso (redundante com o jogo).
-        // Contas em segundo plano continuam notificando; o histórico ("Últimas notificações") é preservado.
+        // App em 1º plano + conta ativa em uso → não registra nem nada: nem som, nem histórico.
+        // Contas em segundo plano continuam notificando normalmente.
         if (key != null
             && string.Equals(key, _settings.ContaAtiva, StringComparison.OrdinalIgnoreCase)
             && AppEmPrimeiroPlano())
         {
-            // Mesmo assim registra no histórico (sem bolinha nem som/balão):
-            RegistrarNotificacao(key, kind);
             return;
         }
 
@@ -2440,9 +2805,8 @@ public partial class MainWindow : Window
         {
             RegistrarNotificacao(key, kind);
 
-            // Só conta como "não lida" quando você NÃO está vendo a conta (nem app visível nem flutuante nem minimizada visível).
-            if (!(string.Equals(key, _settings.ContaAtiva, StringComparison.OrdinalIgnoreCase) && AppEmPrimeiroPlano()))
-                _contasNaoLidas.Add(key);
+            // Só conta como "não lida" quando você NÃO está vendo a conta (caso contrário o early return acima já saiu).
+            _contasNaoLidas.Add(key);
         }
 
         // Se mais de uma conta estiver habilitada, mostra o nome da conta no balão
@@ -2618,21 +2982,6 @@ public partial class MainWindow : Window
         catch (Exception ex) { LogFloatingWindowEvent($"VoltarParaFonte falhou ({contaKey}): {ex.Message}"); }
     }
 
-    private static void AddAudioSetting(Panel parent, string title, bool initialValue, Action<bool> changed)
-    {
-        var check = new CheckBox
-        {
-            Content = title,
-            IsChecked = initialValue,
-            Foreground = Brushes.White,
-            FontSize = 13,
-            Margin = new Thickness(0, 5, 0, 8)
-        };
-        check.Checked += (_, _) => changed(true);
-        check.Unchecked += (_, _) => changed(false);
-        parent.Children.Add(check);
-    }
-
     private async Task ApplyAudioSettingsAsync()
     {
         // Só muta de fato na bandeja (não na janela flutuante)
@@ -2706,85 +3055,6 @@ public partial class MainWindow : Window
         {
             try { await _floatingView.CoreWebView2.ExecuteScriptAsync(scriptForActive); }
             catch (Exception ex) { LogFloatingWindowEvent($"Audio: não foi possível aplicar preferências na flutuante: {ex.Message}"); }
-        }
-    }
-
-    // Abre a janela já preparada sem inicializar WebView2 durante o clique.
-    private async void ReopenFloatingWindow_Click(object sender, RoutedEventArgs e)
-    {
-        LogFloatingWindowEvent("ReopenButton: clique recebido.");
-        try
-        {
-            if (_floatingWindow != null)
-            {
-                ShowFloatingWindow(_floatingWindow);
-                SaveWindowSettings();
-                _isHiddenToTray = true;
-                Hide();
-                _ = ApplyAudioSettingsAsync();
-                _floatingOpened = true;
-                if (_settings.ShowMissions)
-                {
-                    ShowMissions();
-                    SyncFloatingControls();
-                }
-                LogFloatingWindowEvent("ReopenButton: janela flutuante reaberta. Janela principal fechada (sem bandeja).");
-                return;
-            }
-
-            if (_preparedFloatingWindow == null || _preparedFloatingView?.CoreWebView2 == null)
-                await PrepareFloatingWebViewAsync(this);
-
-            if (_preparedFloatingWindow == null || _preparedFloatingView?.CoreWebView2 == null)
-            {
-                LogFloatingWindowEvent("ReopenButton: WebView preparado indisponível.");
-                return;
-            }
-
-            var window = _preparedFloatingWindow;
-            var view = _preparedFloatingView;
-            var core = view.CoreWebView2;
-            _preparedFloatingWindow = null;
-            _preparedFloatingView = null;
-            _floatingWindow = window;
-            _floatingView = view;
-
-            try
-            {
-                var seed = $"window.__lolIdleMissionsActive = {_settings.ShowMissions.ToString().ToLowerInvariant()}; window.__lolIdleFloatingTopmost = {_settings.FloatingTopmost.ToString().ToLowerInvariant()};";
-                _ = view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(seed);
-            }
-            catch { }
-
-            ShowFloatingWindow(window);
-            SaveWindowSettings();
-            _isHiddenToTray = true;
-            Hide();
-            _ = ApplyAudioSettingsAsync();
-            _floatingOpened = true;
-            if (_settings.ShowMissions)
-            {
-                ShowMissions();
-                SyncFloatingControls();
-            }
-            LogFloatingWindowEvent("ReopenButton: janela flutuante aberta. Janela principal fechada (sem bandeja).");
-
-            var target = Uri.TryCreate(_lastFloatingUri, UriKind.Absolute, out var savedUri) &&
-                         savedUri.Scheme is "http" or "https"
-                ? savedUri.ToString()
-                : GameUrl;
-            if (string.IsNullOrWhiteSpace(core.Source) || core.Source == "about:blank")
-                core.Navigate(target);
-            _ = PrepareFloatingWebViewAsync(this);
-        }
-        catch (Exception ex)
-        {
-            LogFloatingWindowEvent($"ReopenButton: falha: {ex}");
-            MessageBox.Show(
-                "Não foi possível abrir a janela flutuante.\\n\\n" + ex.Message,
-                "LoL Idle - janela flutuante",
-                MessageBoxButton.OK,
-                MessageBoxImage.Warning);
         }
     }
 
@@ -2987,7 +3257,6 @@ public partial class MainWindow : Window
 
         string key = NextAccountKey();
         _settings.ContasAdicionadas.Add(key);
-        _settings.ContasAdicionadasCount = _settings.ContasAdicionadas.Count;
         _settings.ContaAtiva = key;
         SaveWindowSettings();
 
@@ -3000,7 +3269,6 @@ public partial class MainWindow : Window
         {
             // Não deixa conta "quebrada" no seletor.
             _settings.ContasAdicionadas.RemoveAll(c => c.Equals(key, StringComparison.OrdinalIgnoreCase));
-            _settings.ContasAdicionadasCount = _settings.ContasAdicionadas.Count;
             _settings.ContaAtiva = DefaultAccountName;
             SaveWindowSettings();
             await AtualizarContaConectadaUIAsync();
@@ -3020,13 +3288,6 @@ public partial class MainWindow : Window
             $"Conta criada: {key}. Faça login na conta nesta aba; ela fica salva e o chip troca para o nome do jogador automaticamente.",
             "Entendi",
             MessageKind.Success);
-    }
-
-    // Lê o nome da conta logada do DOM do jogo (WebView2) tentando vários seletores.
-    // Lê o nome da conta ativa (na frente) a partir de um CoreWebView2.
-    private Task<string?> ObterContaConectadaAsync()
-    {
-        return ReadPlayerNameAsync(ActiveView?.CoreWebView2);
     }
 
     // Atualiza os itens de conta exibidos na barra lateral (lista estilo IdleDeck).
@@ -3060,8 +3321,8 @@ public partial class MainWindow : Window
     // Cria um item de avatar clicável (usado na faixa da sidebar recolhida e na faixa da borda quando minimizada).
     private Border CriarAvatarStripItem(string conta, string display, bool destacado)
     {
-        var verde = new SolidColorBrush(Color.FromRgb(0x2B, 0xD4, 0x6A));
-        var fundoApp = new SolidColorBrush(Color.FromRgb(0x16, 0x19, 0x22));
+        var verde = new SolidColorBrush(Color.FromRgb(0xD9, 0x7B, 0x36));
+        var fundoApp = new SolidColorBrush(Color.FromRgb(0x1C, 0x21, 0x29));
         var vermelho = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
 
         var avatar = CriarAvatarVisual(_settings, conta, display, 34, 9, 19);
@@ -3095,7 +3356,7 @@ public partial class MainWindow : Window
         {
             Width = 40,
             Height = 40,
-            CornerRadius = new CornerRadius(12),
+            CornerRadius = new CornerRadius(7),
             BorderThickness = new Thickness(2),
             BorderBrush = destacado ? verde : Brushes.Transparent,
             Background = Brushes.Transparent,
@@ -3166,7 +3427,7 @@ public partial class MainWindow : Window
         NotificacoesRecentesVazio.Visibility = Visibility.Collapsed;
         NotificacoesRecentesTituloRow.Visibility = Visibility.Visible;
 
-        var fundoApp = new SolidColorBrush(Color.FromRgb(0x16, 0x19, 0x22));
+        var fundoApp = new SolidColorBrush(Color.FromRgb(0x1C, 0x21, 0x29));
         var vermelho = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
 
         foreach (var item in _ultimasNotificacoes.Take(4))
@@ -3197,7 +3458,7 @@ public partial class MainWindow : Window
             linha1.Children.Add(new TextBlock
             {
                 Text = display,
-                Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+                Foreground = new SolidColorBrush(Color.FromRgb(0xD6, 0xDA, 0xE6)),
                 FontWeight = FontWeights.SemiBold,
                 FontSize = 11,
                 TextTrimming = TextTrimming.CharacterEllipsis
@@ -3233,7 +3494,7 @@ public partial class MainWindow : Window
             textos.Children.Add(new TextBlock
             {
                 Text = FormatarTempoRelativo(item.Quando),
-                Foreground = new SolidColorBrush(Color.FromRgb(0x6E, 0x74, 0x80)),
+                Foreground = new SolidColorBrush(Color.FromRgb(0x6B, 0x76, 0x89)),
                 FontSize = 10,
                 Margin = new Thickness(0, 1, 0, 0)
             });
@@ -3242,11 +3503,11 @@ public partial class MainWindow : Window
             grid.Children.Add(textos);
 
             // Brush próprio por linha: permite animar só o fundo da linha clicada.
-            var fundoLinha = new SolidColorBrush(Color.FromRgb(0x1B, 0x1E, 0x27));
+            var fundoLinha = new SolidColorBrush(Color.FromRgb(0x22, 0x27, 0x33));
 
             var linha = new Border
             {
-                CornerRadius = new CornerRadius(10),
+                CornerRadius = new CornerRadius(6),
                 Background = fundoLinha,
                 Padding = new Thickness(8),
                 Margin = new Thickness(0, 0, 0, 6),
@@ -3257,6 +3518,91 @@ public partial class MainWindow : Window
             };
             linha.MouseLeftButtonUp += NotificacaoLinha_Click;
             NotificacoesRecentesList.Children.Add(linha);
+        }
+    }
+
+    // Anima a saída das linhas correspondentes (fade + deslize para a direita, escalonada),
+    // remove os itens da lista e recria "Últimas notificações". Reutilizável pelos caminhos
+    // de remoção (clique na linha, troca de conta pela sidebar, etc.). Falha em qualquer
+    // etapa cai para a remoção direta.
+    private async Task RemoverNotificacoesComAnimacaoAsync(IEnumerable<NotificacaoItem> itens)
+    {
+        var itensParaRemover = itens?.ToList();
+        if (itensParaRemover == null || itensParaRemover.Count == 0)
+            return;
+
+        try
+        {
+            var linhas = NotificacoesRecentesList.Children.OfType<Border>()
+                .Where(l => l.Tag is NotificacaoItem it && itensParaRemover.Contains(it))
+                .ToList();
+
+            if (linhas.Count == 0)
+            {
+                foreach (var it in itensParaRemover)
+                    _ultimasNotificacoes.Remove(it);
+                RebuildUltimasNotificacoes();
+                return;
+            }
+
+            var concluida = new TaskCompletionSource<object?>();
+            int ultima = linhas.Count - 1;
+            for (int i = 0; i < linhas.Count; i++)
+            {
+                var linha = linhas[i];
+                var translate = new TranslateTransform();
+                linha.RenderTransform = translate;
+
+                var beginTime = TimeSpan.FromMilliseconds(i * 45);
+                var animX = new DoubleAnimation
+                {
+                    From = 0,
+                    To = 320,
+                    Duration = TimeSpan.FromMilliseconds(220),
+                    BeginTime = beginTime,
+                    FillBehavior = FillBehavior.Stop
+                };
+                var animOpacity = new DoubleAnimation
+                {
+                    From = 1,
+                    To = 0,
+                    Duration = TimeSpan.FromMilliseconds(220),
+                    BeginTime = beginTime,
+                    FillBehavior = FillBehavior.Stop
+                };
+
+                if (i == ultima)
+                {
+                    animOpacity.Completed += (_, _) =>
+                    {
+                        // Remove só os itens que estavam nas linhas animadas (por referência);
+                        // notificações que chegaram durante a animação são preservadas.
+                        foreach (var it in itensParaRemover)
+                            _ultimasNotificacoes.Remove(it);
+                        RebuildUltimasNotificacoes();
+                        concluida.TrySetResult(null);
+                    };
+                }
+
+                translate.BeginAnimation(TranslateTransform.XProperty, animX);
+                linha.BeginAnimation(UIElement.OpacityProperty, animOpacity);
+            }
+
+            // Rede de segurança: se a animação não completar (ex.: janela sem render), remove direto
+            // em vez de travar quem está esperando (ex.: troca de conta).
+            var limite = Task.Delay(TimeSpan.FromMilliseconds(ultima * 45 + 220 + 1000));
+            if (await Task.WhenAny(concluida.Task, limite).ConfigureAwait(true) != concluida.Task)
+            {
+                foreach (var it in itensParaRemover)
+                    _ultimasNotificacoes.Remove(it);
+                RebuildUltimasNotificacoes();
+            }
+        }
+        catch
+        {
+            foreach (var it in itensParaRemover)
+                _ultimasNotificacoes.Remove(it);
+            RebuildUltimasNotificacoes();
         }
     }
 
@@ -3364,7 +3710,7 @@ public partial class MainWindow : Window
                 {
                     var anim = new ColorAnimation
                     {
-                        From = Color.FromRgb(0x1B, 0x1E, 0x27),
+                        From = Color.FromRgb(0x22, 0x27, 0x33),
                         To = Color.FromRgb(0x2B, 0x3A, 0x55),
                         Duration = TimeSpan.FromMilliseconds(120),
                         AutoReverse = true,
@@ -3380,41 +3726,18 @@ public partial class MainWindow : Window
 
             await Task.Delay(130);
 
-            var translate = new TranslateTransform();
-            linha.RenderTransform = translate;
+            await RemoverNotificacoesComAnimacaoAsync(new[] { item });
 
-            var animX = new DoubleAnimation
+            try
             {
-                From = 0,
-                To = 320,
-                Duration = TimeSpan.FromMilliseconds(220),
-                FillBehavior = FillBehavior.Stop
-            };
-            var animOpacity = new DoubleAnimation
+                await SwitchAccountAsync(item.Conta);
+                if (item.Kind.StartsWith("potion", StringComparison.OrdinalIgnoreCase))
+                    _ = VoltarParaFonteAsync(item.Conta);
+            }
+            catch
             {
-                From = 1,
-                To = 0,
-                Duration = TimeSpan.FromMilliseconds(220),
-                FillBehavior = FillBehavior.Stop
-            };
-            animOpacity.Completed += async (_, _) =>
-            {
-                try
-                {
-                    _ultimasNotificacoes.Remove(item);
-                    RebuildUltimasNotificacoes();
-                    await SwitchAccountAsync(item.Conta);
-                    if (item.Kind.StartsWith("potion", StringComparison.OrdinalIgnoreCase))
-                        _ = VoltarParaFonteAsync(item.Conta);
-                }
-                catch
-                {
-                    await RemoverNotificacaoETrocarAsync(item);
-                }
-            };
-
-            translate.BeginAnimation(TranslateTransform.XProperty, animX);
-            linha.BeginAnimation(UIElement.OpacityProperty, animOpacity);
+                await RemoverNotificacaoETrocarAsync(item);
+            }
         }
         catch
         {
@@ -3649,7 +3972,7 @@ public partial class MainWindow : Window
         var emojiTextBlock = new TextBlock
         {
             Text = temIcone ? icon : iniciais,
-            Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xD6, 0xDA, 0xE6)),
             FontWeight = FontWeights.Bold,
             FontSize = temIcone ? fontSizeConteudo : fontSizeConteudo * 0.55,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
@@ -3721,18 +4044,18 @@ public partial class MainWindow : Window
         string display = GetAccountDisplayName(conta);
 
         // Paleta de destaque
-        var bgItem = new SolidColorBrush(Color.FromRgb(0x1F, 0x22, 0x2B));
-        var bgItemAtivo = new SolidColorBrush(Color.FromRgb(0x14, 0x26, 0x23));
-        var bordaAtivo = new SolidColorBrush(Color.FromRgb(0x2B, 0xD4, 0x6A));
+        var bgItem = new SolidColorBrush(Color.FromRgb(0x22, 0x27, 0x33));
+        var bgItemAtivo = new SolidColorBrush(Color.FromRgb(0x3A, 0x2A, 0x1C));
+        var bordaAtivo = new SolidColorBrush(Color.FromRgb(0xD9, 0x7B, 0x36));
         var bordaInativo = new SolidColorBrush(Colors.Transparent);
-        var verde = Color.FromRgb(0x2B, 0xD4, 0x6A);
+        var verde = Color.FromRgb(0xD9, 0x7B, 0x36);
         var azul = Color.FromRgb(0x3B, 0x9B, 0xFF);
-        var fundoApp = Color.FromRgb(0x16, 0x19, 0x22);
+        var fundoApp = Color.FromRgb(0x1C, 0x21, 0x29);
 
         // Avatar quadrado (imagem > ícone > cor > padrão)
         // Tag "avatar": clique no avatar abre o editor de conta (estilo Facebook),
         // tratado em Chip_Click via IsInsideAvatar.
-        var avatar = CriarAvatarVisual(_settings, conta, display, 40, 10, 24);
+        var avatar = CriarAvatarVisual(_settings, conta, display, 40, 7, 24);
         avatar.Tag = "avatar";
         avatar.Cursor = Cursors.Hand;
         avatar.ToolTip = "Editar conta";
@@ -3785,7 +4108,7 @@ public partial class MainWindow : Window
         textos.Children.Add(new TextBlock
         {
             Text = display,
-            Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xD6, 0xDA, 0xE6)),
             FontWeight = FontWeights.SemiBold,
             FontSize = 12,
             TextTrimming = TextTrimming.CharacterEllipsis
@@ -3794,7 +4117,7 @@ public partial class MainWindow : Window
         {
             Text = destacado ? "na frente" : "segundo plano",
             Foreground = new SolidColorBrush(destacado
-                ? Color.FromRgb(0x37, 0xD0, 0x67)
+                ? Color.FromRgb(0xD9, 0x7B, 0x36)
                 : Color.FromRgb(0x6E, 0x9C, 0xD8)),
             FontSize = 10,
             Margin = new Thickness(0, 1, 0, 0)
@@ -3807,6 +4130,59 @@ public partial class MainWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right
         };
+
+        // Botão para recarregar apenas o jogo desta conta (como F5) — ícone de refresh estilo feather
+        var strokeForegroundBinding = new System.Windows.Data.Binding("Foreground")
+        {
+            RelativeSource = new System.Windows.Data.RelativeSource(
+                System.Windows.Data.RelativeSourceMode.FindAncestor, typeof(Button), 1)
+        };
+
+        // Ícone ópticamente centrado no Canvas 13x13: desenho ocupa ~1.5..11.5 (x) e 2.0..11.0 (y), centro ~ (6.5, 6.5)
+        var reloadIcon = new Canvas { Width = 13, Height = 13 };
+
+        var reloadArrow = new System.Windows.Shapes.Polyline
+        {
+            Points = new System.Windows.Media.PointCollection
+            {
+                new System.Windows.Point(11.5, 2.5),
+                new System.Windows.Point(11.5, 5.5),
+                new System.Windows.Point(8.5, 5.5)
+            },
+            StrokeThickness = 1.5,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Fill = System.Windows.Media.Brushes.Transparent
+        };
+        reloadArrow.SetBinding(System.Windows.Shapes.Shape.StrokeProperty, strokeForegroundBinding);
+        reloadIcon.Children.Add(reloadArrow);
+
+        // Arco do círculo (aprox. 295°) com o trecho final reto até o canto da seta, estilo feather "rotate-cw" recentralizado
+        var reloadArc = new System.Windows.Shapes.Path
+        {
+            Data = Geometry.Parse("M10.245 8.0 a4.5 4.5 0 1 1 -1.06 -4.68 L11.5 5.5"),
+            StrokeThickness = 1.5,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round,
+            Fill = System.Windows.Media.Brushes.Transparent
+        };
+        reloadArc.SetBinding(System.Windows.Shapes.Shape.StrokeProperty, strokeForegroundBinding);
+        reloadIcon.Children.Add(reloadArc);
+
+        var btnRecarregar = new Button
+        {
+            Content = reloadIcon,
+            ToolTip = "Recarregar o jogo desta conta",
+            Style = (Style)System.Windows.Application.Current.Resources["GhostIconButton"],
+            VerticalAlignment = VerticalAlignment.Center,
+            FontSize = 13,
+            Width = 28,
+            Height = 28
+        };
+        btnRecarregar.Click += (s, e) => RecarregarConta(conta);
+        botoes.Children.Add(btnRecarregar);
 
         // Botão ✏️ para abrir o editor de conta (renomear + avatar)
         var btnEditar = new Button
@@ -3854,7 +4230,7 @@ public partial class MainWindow : Window
             Background = destacado ? bgItemAtivo : bgItem,
             BorderBrush = destacado ? bordaAtivo : bordaInativo,
             BorderThickness = destacado ? new Thickness(1) : new Thickness(0),
-            CornerRadius = new CornerRadius(10),
+            CornerRadius = new CornerRadius(6),
             Cursor = Cursors.Hand,
             Tag = conta,
             ToolTip = destacado
@@ -3904,192 +4280,6 @@ public partial class MainWindow : Window
         return false;
     }
 
-    // Mostra um prompt simples em código (sem biblioteca externa).
-    // Retorna o texto informado, ou null se cancelado.
-    private static string? MostrarPrompt(string titulo, string rotulo, string valorInicial)
-    {
-        var janela = new Window
-        {
-            Title = titulo,
-            Width = 380,
-            Height = 210,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            ResizeMode = ResizeMode.NoResize,
-            WindowStyle = WindowStyle.None,
-            AllowsTransparency = true,
-            Background = new SolidColorBrush(Colors.Transparent),
-            ShowInTaskbar = false,
-            Owner = System.Windows.Application.Current.MainWindow
-        };
-
-        var moldura = new Border
-        {
-            CornerRadius = new CornerRadius(12),
-            Background = new SolidColorBrush(Color.FromRgb(0x16, 0x19, 0x22)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x2F, 0x35, 0x40)),
-            BorderThickness = new Thickness(1)
-        };
-
-        var externa = new Grid();
-        externa.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-        externa.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-
-        // Cabeçalho
-        var header = new Border
-        {
-            Padding = new Thickness(18, 12, 12, 12),
-            Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x21, 0x2B)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x22, 0x26, 0x2F)),
-            BorderThickness = new Thickness(0, 0, 0, 1),
-            CornerRadius = new CornerRadius(12, 12, 0, 0)
-        };
-
-        var headerGrid = new Grid();
-        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        headerGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        headerGrid.Children.Add(new TextBlock
-        {
-            Text = titulo,
-            Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
-            FontSize = 14,
-            FontWeight = FontWeights.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center
-        });
-
-        var btnFechar = new Button
-        {
-            Content = "✕",
-            Width = 30,
-            Height = 30,
-            ToolTip = "Fechar",
-            Style = (Style)System.Windows.Application.Current.Resources["GhostIconButton"]
-        };
-        btnFechar.Click += (s, e) => janela.DialogResult = false;
-        Grid.SetColumn(btnFechar, 1);
-        headerGrid.Children.Add(btnFechar);
-        header.Child = headerGrid;
-
-        // Corpo
-        var corpo = new StackPanel { Margin = new Thickness(18, 16, 18, 16) };
-        corpo.Children.Add(new TextBlock
-        {
-            Text = rotulo,
-            Margin = new Thickness(0, 0, 0, 10),
-            FontSize = 12,
-            Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xCD, 0xD6))
-        });
-
-        var box = new System.Windows.Controls.TextBox
-        {
-            Text = valorInicial,
-            FontSize = 13,
-            Padding = new Thickness(10, 8, 10, 8),
-            Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2E, 0x38)),
-            Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
-            BorderThickness = new Thickness(1),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x3A, 0x40, 0x4C)),
-            CaretBrush = new SolidColorBrush(Color.FromRgb(0xD8, 0xB4, 0x5A))
-        };
-        corpo.Children.Add(box);
-
-        ControlTemplate CriarTemplateArredondado(System.Windows.Media.Brush fundo, System.Windows.Media.Brush fundoHover, double raio)
-        {
-            var template = new ControlTemplate(typeof(Button));
-            var borderFactory = new FrameworkElementFactory(typeof(Border), "BorderRoot");
-            borderFactory.SetValue(Border.CornerRadiusProperty, new CornerRadius(raio));
-            borderFactory.SetValue(Border.BackgroundProperty, fundo);
-            borderFactory.SetValue(Border.PaddingProperty, new Thickness(6));
-
-            var presenterFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.ContentPresenter));
-            presenterFactory.SetValue(HorizontalAlignmentProperty, System.Windows.HorizontalAlignment.Center);
-            presenterFactory.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
-            borderFactory.AppendChild(presenterFactory);
-            template.VisualTree = borderFactory;
-
-            var trigger = new Trigger { Property = Button.IsMouseOverProperty, Value = true };
-            trigger.Setters.Add(new Setter(Border.BackgroundProperty, fundoHover, "BorderRoot"));
-            template.Triggers.Add(trigger);
-            return template;
-        }
-
-        var botoes = new StackPanel
-        {
-            Orientation = System.Windows.Controls.Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-            Margin = new Thickness(0, 14, 0, 0)
-        };
-
-        var btnOk = new Button
-        {
-            Content = "Salvar",
-            Width = 90,
-            Height = 34,
-            Background = new SolidColorBrush(Color.FromRgb(0x2B, 0xD4, 0x6A)),
-            Foreground = new SolidColorBrush(Color.FromRgb(0x0A, 0x2E, 0x19)),
-            BorderThickness = new Thickness(0),
-            FontSize = 12,
-            FontWeight = FontWeights.SemiBold,
-            Cursor = Cursors.Hand,
-            Template = CriarTemplateArredondado(
-                new LinearGradientBrush(
-                    Color.FromRgb(0x36, 0xE6, 0x7D),
-                    Color.FromRgb(0x1F, 0x9E, 0x53),
-                    90),
-                new SolidColorBrush(Color.FromRgb(0x47, 0xF2, 0x90)),
-                17),
-            Margin = new Thickness(0, 0, 8, 0)
-        };
-        var btnCancelar = new Button
-        {
-            Content = "Cancelar",
-            Width = 90,
-            Height = 34,
-            Background = new SolidColorBrush(Colors.Transparent),
-            Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xCD, 0xD6)),
-            BorderThickness = new Thickness(0),
-            FontSize = 12,
-            Cursor = Cursors.Hand,
-            Template = CriarTemplateArredondado(
-                new SolidColorBrush(Colors.Transparent),
-                new SolidColorBrush(Color.FromRgb(0x2A, 0x2E, 0x38)),
-                17)
-        };
-        btnCancelar.Click += (s, e) => janela.DialogResult = false;
-        botoes.Children.Add(btnOk);
-        botoes.Children.Add(btnCancelar);
-        corpo.Children.Add(botoes);
-
-        externa.Children.Add(header);
-        Grid.SetRow(corpo, 1);
-        externa.Children.Add(corpo);
-        moldura.Child = externa;
-        janela.Content = moldura;
-
-        string? resultado = null;
-        btnOk.Click += (s, e) =>
-        {
-            resultado = box.Text;
-            janela.DialogResult = true;
-        };
-
-        janela.Loaded += (s, e) =>
-        {
-            box.Focus();
-            box.SelectAll();
-        };
-        janela.MouseLeftButtonDown += (s, e) =>
-        {
-            if (e.LeftButton == MouseButtonState.Pressed &&
-                e.OriginalSource is not Button &&
-                e.OriginalSource is not System.Windows.Controls.Primitives.ButtonBase)
-                janela.DragMove();
-        };
-
-        janela.ShowDialog();
-        return resultado;
-    }
-
     // Diálogo customizado de confirmação de remoção (estilo do app).
     // Retorna true se o usuário confirmar a remoção.
     private static bool MostrarConfirmacaoRemover(string titulo, string mensagem, string subMensagem, string textoConfirmar)
@@ -4110,9 +4300,9 @@ public partial class MainWindow : Window
 
         var moldura = new Border
         {
-            CornerRadius = new CornerRadius(14),
-            Background = new SolidColorBrush(Color.FromRgb(0x16, 0x19, 0x22)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x2F, 0x35, 0x40)),
+            CornerRadius = new CornerRadius(8),
+            Background = new SolidColorBrush(Color.FromRgb(0x1C, 0x21, 0x29)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x31, 0x3F)),
             BorderThickness = new Thickness(1)
         };
 
@@ -4124,8 +4314,8 @@ public partial class MainWindow : Window
         var header = new Border
         {
             Padding = new Thickness(18, 8, 10, 8),
-            Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x21, 0x2B)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x22, 0x26, 0x2F)),
+            Background = new SolidColorBrush(Color.FromRgb(0x22, 0x27, 0x33)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x31, 0x3F)),
             BorderThickness = new Thickness(0, 0, 0, 1)
         };
 
@@ -4136,7 +4326,7 @@ public partial class MainWindow : Window
         headerGrid.Children.Add(new TextBlock
         {
             Text = titulo,
-            Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xD6, 0xDA, 0xE6)),
             FontSize = 14,
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
@@ -4183,7 +4373,7 @@ public partial class MainWindow : Window
         corpo.Children.Add(new TextBlock
         {
             Text = mensagem,
-            Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xD6, 0xDA, 0xE6)),
             FontSize = 13,
             FontWeight = FontWeights.SemiBold,
             TextWrapping = TextWrapping.Wrap,
@@ -4257,13 +4447,13 @@ public partial class MainWindow : Window
             Width = 110,
             Height = 36,
             Background = new SolidColorBrush(Colors.Transparent),
-            Foreground = new SolidColorBrush(Color.FromRgb(0xC9, 0xCD, 0xD6)),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xD6, 0xDA, 0xE6)),
             BorderThickness = new Thickness(0),
             FontSize = 12,
             Cursor = Cursors.Hand,
             Template = CriarTemplateArredondado(
                 new SolidColorBrush(Colors.Transparent),
-                new SolidColorBrush(Color.FromRgb(0x2A, 0x2E, 0x38)),
+                new SolidColorBrush(Color.FromRgb(0x2B, 0x31, 0x3F)),
                 17)
         };
         btnCancelar.Click += (s, e) => janela.DialogResult = false;
@@ -4312,9 +4502,9 @@ public partial class MainWindow : Window
 
         var moldura = new Border
         {
-            CornerRadius = new CornerRadius(14),
-            Background = new SolidColorBrush(Color.FromRgb(0x16, 0x19, 0x22)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x2F, 0x35, 0x40)),
+            CornerRadius = new CornerRadius(8),
+            Background = new SolidColorBrush(Color.FromRgb(0x1C, 0x21, 0x29)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x31, 0x3F)),
             BorderThickness = new Thickness(1)
         };
 
@@ -4324,10 +4514,10 @@ public partial class MainWindow : Window
         var header = new Border
         {
             Padding = new Thickness(18, 10, 10, 10),
-            Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x21, 0x2B)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x22, 0x26, 0x2F)),
+            Background = new SolidColorBrush(Color.FromRgb(0x22, 0x27, 0x33)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x31, 0x3F)),
             BorderThickness = new Thickness(0, 0, 0, 1),
-            CornerRadius = new CornerRadius(14, 14, 0, 0)
+            CornerRadius = new CornerRadius(8, 8, 0, 0)
         };
 
         var headerGrid = new Grid();
@@ -4337,7 +4527,7 @@ public partial class MainWindow : Window
         headerGrid.Children.Add(new TextBlock
         {
             Text = titulo,
-            Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xD6, 0xDA, 0xE6)),
             FontSize = 14,
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
@@ -4360,7 +4550,7 @@ public partial class MainWindow : Window
         // Ícone (círculo desenhado) + mensagem
         var (fundoIcone, corIcone, geometria) = kind switch
         {
-            MessageKind.Success => (Color.FromRgb(0x16, 0x38, 0x2A), Color.FromRgb(0x2B, 0xD4, 0x6A), "M 5.5 12.5 L 10 17 L 18.5 7.5"),
+            MessageKind.Success => (Color.FromRgb(0x16, 0x38, 0x2A), Color.FromRgb(0x3B, 0xAF, 0x6B), "M 5.5 12.5 L 10 17 L 18.5 7.5"),
             MessageKind.Warning => (Color.FromRgb(0x3E, 0x2C, 0x17), Color.FromRgb(0xE0, 0xA1, 0x3B), "M 12 6.5 L 12 13.2 M 12 16.0 L 12 17.2"),
             MessageKind.Error   => (Color.FromRgb(0x40, 0x24, 0x1F), Color.FromRgb(0xE0, 0x5B, 0x4B), "M 7 7 L 17 17 M 17 7 L 7 17"),
             _                   => (Color.FromRgb(0x1F, 0x2A, 0x40), Color.FromRgb(0x3B, 0x9B, 0xFF), "M 12 10.8 L 12 17 M 12 6.4 L 12 7.6"),
@@ -4396,7 +4586,7 @@ public partial class MainWindow : Window
         corpo.Children.Add(new TextBlock
         {
             Text = mensagem,
-            Foreground = new SolidColorBrush(Color.FromRgb(0xF2, 0xF2, 0xF2)),
+            Foreground = new SolidColorBrush(Color.FromRgb(0xD6, 0xDA, 0xE6)),
             FontSize = 13,
             TextWrapping = TextWrapping.Wrap,
             VerticalAlignment = VerticalAlignment.Center,
@@ -4410,7 +4600,7 @@ public partial class MainWindow : Window
         var rodape = new Border
         {
             Padding = new Thickness(14, 12, 14, 12),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x22, 0x26, 0x2F)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0x2B, 0x31, 0x3F)),
             BorderThickness = new Thickness(0, 1, 0, 0)
         };
 
@@ -4441,14 +4631,14 @@ public partial class MainWindow : Window
             Width = 110,
             Height = 36,
             HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
-            Foreground = new SolidColorBrush(erro ? Colors.White : Color.FromRgb(0x0A, 0x2E, 0x19)),
+            Foreground = new SolidColorBrush(erro ? Colors.White : Color.FromRgb(0x17, 0x1A, 0x21)),
             BorderThickness = new Thickness(0),
             FontSize = 12,
             FontWeight = FontWeights.SemiBold,
             Cursor = Cursors.Hand,
             Template = CriarTemplateArredondado(
-                new SolidColorBrush(erro ? Color.FromRgb(0xE0, 0x5B, 0x4B) : Color.FromRgb(0x2B, 0xD4, 0x6A)),
-                new SolidColorBrush(erro ? Color.FromRgb(0xF2, 0x6F, 0x5E) : Color.FromRgb(0x36, 0xE6, 0x7D)),
+                new SolidColorBrush(erro ? Color.FromRgb(0xE0, 0x5B, 0x4B) : Color.FromRgb(0xD9, 0x7B, 0x36)),
+                new SolidColorBrush(erro ? Color.FromRgb(0xF2, 0x6F, 0x5E) : Color.FromRgb(0xE8, 0x90, 0x3F)),
                 9)
         };
         btnAcao.Click += (s, e) => janela.DialogResult = true;
@@ -4467,6 +4657,24 @@ public partial class MainWindow : Window
         };
 
         janela.ShowDialog();
+    }
+
+    // Recarrega apenas a página da conta informada (como F5 na webview dela).
+    // As demais contas continuam rodando normalmente.
+    private void RecarregarConta(string conta)
+    {
+        try
+        {
+            if (_accountViews.TryGetValue(conta, out var view) && view.CoreWebView2 != null)
+            {
+                view.CoreWebView2.Reload();
+                LogFloatingWindowEvent($"RecarregarConta: reload acionado para '{conta}'");
+            }
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"RecarregarConta: falhou ('{conta}'): {ex.Message}");
+        }
     }
 
     // Abre o diálogo de edição de conta (nome + avatar).
@@ -4545,7 +4753,6 @@ public partial class MainWindow : Window
             _ = ApplyAudioSettingsAsync();
         }
 
-        _settings.ContasAdicionadasCount = _settings.ContasAdicionadas.Count;
         _settings.ContasNomesPersonalizados?.RemoveAll(
             c => c.Equals(conta, StringComparison.OrdinalIgnoreCase));
         SaveWindowSettings();

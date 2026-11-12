@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.4.2](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.2)**
+**[Baixar LoL Idle Desktop v1.4.3](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.3)**
 
 ### Instalador (quando disponível na Release)
 
@@ -81,10 +81,9 @@ O projeto é gratuito e feito por um desenvolvedor independente — contribuiç�
 
 ### Limitações desta versão
 - Painéis disponíveis: **Missões** (somente leitura) incluído. **Barra lateral interativa** e **Personagem** não incluídos (o jogo bloqueia a segunda sessão).
-- O controle de áudio disponível silencia todo o áudio do jogo. Não há uma tela acessível pela interface para ajustar música e efeitos separadamente (a tela de configurações de áudio `ShowFloatingSettings` existe no código, mas não é chamada pela interface atual).
-- A janela separada de voto (`ShowVoteWindow` / `PrepareVoteWebViewAsync`) existe no código mas não é exibida; voto e login OAuth usam o navegador real.
+- O controle de áudio disponível silencia todo o áudio do jogo. Não há uma tela acessível pela interface para ajustar música e efeitos separadamente (a antiga tela de configurações de áudio foi removida do código; o ajuste de música/efeitos continua pelos botões do jogo).
+- O voto e o login OAuth abrem no navegador real (a antiga janela separada de voto foi removida do código).
 - O botão fechar (×) e o Alt+F4/fechar pelo sistema abrem o diálogo "Fechar o LoL Idle?" (a menos que a preferência `CloseBehavior` esteja definida — ajuste pelo botão ⚙ "Opções de fechamento" na sidebar). Para encerrar direto, use **Sair** no menu da bandeja ou a opção "Sair e desligar as contas".
-- `ReopenFloatingWindow_Click` existe no código sem ligação no `MainWindow.xaml` atual — a flutuante só abre via `window.open` do jogo.
 
 ## 🖥️ Requisitos
 
@@ -138,6 +137,16 @@ artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.4.3
+- **Tema tático novo**: fundo ardósia-acinzentado com acento cobre (`#D97B36`), texto frio (`#D6DAE6`), tipografia `Rajdhani` (títulos) e `Barlow` (corpo).Cantos menores (raio 4–7), compatível com todas as telas do app.
+- **Diálogo "Fechar o LoL Idle?" redesenhado** em azul (`AccentIce`) para combinar com o tema, e botão primário coerente ("Fechar e continuar rodando").
+- **Consumo total no sidebar**: novo bloco acima das contas individuais mostrando CPU à esquerda e RAM à direita; **barra de RAM com meta dinâmica de 1 GB por conta** (principal + extras), verde abaixo, vermelha acima; pill "Normal" / "Acima da meta".
+- **"Limpar cache"** no sidebar: renomeado de "Liberar espaço", remove pastas `Cache|Code Cache|GPUCache` do perfil WebView2 (protegidas `Network`, `Sessions`, `Local Storage`). Feedback honesto em MB/GB com botão para voltar; sem promessas de RAM liberada.
+- **Rodapé com métricas** (30px de altura): pills de CPU e RAM (acento cobre + gelo), radinha de CPU e texto valor; sidebar e rodapé medem o mesmo conjunto (processo principal + WebViews). RAM agora em absoluto (1,4 GB), sem % confuso.
+- **Notificações por conta**: troca de conta também remove a linha dela em "Últimas notificações" (com animação); quando a conta ativa está em 1º plano, notifications vão apenas para o histórico, sem som/toast/bolinha; ao clicar no histórico ou no toast, a linha correspondente some junto.
+- **Botão recarregar por conta** (ícone 🔄 estilizado feather, antes do ✏️) — recarrega o jogo só daquela conta (`CoreWebView2.Reload()`).
+- **Coleta de recursos em background** (WMI fora da UI principal) para evitar engasgos; total do sidebar igual ao do rodapé; soma inclui o processo principal.
 
 ### v1.4.2
 - **Notificações por conta refinadas de ponta a ponta**: a conta ativa na frente (janela principal ou flutuante) não toca som nem mostra toast/balão/bolinha — a notificação vai apenas para o histórico; minimizada/na bandeja, volta a avisar. Contas em segundo plano seguem notificando em todos os estados.

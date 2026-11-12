@@ -1,6 +1,6 @@
 ﻿# 🗺️ Roadmap — LoL Idle Desktop
 
-> Base: **v1.4.2** · Última atualização: 2026-11-11
+> Base: **v1.4.3** · Última atualização: 2026-11-12
 > Versão web estilizada: [`ROADMAP.html`](./ROADMAP.html) — abra no navegador para visualizar como site.
 
 <p align="center">
@@ -18,16 +18,16 @@
 |---|---|---|
 | 📖 **Missões** | ✅ **Confirmado** | v1.2.5 / v1.2.6 |
 | 🔔 **Bandeja inteligente (sons + clique abre app e troca de conta)** | ✅ **Confirmado** | v1.2.0 → v1.3.0 / v1.3.7 / v1.3.8 |
-| 🔔 **Toasts modernos + Central de Ações clicável** | ✅ **Feito** | v1.4.0 / v1.4.1 (Limpar também marca não lidos) / v1.4.2 (conta ativa na frente não notifica) |
-| 🎛️ **Barra lateral de contas** | ✅ **Feito** | v1.3.2 / v1.3.3 / v1.3.5 / v1.3.6 / v1.3.7 / v1.3.8 / v1.3.9 |
+| 🔔 **Toasts modernos + Central de Ações clicável** | ✅ **Feito** | v1.4.0 / v1.4.1 / v1.4.2 (conta ativa na frente não notifica) / v1.4.3 (tema tático + uso de recursos) |
+| 🎛️ **Barra lateral de contas** | ✅ **Feito** | v1.3.2 / v1.3.3 / v1.3.5 / v1.3.6 / v1.3.7 / v1.3.8 / v1.3.9 / v1.4.3 |
 | 🖼️ **Avatares das contas (3 fontes)** | ✅ **Feito** | v1.3.6 |
-| 🔴 **Sinalizações de não lida / últimas notificações na sidebar** | ✅ **Feito** | v1.3.7 / v1.3.8 / v1.3.9 |
+| 🔴 **Sinalizações de não lida / últimas notificações na sidebar** | ✅ **Feito** | v1.3.7 / v1.3.8 / v1.3.9 / v1.4.1 / v1.4.2 / v1.4.3 |
 | 🔔 **Notificações por conta e por tipo** | ✅ **Feito** | v1.3.3 / v1.4.0 (Toasts modernos) |
 | 🧪 **Poções: notificação + retorno à Fonte (modo Automático)** | ✅ **Feito** | v1.3.8 / v1.4.0 (Central de Ações clicável) |
 | 🧙 **Personagem (interativo)** | ❌ **Impossível** | — (jogo bloqueia 2ª sessão) |
 | 📌 **Sempre no topo persistente** | ✅ **Confirmado** | v1.2.7 |
 | 📱 **Android** | 🔵 **Futuro** | — |
-| 🔊 **Áudio separado (música/efeitos)** | 🟡 **Pendente — precisa de decisão** | lógica existe; UI inacessível (`ShowFloatingSettings` sem chamada) |
+| 🔊 **Áudio separado (música/efeitos)** | 🟡 **Pendente — precisa de decisão** | lógica existe (script de sincronização + botões `bt-musica`/`bt-efeitos` do jogo); a antiga tela de configurações foi removida do código |
 | 🔄 **Aviso de versão nova** | 🟡 **Falta polir** | — |
 
 ---
@@ -46,7 +46,7 @@ Painel separado e destacável que **já está pronto** (v1.2.5 / v1.2.6):
 
 > ℹ️ É um painel **só-texto** (igual ao que a Barra lateral poderia ser), sem segunda sessão do jogo.
 
-### 🎛️ Barra lateral de contas — `FEITO` ✅ (v1.3.2 / v1.3.3 / v1.3.5 / v1.3.6 / v1.3.7 / v1.3.8 / v1.3.9)
+### 🎛️ Barra lateral de contas — `FEITO` ✅ (v1.3.2 / v1.3.3 / v1.3.5 / v1.3.6 / v1.3.7 / v1.3.8 / v1.3.9 / v1.4.3)
 
 A sidebar **de contas** (lado direito, com toggle esconder/mostrar) foi implementada e evoluiu ao longo da v1.3.x:
 
@@ -74,11 +74,16 @@ A sidebar **de contas** (lado direito, com toggle esconder/mostrar) foi implemen
 - **Sidebar inteira com fade + deslize lateral** (v1.3.9) — esconder/mostrar a barra pelo chevron da borda anima fade + deslize para a direita (~160 ms); na primeira chamada (startup) o estado salvo é aplicado sem flash
 - **Botão de expandir/recolher centralizado na sidebar minimizada** (v1.3.8) — faixa na borda direita com os avatares (menores, no topo) e o botão no meio; clique no avatar troca de conta
 - **Correções de estabilidade** (v1.3.7) — inicialização das contas WebView2 protegida por exceções (falha em uma conta desregistra só ela, sem afetar as outras); desmute só retoma AudioContext suspenso pelo próprio app; remover a conta ativa troca para a principal e limpa as preferências por conta da conta removida (login salvo preservado)
+- **Seção "Consumo total"** (v1.4.3) — bloco acima das contas individuais: **CPU total** do app à esquerda (verde quando ok) e **RAM total** à direita (processo principal + WebViews, incluindo páginas compartilhadas); **barra de RAM com meta dinâmica** (`MetaRamBytes()` = **1 GB × nº total de contas**, incluindo a principal); pill **Normal**/**Acima da meta** (vermelho acima da meta); abaixo, lista de **uso por conta**
+- **Botão "⚡ Limpar cache"** (v1.4.3) — remove só `Cache`/`Code Cache`/`GPUCache` do WebView2 (`%LOCALAPPDATA%\LoLIdleDesktop\WebView2\EBWebView\Default\`, principal + extras via `Contas\<slug>`), com feedback de quanto foi liberado (MB/GB) e tela de resultado (botão "Ok"); cookies, sessão e login ficam intactos
+- **Botão 🔄 no chip** (v1.4.3) — recarrega o jogo **apenas daquela conta** (como F5), sem afetar as outras contas
+- **Rodapé (status bar) com pills de CPU e RAM** (v1.4.3) — pill de **CPU** (dot cobre, barra com `Accent`) e pill de **RAM** (dot `AccentIce`, absoluto em pt-BR), ambos mostrando o **total do app**, alinhados com a mesma contagem da sidebar
+- **Tema tático copper + ardósia (slate)** (v1.4.3) — paleta nova, bordas mais sutis, tipografia **Rajdhani** (títulos) e **Barlow** (corpo) embutidas (`Assets\Fonts\`), compatível com todos os diálogos internos
 - Conta ativa lembrada ao reabrir (`ContaAtiva`)
 
 > ℹ️ **O que continua inviável** é um **painel do jogo interativo dentro da barra** (2ª sessão viva acoplada ao painel) — o LoL Idle bloqueia uma segunda WebView com o jogo absoluto no mesmo momento. A barra feita aqui é **seletor + gerenciador de contas**, não um painel vivo.
 
-### 🔔 Sinalizações de não lida / últimas notificações na sidebar — `FEITO` ✅ (v1.3.7 / v1.3.8 / v1.3.9)
+### 🔔 Sinalizações de não lida / últimas notificações na sidebar — `FEITO` ✅ (v1.3.7 / v1.3.8 / v1.3.9 / v1.4.1 / v1.4.2 / v1.4.3)
 
 A sidebar de contas passou a sinalizar notificações pendentes sem precisar abrir a janela do jogo:
 
@@ -90,6 +95,10 @@ A sidebar de contas passou a sinalizar notificações pendentes sem precisar abr
 - Com a lista de contas recolhida ("Contas ▴"), a faixa vertical mostra os **avatares das contas** (clique troca de conta) no lugar do espaço vazio.
 - Com a sidebar inteira minimizada, uma **faixinha na borda direita** mostra os avatares das contas conectadas (menores, no topo), com o botão de expandir/recolher no meio; clique no avatar troca de conta.
 - Animações: linha de notificação pulsa ao ser clicada; limpar faz as linhas deslizar para a direita e desaparecer escalonado (v1.3.9).
+- **"Limpar" também zera as bolinhas de não lida** (v1.4.1) — o botão esvazia a lista **e** limpa `_contasNaoLidas` (a sidebar é recriada sem as bolinhas); só retorna sem fazer nada se a lista **e** o conjunto de não lidas estiverem vazios
+- **Clique no toast/balão remove a linha correspondente** de "Últimas notificações" (v1.4.2) — o clique consome/zera `_lastBalloonAccount`/`_lastBalloonKind`, troca para a conta (se ela ainda existe) e remove a linha via `RemoverUltimaNotificacao`; se a conta foi removida, a linha órfã é descartada sem restaurar/trocar
+- **Trocar de conta remove a linha daquela conta** do histórico, com animação (fade + deslize à direita) (v1.4.3)
+- **Conta ativa na frente não notifica** (v1.4.2) — com a principal (não minimizada) ou a flutuante visíveis, `HandleNotification` retorna cedo: sem som, sem toast/balão e sem registro no histórico; em segundo plano e minimizada/na bandeja, volta a avisar
 
 > ℹ️ O rastreamento das notificações (`_ultimasNotificacoes`, `_contasNaoLidas`) é **somente em memória** — nada é persistido no `window-settings.json`.
 
@@ -150,7 +159,7 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 |---|---|
 | Missões | ✅ **Resolvido** (v1.2.5/v1.2.6) |
 | Barra lateral / Personagem | ❌ Impossíveis interativos (bloqueio de 2ª sessão) |
-| Áudio | 🟡 Lógica de música/efeitos existe no código (`AudioBootstrapScript` + `bt-musica`/`bt-efeitos`), mas a tela `ShowFloatingSettings()` **não é chamada pela interface** — precisa de decisão para expor |
+| Áudio | 🟡 Lógica de música/efeitos existe no código (`AudioBootstrapScript` + `bt-musica`/`bt-efeitos`), mas não há tela acessível pela interface (a antiga `ShowFloatingSettings()` foi removida) — precisa de decisão para recriar uma tela ou manter só os botões do jogo |
 | Sempre no topo | ✅ **Resolvido na v1.2.7** — persistente por janela (`FloatingTopmost` / `MissionsTopmost`) |
 
 ---
@@ -159,7 +168,7 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 
 - [ ] Sons de notificação (volume/timbre por evento)
 - [ ] Detalhes da flutuante + Missões
-- [ ] Áudio separado (música/efeitos) — **decisão necessária:** expor a tela `ShowFloatingSettings()` (hoje órfã) ou manter apenas os botões `bt-musica`/`bt-efeitos` do jogo
+- [ ] Áudio separado (música/efeitos) — **decisão necessária:** recriar uma tela de configurações (a antiga foi removida do código) ou manter apenas os botões `bt-musica`/`bt-efeitos` do jogo
 - [x] Sempre no topo persistente — **feito na v1.2.7** (`FloatingTopmost` / `MissionsTopmost`, com sincronia visual)
 - [ ] Aviso de nova versão (GitHub)
 - [x] Avatares das contas (3 fontes) + aba Campeões + janela "Alterar avatar" com zoom — **feito na v1.3.6**
@@ -169,7 +178,8 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 - [x] Toasts modernos e Central de Ações clicável (AppUserModelId `Zephrus15.LoLIdle.Desktop`) — **feito na v1.4.0**
 - [x] Botão "Limpar" em "Últimas notificações" também remove as bolinhas de não lida — **feito na v1.4.1**
 - [x] Conta ativa na frente não notifica; limpeza preserva recém-chegadas; toast/balão remove item correspondente e linha órfã de conta removida; HUD de poções analisado estaticamente — **feito na v1.4.2**
+- [x] Parte superior do sidebar com consumo total (CPU à esquerda, RAM à direita, barra de RAM com meta dinâmica 1 GB por conta; pill Normal/Acima da meta); rodapé com pills de CPU e RAM; tema tático copper + ardósia (slate); botão recarregar por conta — **feito na v1.4.3**
 
 ---
 
-<sub>Documento gerado a partir do estado atual do app (v1.4.2). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site.</sub>
+<sub>Documento gerado a partir do estado atual do app (estado v1.4.3). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site.</sub>

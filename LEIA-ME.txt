@@ -1,4 +1,4 @@
-﻿LoL Idle Desktop - versão 1.4.2
+﻿LoL Idle Desktop - versão 1.4.3
 Aplicativo desktop não oficial para Windows
 
 O que é
@@ -12,10 +12,10 @@ Recursos
 - Janela flutuante independente, aberta pelo pedido do jogo (window.open),
   não por botão na principal. Ao abrir, a principal é oculta sem bandeja.
   Fechar a flutuante pelo × restaura a principal.
-  ReopenFloatingWindow_Click existe sem ligação no XAML (a confirmar).
 - Arraste da janela flutuante pela área do jogo (exceto controles).
-- Controle de silenciamento geral do áudio. A tela de música/efeitos
-  separados (ShowFloatingSettings) não tem UI acessível hoje.
+- Controle de silenciamento geral do áudio (botões próprios do jogo:
+  bt-musica/bt-efeitos); a antiga tela separada de áudio foi removida
+  do código.
 - Janela de Missões separada (somente leitura), visível só com a flutuante aberta,
   arrastável e redimensionável (largura e altura), com borda amarela.
 - Minimizar (－) envia a janela para a barra de tarefas do Windows.
@@ -59,6 +59,18 @@ Gerar instalador
 
 O instalador verifica o Microsoft Edge WebView2 Runtime e o instala
 automaticamente quando necessário.
+
+Novidades (v1.4.3)
+------------------
+- Tema tático novo (cobre + ardósia, tipografia Rajdhani/Barlow).
+- Novo bloco "Consumo total" no sidebar: CPU à esquerda, RAM à direita;
+  barra de RAM com meta dinâmica (1 GB por conta); pill Normal/Acima da meta.
+- Botão "Limpar cache" renomeado; remove só pastas Cache|Code Cache|GPUCache;
+  feedback em MB/GB; não promete RAM liberada.
+- Rodapé com pills de CPU e RAM (acento gelo e cobre); RAM em absoluto
+  (p.ex. 1,4 GB); sidebar e rodapé medem o mesmo conjunto.
+- Notificações por conta: soma/animação ao trocar de conta; a conta ativa
+  na frente não notifica o app; linhas desaparecem clicando no toast/histórico.
 
 Novidades (v1.4.2)
 ------------------
@@ -220,11 +232,9 @@ Limitações desta versão
 -----------------------
 - Missões incluído (somente leitura). Barra lateral interativa e Personagem
   não incluídos (o jogo bloqueia a segunda sessão).
-- O controle de áudio disponível silencia todo o áudio do jogo. Não há uma
-  tela acessível pela interface para ajustar música e efeitos separadamente
-  (a tela ShowFloatingSettings existe no código, mas não é chamada).
-- Janela separada de voto (ShowVoteWindow) existe sem exibição; voto/OAuth
-  abrem no navegador real.
+- O controle de áudio disponível silencia todo o áudio do jogo; música e
+  efeitos são ajustados pelos botões próprios do jogo (bt-musica/bt-efeitos).
+- Voto e login OAuth abrem no navegador real.
 
 Observações importantes
 -----------------------

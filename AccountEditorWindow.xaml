@@ -12,9 +12,9 @@
         WindowStartupLocation="CenterOwner">
     <Window.Resources>
         <Style x:Key="AvatarTabButton" TargetType="Button">
-            <Setter Property="Foreground" Value="#9298A5" />
-            <Setter Property="Background" Value="#1E212B" />
-            <Setter Property="BorderBrush" Value="#2F3540" />
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+            <Setter Property="Background" Value="{StaticResource BgPanel2}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderSubtle}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Height" Value="28" />
@@ -24,7 +24,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="border"
-                                CornerRadius="14"
+                                CornerRadius="8"
                                 Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}">
@@ -34,7 +34,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#262A35" />
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource BgPanel3}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -42,9 +42,9 @@
             </Setter>
         </Style>
         <Style x:Key="OffsetButton" TargetType="Button">
-            <Setter Property="Foreground" Value="#F2F2F2" />
-            <Setter Property="Background" Value="#1E212B" />
-            <Setter Property="BorderBrush" Value="#2F3540" />
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Setter Property="Background" Value="{StaticResource BgPanel2}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderSubtle}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
@@ -61,10 +61,10 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#262A35" />
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource BgPanel3}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="border" Property="Background" Value="#343A46" />
+                                <Setter TargetName="border" Property="Background" Value="{StaticResource BorderSoft}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -72,9 +72,9 @@
             </Setter>
         </Style>
     </Window.Resources>
-    <Border CornerRadius="14"
-            Background="#161922"
-            BorderBrush="#2F3540"
+    <Border CornerRadius="8"
+            Background="{StaticResource BgPanel}"
+            BorderBrush="{StaticResource BorderSubtle}"
             BorderThickness="1">
         <Grid>
             <Grid.RowDefinitions>
@@ -86,20 +86,21 @@
             <!-- Cabeçalho -->
             <Border Grid.Row="0"
                     Padding="16,10,10,10"
-                    Background="#1E212B"
-                    BorderBrush="#22262F"
+                    Background="{StaticResource BgPanel2}"
+                    BorderBrush="{StaticResource BorderSubtle}"
                     BorderThickness="0 0 0 1">
                 <Grid>
                     <StackPanel VerticalAlignment="Center">
                         <TextBlock x:Name="HeaderTitle"
                                    Text="✏️ Editar conta"
-                                   Foreground="#F2F2F2"
+                                   Foreground="{StaticResource TextPrimary}"
                                    FontSize="14"
                                    FontWeight="SemiBold"
+                               FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
                                    TextTrimming="CharacterEllipsis" />
                         <TextBlock x:Name="HeaderSubtitle"
                                    Text=""
-                                   Foreground="#9298A5"
+                                   Foreground="{StaticResource TextSecondary}"
                                    FontSize="11"
                                    Margin="0,1,0,0"
                                    TextTrimming="CharacterEllipsis" />
@@ -119,20 +120,20 @@
             <StackPanel Grid.Row="1" Margin="14,12,14,10">
                 <!-- Nome -->
                 <TextBlock Text="Nome:"
-                           Foreground="#E8CF8F"
+                           Foreground="#E8CF8F" FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
                            FontSize="11"
                            FontWeight="SemiBold"
                            Margin="2,0,0,4" />
                 <Border CornerRadius="6"
-                        Background="#1B1E27"
-                        BorderBrush="#2A2E38"
+                        Background="{StaticResource BgPanel2}"
+                        BorderBrush="{StaticResource BorderSubtle}"
                         BorderThickness="1"
                         Padding="6"
                         Margin="0,0,0,12">
                     <TextBox x:Name="NameBox"
                              Background="Transparent"
                              BorderThickness="0"
-                             Foreground="#F2F2F2"
+                             Foreground="{StaticResource TextPrimary}"
                              CaretBrush="#E8CF8F"
                              FontSize="13"
                              Padding="2,1"
@@ -149,7 +150,7 @@
 
                 <!-- Cor -->
                 <TextBlock Text="Cor"
-                           Foreground="#E8CF8F"
+                           Foreground="#E8CF8F" FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
                            FontSize="11"
                            FontWeight="SemiBold"
                            Margin="2,0,0,4" />
@@ -159,7 +160,7 @@
 
                 <!-- Ícone (abas: Ícones / Campeões) -->
                 <TextBlock Text="Ícone"
-                           Foreground="#E8CF8F"
+                           Foreground="#E8CF8F" FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
                            FontSize="11"
                            FontWeight="SemiBold"
                            Margin="2,0,0,4" />
@@ -187,7 +188,7 @@
 
                 <!-- Imagem -->
                 <TextBlock Text="Imagem"
-                           Foreground="#E8CF8F"
+                           Foreground="#E8CF8F" FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
                            FontSize="11"
                            FontWeight="SemiBold"
                            Margin="2,0,0,4" />
@@ -201,8 +202,8 @@
                             Content="Escolher arquivo…"
                             Height="30"
                             Padding="14,0"
-                            Foreground="#F2F2F2"
-                            BorderBrush="#2F3540"
+                            Foreground="{StaticResource TextPrimary}"
+                            BorderBrush="{StaticResource BorderSubtle}"
                             BorderThickness="1"
                             FontSize="12"
                             Cursor="Hand"
@@ -211,7 +212,7 @@
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="border"
                                         CornerRadius="8"
-                                        Background="#1E212B"
+                                        Background="{StaticResource BgPanel2}"
                                         BorderBrush="{TemplateBinding BorderBrush}"
                                         BorderThickness="{TemplateBinding BorderThickness}">
                                     <ContentPresenter HorizontalAlignment="Center"
@@ -220,7 +221,7 @@
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="border" Property="Background" Value="#262A35" />
+                                        <Setter TargetName="border" Property="Background" Value="{StaticResource BgPanel3}" />
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -229,7 +230,7 @@
                     <TextBlock x:Name="ImageHint"
                                Grid.Column="1"
                                Text="Nenhuma imagem escolhida"
-                               Foreground="#9298A5"
+                               Foreground="{StaticResource TextSecondary}"
                                FontSize="11"
                                VerticalAlignment="Center"
                                Margin="10,0,0,0"
@@ -240,7 +241,7 @@
                             Visibility="Collapsed"
                             Margin="0,8,0,0">
                     <TextBlock Text="Ajuste qual pedaço da imagem aparece no avatar"
-                               Foreground="#9298A5"
+                               Foreground="{StaticResource TextSecondary}"
                                FontSize="11"
                                Margin="2,0,0,6" />
                     <StackPanel Orientation="Horizontal"
@@ -282,7 +283,7 @@
                                 Height="30"
                                 Padding="10,0"
                                 FontSize="11"
-                                Foreground="#9298A5"
+                                Foreground="{StaticResource TextSecondary}"
                                 Style="{StaticResource OffsetButton}"
                                 ToolTip="Voltar ao recorte centralizado"
                                 Click="OffsetReset_Click" />
@@ -293,13 +294,13 @@
             <!-- Rodapé -->
             <Border Grid.Row="2"
                     Padding="14,10"
-                    BorderBrush="#22262F"
+                    BorderBrush="{StaticResource BorderSubtle}"
                     BorderThickness="0 1 0 0">
                 <Button x:Name="DoneButton"
                         Content="Concluído"
                         HorizontalAlignment="Right"
                         Width="110" Height="34"
-                        Foreground="#0A2E19"
+                        Foreground="{StaticResource BgApp}"
                         BorderThickness="0"
                         FontSize="12"
                         FontWeight="SemiBold"
@@ -309,7 +310,7 @@
                         <ControlTemplate TargetType="Button">
                             <Border x:Name="border"
                                     CornerRadius="9"
-                                    Background="#2BD46A">
+                                    Background="{StaticResource Accent}">
                                 <ContentPresenter HorizontalAlignment="Center"
                                                   VerticalAlignment="Center" />
                             </Border>
@@ -317,7 +318,7 @@
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter TargetName="border"
                                             Property="Background"
-                                            Value="#36E67D" />
+                                            Value="{StaticResource AccentHover}" />
                                 </Trigger>
                             </ControlTemplate.Triggers>
                         </ControlTemplate>

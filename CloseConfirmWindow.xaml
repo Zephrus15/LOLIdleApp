@@ -10,9 +10,66 @@
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner">
-    <Border CornerRadius="14"
-            Background="#161922"
-            BorderBrush="#2F3540"
+    <Window.Resources>
+        <!-- Paleta azul local deste diálogo (não afeta o resto do app) -->
+        <SolidColorBrush x:Key="DialogBlue"          Color="#5B8BD6" />
+        <SolidColorBrush x:Key="DialogBlueHover"     Color="#6FA4E0" />
+        <SolidColorBrush x:Key="DialogBlueDeep"      Color="#4F7ACC" />
+        <SolidColorBrush x:Key="DialogBlueSoft"      Color="#1E2B42" />
+        <SolidColorBrush x:Key="ConfirmHoverBrush"   Color="#6190D9" />
+
+        <!-- DarkCheckBox local com check azul (o global continua cobre) -->
+        <Style x:Key="DialogCheckBox" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <StackPanel Orientation="Horizontal"
+                                    VerticalAlignment="Center">
+                            <Border x:Name="box"
+                                    Width="17" Height="17"
+                                    CornerRadius="4"
+                                    Background="{StaticResource BorderSubtle}"
+                                    BorderBrush="{StaticResource BorderSoft}"
+                                    BorderThickness="1"
+                                    VerticalAlignment="Center">
+                                <Path x:Name="check"
+                                      Data="M 3 8.6 L 6.6 12 L 13.5 4.3"
+                                      Stroke="{StaticResource DialogBlueHover}"
+                                      StrokeThickness="2.2"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round"
+                                      StrokeLineJoin="Round"
+                                      Fill="Transparent"
+                                      Stretch="Uniform"
+                                      Width="12.5" Height="10"
+                                      Visibility="Collapsed"
+                                      HorizontalAlignment="Center"
+                                      VerticalAlignment="Center" />
+                            </Border>
+                            <ContentPresenter x:Name="content"
+                                              Margin="9,0,0,0"
+                                              VerticalAlignment="Center" />
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource BorderSoft}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="box" Property="Background" Value="{StaticResource DialogBlueSoft}" />
+                                <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource DialogBlue}" />
+                                <Setter TargetName="check" Property="Visibility" Value="Visible" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+    <Border CornerRadius="8"
+            Background="{StaticResource BgPanel}"
+            BorderBrush="{StaticResource BorderSubtle}"
             BorderThickness="1"
             Padding="0">
         <Grid>
@@ -25,13 +82,14 @@
             <!-- Cabeçalho -->
             <Border Grid.Row="0"
                     Padding="20,14"
-                    BorderBrush="#22262F"
+                    BorderBrush="{StaticResource BorderSubtle}"
                     BorderThickness="0 0 0 1">
                 <Grid>
                     <TextBlock Text="Fechar o LoL Idle?"
-                               Foreground="#F2F2F2"
+                               Foreground="{StaticResource TextPrimary}"
                                FontSize="16"
                                FontWeight="SemiBold"
+                               FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
                                VerticalAlignment="Center" />
                     <Button x:Name="CloseHeaderButton"
                             HorizontalAlignment="Right"
@@ -49,10 +107,10 @@
 
                 <!-- Opção 1: continuar rodando -->
                 <Border x:Name="OptionSegundoPlano"
-                        Background="#17292A"
-                        BorderBrush="#1F8A4C"
+                        Background="{StaticResource DialogBlueSoft}"
+                        BorderBrush="{StaticResource DialogBlue}"
                         BorderThickness="1.5"
-                        CornerRadius="12"
+                        CornerRadius="7"
                         Padding="12,12"
                         Cursor="Hand"
                         Margin="0,0,0,10"
@@ -68,8 +126,8 @@
                         <!-- Avatar do app: quadrado arredondado com triângulo de play centralizado -->
                         <Border Grid.Column="0"
                                 Width="46" Height="46"
-                                CornerRadius="12"
-                                Background="#1E3A2F"
+                                CornerRadius="7"
+                                Background="{StaticResource DialogBlueSoft}"
                                 VerticalAlignment="Center"
                                 HorizontalAlignment="Center">
                             <Viewbox Stretch="Uniform"
@@ -77,8 +135,8 @@
                                      HorizontalAlignment="Center"
                                      VerticalAlignment="Center">
                                 <Path Data="M 2 2 L 20 11 L 2 20 Z"
-                                      Fill="#37D067"
-                                      Stroke="#37D067"
+                                      Fill="{StaticResource DialogBlueHover}"
+                                      Stroke="{StaticResource DialogBlueHover}"
                                       StrokeThickness="2.2"
                                       StrokeLineJoin="Round" />
                             </Viewbox>
@@ -89,18 +147,18 @@
                                     Orientation="Horizontal"
                                     VerticalAlignment="Center">
                             <CheckBox x:Name="RadioSegundoPlano"
-                                      Style="{StaticResource DarkCheckBox}"
+                                      Style="{StaticResource DialogCheckBox}"
                                       IsHitTestVisible="False"
                                       IsChecked="True"
                                       Margin="0,0,16,0"
                                       VerticalAlignment="Center" />
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="Continuar rodando em segundo plano"
-                                           Foreground="#F2F2F2"
+                                           Foreground="{StaticResource TextPrimary}"
                                            FontSize="13"
                                            FontWeight="SemiBold" />
                                 <TextBlock Text="A conta ligada segue farmando. O LoL Idle fica no ícone ao lado do relógio."
-                                           Foreground="#9AA3B2"
+                                           Foreground="{StaticResource TextSecondary}"
                                            FontSize="11.5"
                                            TextWrapping="Wrap"
                                            Margin="0,5,0,0"
@@ -112,10 +170,10 @@
 
                 <!-- Opção 2: sair -->
                 <Border x:Name="OptionSair"
-                        Background="#1B1E27"
-                        BorderBrush="#2A2E38"
+                        Background="{StaticResource BgPanel2}"
+                        BorderBrush="{StaticResource BorderSubtle}"
                         BorderThickness="1"
-                        CornerRadius="12"
+                        CornerRadius="7"
                         Padding="12,12"
                         Cursor="Hand"
                         MouseLeftButtonDown="OptionSair_MouseLeftButtonDown"
@@ -130,7 +188,7 @@
                         <!-- Avatar vermelho escuro: símbolo de desligar centralizado no avatar -->
                         <Border Grid.Column="0"
                                 Width="46" Height="46"
-                                CornerRadius="12"
+                                CornerRadius="7"
                                 Background="#403033"
                                 VerticalAlignment="Center"
                                 HorizontalAlignment="Center">
@@ -152,17 +210,17 @@
                                     Orientation="Horizontal"
                                     VerticalAlignment="Center">
                             <CheckBox x:Name="RadioSair"
-                                      Style="{StaticResource DarkCheckBox}"
+                                      Style="{StaticResource DialogCheckBox}"
                                       IsHitTestVisible="False"
                                       Margin="0,0,16,0"
                                       VerticalAlignment="Center" />
                             <StackPanel VerticalAlignment="Center">
                                 <TextBlock Text="Sair e desligar as contas"
-                                           Foreground="#EDEDED"
+                                           Foreground="{StaticResource TextPrimary}"
                                            FontSize="13"
                                            FontWeight="SemiBold" />
                                 <TextBlock Text="A conta para de farmar. O login continua salvo."
-                                           Foreground="#9AA3B2"
+                                           Foreground="{StaticResource TextSecondary}"
                                            FontSize="11.5"
                                            TextWrapping="Wrap"
                                            Margin="0,5,0,0"
@@ -176,7 +234,7 @@
                 <CheckBox x:Name="RememberCheckbox"
                           Content="Lembrar minha escolha e não perguntar de novo"
                           Margin="2,14,0,0"
-                          Style="{StaticResource DarkCheckBox}"
+                          Style="{StaticResource DialogCheckBox}"
                           FontSize="12"
                           VerticalContentAlignment="Center" />
             </StackPanel>
@@ -184,7 +242,7 @@
             <!-- Rodapé -->
             <Border Grid.Row="2"
                     Padding="18,12"
-                    BorderBrush="#22262F"
+                    BorderBrush="{StaticResource BorderSubtle}"
                     BorderThickness="0 1 0 0">
                 <Grid>
                     <Button x:Name="CancelButton"
@@ -193,14 +251,14 @@
                             Width="110" Height="40"
                             Background="Transparent"
                             BorderThickness="0"
-                            Foreground="#C9CDD6"
+                            Foreground="{StaticResource TextPrimary}"
                             FontSize="13"
                             Cursor="Hand"
                             Click="Cancel_Click">
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="border"
-                                        CornerRadius="10"
+                                        CornerRadius="6"
                                         Background="{TemplateBinding Background}">
                                     <ContentPresenter HorizontalAlignment="Center"
                                                       VerticalAlignment="Center" />
@@ -209,12 +267,12 @@
                                     <Trigger Property="IsMouseOver" Value="True">
                                         <Setter TargetName="border"
                                                 Property="Background"
-                                                Value="#2A2E38" />
+                                                Value="{StaticResource BorderSubtle}" />
                                     </Trigger>
                                     <Trigger Property="IsPressed" Value="True">
                                         <Setter TargetName="border"
                                                 Property="Background"
-                                                Value="#343A46" />
+                                                Value="{StaticResource BorderSoft}" />
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -225,8 +283,8 @@
                             HorizontalAlignment="Right"
                             Width="220" Height="40"
                             Content="Fechar e continuar rodando"
-                            Background="#2BD46A"
-                            Foreground="#0A2E19"
+                            Background="{StaticResource DialogBlueDeep}"
+                            Foreground="#0A1B2E"
                             BorderThickness="0"
                             FontSize="13"
                             FontWeight="SemiBold"
@@ -235,7 +293,7 @@
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="border"
-                                        CornerRadius="10"
+                                        CornerRadius="6"
                                         Background="{TemplateBinding Background}">
                                     <ContentPresenter HorizontalAlignment="Center"
                                                       VerticalAlignment="Center" />
@@ -243,8 +301,8 @@
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
                                         <Setter TargetName="border"
-                                                Property="Opacity"
-                                                Value="0.85" />
+                                                Property="Background"
+                                                Value="{DynamicResource ConfirmHoverBrush}" />
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>

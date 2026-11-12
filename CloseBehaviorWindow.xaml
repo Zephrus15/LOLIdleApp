@@ -10,9 +10,9 @@
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner">
-    <Border CornerRadius="14"
-            Background="#161922"
-            BorderBrush="#2F3540"
+    <Border CornerRadius="8"
+            Background="{StaticResource BgPanel}"
+            BorderBrush="{StaticResource BorderSubtle}"
             BorderThickness="1">
         <Grid>
             <Grid.RowDefinitions>
@@ -24,14 +24,15 @@
             <!-- Cabeçalho -->
             <Border Grid.Row="0"
                     Padding="18,10,10,10"
-                    Background="#1E212B"
-                    BorderBrush="#22262F"
+                    Background="{StaticResource BgPanel2}"
+                    BorderBrush="{StaticResource BorderSubtle}"
                     BorderThickness="0 0 0 1">
                 <Grid>
                     <TextBlock Text="⚙ Opções de fechamento"
-                               Foreground="#F2F2F2"
+                               Foreground="{StaticResource TextPrimary}"
                                FontSize="14"
                                FontWeight="SemiBold"
+                               FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
                                VerticalAlignment="Center" />
                     <Button x:Name="CloseHeaderButton"
                             HorizontalAlignment="Right"
@@ -47,16 +48,16 @@
             <!-- Conteúdo -->
             <StackPanel Grid.Row="1" Margin="18,16,18,10">
                 <TextBlock Text="Comportamento do botão Fechar do app."
-                           Foreground="#9298A5"
+                           Foreground="{StaticResource TextSecondary}"
                            FontSize="11"
                            TextWrapping="Wrap"
                            Margin="0,0,0,14" />
 
                 <!-- Opção 1: sempre perguntar -->
-                <Border Background="#1B1E27"
-                        BorderBrush="#2A2E38"
+                <Border Background="{StaticResource BgPanel2}"
+                        BorderBrush="{StaticResource BorderSubtle}"
                         BorderThickness="1"
-                        CornerRadius="10"
+                        CornerRadius="6"
                         Padding="12,10"
                         Margin="0,0,0,10">
                     <CheckBox x:Name="AskCheck"
@@ -66,11 +67,11 @@
                               Unchecked="Option_Unchecked">
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Sempre perguntar"
-                                       Foreground="#F2F2F2"
+                                       Foreground="{StaticResource TextPrimary}"
                                        FontSize="13"
                                        FontWeight="SemiBold" />
                             <TextBlock Text="Abre o diálogo 'Fechar o LoL Idle?' toda vez que clicar em Fechar"
-                                       Foreground="#9298A5"
+                                       Foreground="{StaticResource TextSecondary}"
                                        FontSize="11"
                                        TextWrapping="Wrap"
                                        Margin="0,3,0,0" />
@@ -79,10 +80,10 @@
                 </Border>
 
                 <!-- Opção 2: continuar em segundo plano -->
-                <Border Background="#1B1E27"
-                        BorderBrush="#2A2E38"
+                <Border Background="{StaticResource BgPanel2}"
+                        BorderBrush="{StaticResource BorderSubtle}"
                         BorderThickness="1"
-                        CornerRadius="10"
+                        CornerRadius="6"
                         Padding="12,10"
                         Margin="0,0,0,10">
                     <CheckBox x:Name="BackgroundCheck"
@@ -92,11 +93,11 @@
                               Unchecked="Option_Unchecked">
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Sempre continuar em segundo plano"
-                                       Foreground="#F2F2F2"
+                                       Foreground="{StaticResource TextPrimary}"
                                        FontSize="13"
                                        FontWeight="SemiBold" />
                             <TextBlock Text="Fecha direto para a bandeja; o jogo continua farmando"
-                                       Foreground="#9298A5"
+                                       Foreground="{StaticResource TextSecondary}"
                                        FontSize="11"
                                        TextWrapping="Wrap"
                                        Margin="0,3,0,0" />
@@ -105,10 +106,10 @@
                 </Border>
 
                 <!-- Opção 3: sair e desligar -->
-                <Border Background="#1B1E27"
-                        BorderBrush="#2A2E38"
+                <Border Background="{StaticResource BgPanel2}"
+                        BorderBrush="{StaticResource BorderSubtle}"
                         BorderThickness="1"
-                        CornerRadius="10"
+                        CornerRadius="6"
                         Padding="12,10"
                         Margin="0,0,0,4">
                     <CheckBox x:Name="ExitCheck"
@@ -118,11 +119,11 @@
                               Unchecked="Option_Unchecked">
                         <StackPanel VerticalAlignment="Center">
                             <TextBlock Text="Sempre sair e desligar as contas"
-                                       Foreground="#F2F2F2"
+                                       Foreground="{StaticResource TextPrimary}"
                                        FontSize="13"
                                        FontWeight="SemiBold" />
                             <TextBlock Text="Encerra o app e desliga todas as contas"
-                                       Foreground="#9298A5"
+                                       Foreground="{StaticResource TextSecondary}"
                                        FontSize="11"
                                        TextWrapping="Wrap"
                                        Margin="0,3,0,0" />
@@ -131,7 +132,7 @@
                 </Border>
 
                 <TextBlock Text="A mudança vale na hora e fica salva para as próximas vezes."
-                           Foreground="#9298A5"
+                           Foreground="{StaticResource TextSecondary}"
                            FontSize="11"
                            TextWrapping="Wrap"
                            Margin="2,6,0,0" />
@@ -140,14 +141,14 @@
             <!-- Rodapé -->
             <Border Grid.Row="2"
                     Padding="14,12"
-                    BorderBrush="#22262F"
+                    BorderBrush="{StaticResource BorderSubtle}"
                     BorderThickness="0 1 0 0">
                 <Grid>
                     <Button x:Name="DoneButton"
                             Content="Concluído"
                             HorizontalAlignment="Right"
                             Width="110" Height="36"
-                            Foreground="#0A2E19"
+                            Foreground="{StaticResource BgApp}"
                             BorderThickness="0"
                             FontSize="12"
                             FontWeight="SemiBold"
@@ -157,7 +158,7 @@
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="border"
                                         CornerRadius="9"
-                                        Background="#2BD46A">
+                                        Background="{StaticResource Accent}">
                                     <ContentPresenter HorizontalAlignment="Center"
                                                       VerticalAlignment="Center" />
                                 </Border>
@@ -165,7 +166,7 @@
                                     <Trigger Property="IsMouseOver" Value="True">
                                         <Setter TargetName="border"
                                                 Property="Background"
-                                                Value="#36E67D" />
+                                                Value="{StaticResource AccentHover}" />
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>

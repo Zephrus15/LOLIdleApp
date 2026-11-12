@@ -201,7 +201,7 @@ namespace LoLIdleDesktop
             string display = NomeExibicaoSidebar();
             SidebarPreviewHost.Children.Clear();
             SidebarPreviewHost.Children.Add(
-                MainWindow.CriarAvatarVisual(_settings, _accountKey, display, 40, 10, 24));
+                MainWindow.CriarAvatarVisual(_settings, _accountKey, display, 40, 7, 24));
             SidebarPreviewName.Text = display;
 
             bool destacado = string.Equals(
@@ -211,11 +211,11 @@ namespace LoLIdleDesktop
 
             SidebarPreviewChip.Background = new System.Windows.Media.SolidColorBrush(
                 destacado
-                    ? System.Windows.Media.Color.FromRgb(0x14, 0x26, 0x23)
-                    : System.Windows.Media.Color.FromRgb(0x1F, 0x22, 0x2B));
+                    ? System.Windows.Media.Color.FromRgb(0x3A, 0x2A, 0x1C)
+                    : System.Windows.Media.Color.FromRgb(0x22, 0x27, 0x33));
             SidebarPreviewChip.BorderBrush = new System.Windows.Media.SolidColorBrush(
                 destacado
-                    ? System.Windows.Media.Color.FromRgb(0x2B, 0xD4, 0x6A)
+                    ? System.Windows.Media.Color.FromRgb(0xD9, 0x7B, 0x36)
                     : System.Windows.Media.Colors.Transparent);
             SidebarPreviewChip.BorderThickness = destacado
                 ? new Thickness(1)
@@ -223,7 +223,7 @@ namespace LoLIdleDesktop
             SidebarPreviewSubtitle.Text = destacado ? "na frente" : "segundo plano";
             SidebarPreviewSubtitle.Foreground = new System.Windows.Media.SolidColorBrush(
                 destacado
-                    ? System.Windows.Media.Color.FromRgb(0x37, 0xD0, 0x67)
+                    ? System.Windows.Media.Color.FromRgb(0xD9, 0x7B, 0x36)
                     : System.Windows.Media.Color.FromRgb(0x6E, 0x9C, 0xD8));
         }
 
