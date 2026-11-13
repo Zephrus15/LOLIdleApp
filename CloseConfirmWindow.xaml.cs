@@ -1,10 +1,11 @@
+using System;
 using System.Windows;
 using System.Windows.Input;
 
 namespace LoLIdleDesktop
 {
     // Resultado do diálogo de fechamento:
-    // 0 = perguntar novamente, 1 = continuar em segundo plano, 2 = sair
+    // 1 = continuar em segundo plano, 2 = sair e desligar as contas
     public sealed class CloseConfirmResult
     {
         public int Selected { get; set; } = 1;
@@ -14,15 +15,21 @@ namespace LoLIdleDesktop
     public partial class CloseConfirmWindow : Window
     {
         private static readonly System.Windows.Media.Color AzulAtivo =
-            System.Windows.Media.Color.FromRgb(0x5B, 0x8B, 0xD6);
+            System.Windows.Media.Color.FromRgb(0x5B, 0x8B, 0xD6); // DialogBlue
         private static readonly System.Windows.Media.Color AzulHover =
-            System.Windows.Media.Color.FromRgb(0x6F, 0xA4, 0xE0);
+            System.Windows.Media.Color.FromRgb(0x6F, 0xA4, 0xE0); // DialogBlueHover
         private static readonly System.Windows.Media.Color AzulFundo =
-            System.Windows.Media.Color.FromRgb(0x1E, 0x2B, 0x42);
+            System.Windows.Media.Color.FromRgb(0x1E, 0x2B, 0x42); // DialogBlueSoft
         private static readonly System.Windows.Media.Color AzulFundoHover =
-            System.Windows.Media.Color.FromRgb(0x1E, 0x30, 0x49);
+            System.Windows.Media.Color.FromRgb(0x1E, 0x30, 0x49); // DialogBlueSoftHover
         private static readonly System.Windows.Media.Color CinzaInativo =
-            System.Windows.Media.Color.FromRgb(0x2B, 0x31, 0x3F);
+            System.Windows.Media.Color.FromRgb(0x2B, 0x31, 0x3F); // BorderSubtle
+        private static readonly System.Windows.Media.Color CinzaHover =
+            System.Windows.Media.Color.FromRgb(0x3A, 0x42, 0x54); // BorderSoft
+        private static readonly System.Windows.Media.Color FundoInativo =
+            System.Windows.Media.Color.FromRgb(0x22, 0x27, 0x33); // BgPanel2
+        private static readonly System.Windows.Media.Color FundoInativoHover =
+            System.Windows.Media.Color.FromRgb(0x26, 0x2C, 0x39); // BgPanel3
 
         private readonly CloseConfirmResult _result = new CloseConfirmResult();
 
@@ -53,10 +60,8 @@ namespace LoLIdleDesktop
         {
             bool sel = _result.Selected == 1;
             bool hover = _hoverSegundoPlano;
-            System.Windows.Media.Color border = sel ? (hover ? AzulHover : AzulAtivo)
-                                                    : (hover ? System.Windows.Media.Color.FromRgb(0x3A, 0x42, 0x54) : CinzaInativo);
-            System.Windows.Media.Color bg = sel ? (hover ? AzulFundoHover : AzulFundo)
-                                                : (hover ? System.Windows.Media.Color.FromRgb(0x26, 0x2C, 0x39) : System.Windows.Media.Color.FromRgb(0x22, 0x27, 0x33));
+            System.Windows.Media.Color border = sel ? (hover ? AzulHover : AzulAtivo) : (hover ? CinzaHover : CinzaInativo);
+            System.Windows.Media.Color bg = sel ? (hover ? AzulFundoHover : AzulFundo) : (hover ? FundoInativoHover : FundoInativo);
 
             OptionSegundoPlano.BorderBrush = new System.Windows.Media.SolidColorBrush(border);
             OptionSegundoPlano.BorderThickness = new Thickness(sel ? 1.5 : 1);
@@ -68,9 +73,9 @@ namespace LoLIdleDesktop
             bool sel = _result.Selected == 2;
             bool hover = _hoverSair;
             System.Windows.Media.Color border = sel ? (hover ? System.Windows.Media.Color.FromRgb(0xF0, 0x6D, 0x5E) : System.Windows.Media.Color.FromRgb(0xE0, 0x5B, 0x4B))
-                                                    : (hover ? System.Windows.Media.Color.FromRgb(0x3A, 0x42, 0x54) : CinzaInativo);
+                                                    : (hover ? CinzaHover : CinzaInativo);
             System.Windows.Media.Color bg = sel ? (hover ? System.Windows.Media.Color.FromRgb(0x31, 0x24, 0x28) : System.Windows.Media.Color.FromRgb(0x26, 0x1C, 0x20))
-                                                : (hover ? System.Windows.Media.Color.FromRgb(0x26, 0x2C, 0x39) : System.Windows.Media.Color.FromRgb(0x22, 0x27, 0x33));
+                                                : (hover ? FundoInativoHover : FundoInativo);
 
             OptionSair.BorderBrush = new System.Windows.Media.SolidColorBrush(border);
             OptionSair.BorderThickness = new Thickness(sel ? 1.5 : 1);
@@ -87,12 +92,10 @@ namespace LoLIdleDesktop
             RadioSair.IsChecked = false;
 
             ConfirmButton.Content = "Fechar e continuar rodando";
-            ConfirmButton.Background = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(0x4F, 0x7A, 0xCC));
+            ConfirmButton.Background = new System.Windows.Media.SolidColorBrush(AzulAtivo);
             ConfirmButton.Foreground = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(0x0A, 0x1B, 0x2E));
-            Resources["ConfirmHoverBrush"] = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(0x61, 0x90, 0xD9));
+                System.Windows.Media.Color.FromRgb(0x17, 0x1A, 0x21)); // BgApp
+            Resources["ConfirmHoverBrush"] = new System.Windows.Media.SolidColorBrush(AzulHover);
         }
 
         private void SelecionarSair()

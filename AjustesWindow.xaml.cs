@@ -39,7 +39,7 @@ namespace LoLIdleDesktop
             });
             AjustesTabs.Items.Add(new TabItem
             {
-                Header = "⚙ Opções de fechamento",
+                Header = "⚙ Inicialização",
                 Style = (Style)FindResource("AjustesTabItem"),
                 Content = _closePanel
             });

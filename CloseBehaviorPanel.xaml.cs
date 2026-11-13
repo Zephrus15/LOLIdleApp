@@ -1,13 +1,16 @@
 using System;
 using System.Windows;
 using System.Windows.Controls;
-using CheckBox = System.Windows.Controls.CheckBox;
 using UserControl = System.Windows.Controls.UserControl;
+using Microsoft.Win32;
 
 namespace LoLIdleDesktop
 {
     public partial class CloseBehaviorPanel : UserControl
     {
+        private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+        private const string RunValueName = "LoLIdleDesktop";
+
         private readonly MainWindow.WindowSettings _settings;
         private readonly Action _save;
         private bool _syncing;
@@ -28,10 +31,21 @@ namespace LoLIdleDesktop
             _syncing = true;
             try
             {
-                // Qualquer valor fora de 1/2 cai no padrão "Sempre perguntar"
-                AskCheck.IsChecked = _settings.CloseBehavior != 1 && _settings.CloseBehavior != 2;
-                BackgroundCheck.IsChecked = _settings.CloseBehavior == 1;
-                ExitCheck.IsChecked = _settings.CloseBehavior == 2;
+                // Fechamento: chave única — ligada = 1 (segundo plano),
+                // desligada = 2 (sair). Qualquer valor != 2 cai no padrão ligado.
+                BackgroundCheck.IsChecked = _settings.CloseBehavior != 2;
+
+                // Pré-carregamento: padrão ligado (vale na próxima abertura do app).
+                PrecarregarContasCheck.IsChecked = _settings.PrecarregarContas;
+
+                AskCloseCheck.IsChecked = _settings.PerguntarAoFechar;
+                UpdateAskVisibility();
+
+                StartWithWindowsCheck.IsChecked = _settings.IniciarComWindows;
+                StartTrayCheck.IsChecked = _settings.IniciarNaBandejaAoIniciar;
+                StartTrayRow.Visibility = _settings.IniciarComWindows
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
             }
             finally
             {
@@ -39,57 +53,96 @@ namespace LoLIdleDesktop
             }
         }
 
-        private void Option_Checked(object sender, RoutedEventArgs e)
+        // Pré-carregamento de contas no startup: só afeta a próxima abertura do app.
+        private void Precarregar_Changed(object sender, RoutedEventArgs e)
         {
             if (_syncing) return;
 
-            _syncing = true;
+            _settings.PrecarregarContas = PrecarregarContasCheck.IsChecked == true;
+            _save();
+        }
+
+        // Inicialização com o Windows: grava/apaga a chave HKCU ...\Run\LoLIdleDesktop.
+        private static void SetRunValue(bool enabled)
+        {
             try
             {
-                if (ReferenceEquals(sender, BackgroundCheck))
+                using RegistryKey? key = Registry.CurrentUser.CreateSubKey(RunKeyPath);
+                if (key == null)
+                    return;
+
+                if (enabled)
                 {
-                    AskCheck.IsChecked = false;
-                    ExitCheck.IsChecked = false;
-                    _settings.CloseBehavior = 1;
-                }
-                else if (ReferenceEquals(sender, ExitCheck))
-                {
-                    AskCheck.IsChecked = false;
-                    BackgroundCheck.IsChecked = false;
-                    _settings.CloseBehavior = 2;
+                    string exe = Environment.ProcessPath
+                        ?? System.Windows.Forms.Application.ExecutablePath;
+                    // Caminho entre aspas (o nome do executável contém espaço: "LoL Idle.exe").
+                    key.SetValue(RunValueName, $"\"{exe}\"");
                 }
                 else
                 {
-                    BackgroundCheck.IsChecked = false;
-                    ExitCheck.IsChecked = false;
-                    _settings.CloseBehavior = 0;
+                    key.DeleteValue(RunValueName, throwOnMissingValue: false);
                 }
-
-                _save();
             }
-            finally
+            catch
             {
-                _syncing = false;
+                // Falha ao gravar/apagar a chave não deve derrubar o app;
+                // a preferência fica salva em _settings mesmo assim.
             }
         }
 
-        private void Option_Unchecked(object sender, RoutedEventArgs e)
+        private void Startup_Changed(object sender, RoutedEventArgs e)
         {
             if (_syncing) return;
 
-            // Comportamento de rádio: a opção ativa não pode ser desmarcada
-            if (sender is CheckBox cb)
-            {
-                _syncing = true;
-                try
-                {
-                    cb.IsChecked = true;
-                }
-                finally
-                {
-                    _syncing = false;
-                }
-            }
+            bool on = StartWithWindowsCheck.IsChecked == true;
+            _settings.IniciarComWindows = on;
+            SetRunValue(on);
+            StartTrayRow.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            _save();
+        }
+
+        private void StartTray_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_syncing) return;
+
+            _settings.IniciarNaBandejaAoIniciar = StartTrayCheck.IsChecked == true;
+            _save();
+        }
+
+        // "Perguntar ao fechar": só tem efeito com CloseBehavior = 2 (sair);
+        // pergunta a cada × entre continuar em segundo plano ou sair.
+        private void AskClose_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_syncing) return;
+
+            _settings.PerguntarAoFechar = AskCloseCheck.IsChecked == true;
+            _save();
+        }
+
+        // Mostra a pergunta apenas no modo "sair" (CloseBehavior = 2) com a chave
+        // de segundo plano desligada; caso contrário, o check some.
+        private void UpdateAskVisibility()
+        {
+            bool show = BackgroundCheck.IsChecked != true && _settings.CloseBehavior == 2;
+            AskCloseRow.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        // Fechamento: chave única — ON = continuar em segundo plano (bandeja),
+        // OFF = encerrar o app completamente ao clicar em Fechar.
+        private void CloseBehavior_Click(object sender, RoutedEventArgs e)
+        {
+            if (_syncing) return;
+
+            bool on = BackgroundCheck.IsChecked == true;
+            _settings.CloseBehavior = on ? 1 : 2;
+            // ON: a pergunta não faz sentido (× vai direto pra bandeja).
+            // OFF: volta a perguntar a cada ×.
+            _settings.PerguntarAoFechar = !on;
+            _syncing = true;
+            try { AskCloseCheck.IsChecked = !on; }
+            finally { _syncing = false; }
+            UpdateAskVisibility();
+            _save();
         }
     }
 }

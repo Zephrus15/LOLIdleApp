@@ -570,8 +570,17 @@ public partial class MainWindow : Window
         public double MissionsLeft { get; set; } = 200;
         public double MissionsTop { get; set; } = 200;
         public bool IsMaximized { get; set; }
-        // Comportamento ao fechar (0 = perguntar, 1 = continuar em segundo plano, 2 = sair)
-        public int CloseBehavior { get; set; } = 0;
+        // Comportamento ao fechar (1 = continuar em segundo plano, 2 = sair)
+        public int CloseBehavior { get; set; } = 1;
+        // "Perguntar ao fechar": com CloseBehavior = 2 (sair), pergunta a cada ×
+        // entre continuar em segundo plano ou sair; false = não perguntar.
+        public bool PerguntarAoFechar { get; set; } = true;
+        // Iniciar junto com o Windows (chave HKCU ...\Run\LoLIdleDesktop)
+        public bool IniciarComWindows { get; set; } = false;
+        // Quando inicia com o Windows, abre escondido na bandeja (sem mostrar a janela)
+        public bool IniciarNaBandejaAoIniciar { get; set; } = false;
+        // Pré-carrega TODAS as contas na inicialização (alternância instantânea; custa mais no startup)
+        public bool PrecarregarContas { get; set; } = true;
         public List<string> ContasAdicionadas { get; set; } = new();
         public string ContaAtiva { get; set; } = "Conta principal";
         public Dictionary<string, string> ContasNomes { get; set; } = new();
@@ -617,6 +626,7 @@ public partial class MainWindow : Window
     private void RestoreWindowSettings()
     {
         WindowSettings? settings = null;
+        bool closeBehaviorMigrated = false;
 
         try
         {
@@ -664,6 +674,22 @@ public partial class MainWindow : Window
             if (string.IsNullOrWhiteSpace(_settings.ContaAtiva))
                 _settings.ContaAtiva = DefaultAccountName;
 
+            // Migração: a opção "Sempre perguntar" (CloseBehavior = 0) foi removida —
+            // quem a tinha passa a "Sair" (2) com "Perguntar ao fechar" ligado,
+            // preservando o comportamento antigo de perguntar a cada clique no ×.
+            // CloseBehavior == 2 já salvo preserva PerguntarAoFechar como está.
+            if (_settings.CloseBehavior == 0)
+            {
+                _settings.CloseBehavior = 2;
+                _settings.PerguntarAoFechar = true;
+                closeBehaviorMigrated = true;
+            }
+            else if (_settings.CloseBehavior != 1 && _settings.CloseBehavior != 2)
+            {
+                _settings.CloseBehavior = 1;
+                closeBehaviorMigrated = true; // valor corrompido também cai no padrão 1
+            }
+
             if (settings.NormalWidth >= 480 && settings.NormalWidth <= 10000)
                 _normalWidth = settings.NormalWidth;
 
@@ -696,6 +722,8 @@ public partial class MainWindow : Window
         }
 
         _settingsReady = true;
+        if (closeBehaviorMigrated)
+            SaveWindowSettings(); // persiste a migração CloseBehavior 0 → 2 (+ PerguntarAoFechar)
         ApplySidebarLayout();
         UpdateMaximizeButton();
         SyncTrayMenuChecks();
@@ -928,6 +956,22 @@ public partial class MainWindow : Window
 
         Hide();
         _ = ApplyAudioSettingsAsync();
+        AllAccountsLow();
+    }
+
+    // Bandeja: reduz o consumo de TODAS as contas (inclusive a ativa), sem alterar _settings.ContaAtiva.
+    private void AllAccountsLow()
+    {
+        foreach (var kvp in _accountViews)
+        {
+            try
+            {
+                var core = kvp.Value.CoreWebView2;
+                if (core != null)
+                    core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low;
+            }
+            catch { }
+        }
     }
 
     private void ClearWindowsNotificationHistory()
@@ -976,6 +1020,7 @@ public partial class MainWindow : Window
         ClearWindowsNotificationHistory();
         _ = ApplyAudioSettingsAsync();
         _ = AtualizarContaConectadaUIAsync(); // fire-and-forget
+        ApplyAccountVisibility(); // reverte Normal/Low conforme ContaAtiva
     }
 
     private void ShowMissions()
@@ -1421,6 +1466,42 @@ public partial class MainWindow : Window
                 MessageBoxButton.OK,
                 MessageBoxImage.Error);
         }
+
+        // Abertura via inicialização do Windows com "Abrir na bandeja":
+        // começa escondido na bandeja, sem mostrar a janela principal.
+        if (_settings.IniciarComWindows && _settings.IniciarNaBandejaAoIniciar)
+            HideToTray();
+
+        // Pré-carregamento das contas extras (Ajustes > Inicialização).
+        // Executado AQUI, no fim do Loaded, para não atrasar a exibição da janela principal:
+        // a principal já está criada e visível/configurada antes deste bloco rodar.
+        // Cada conta falha de forma isolada: loga e segue para a próxima, sem abortar o startup.
+        if (_settings.PrecarregarContas)
+        {
+            int index = 0;
+            foreach (var conta in _settings.ContasAdicionadas.ToList())
+            {
+                // A principal já foi criada acima; contas já existentes (ex.: conta ativa) caem no fast path.
+                if (string.Equals(conta, DefaultAccountName, StringComparison.OrdinalIgnoreCase))
+                    continue;
+                if (_accountViews.ContainsKey(conta))
+                    continue;
+                try
+                {
+                    if (index > 0)
+                        await Task.Delay(200); // pequeno respiro entre criações para não sufocar o startup
+                    await EnsureAccountViewAsync(conta);
+                }
+                catch (Exception ex)
+                {
+                    LogFloatingWindowEvent($"Pré-carregar contas: falha ao criar '{conta}': {ex.GetType().Name}: {ex.Message}");
+                }
+                index++;
+            }
+            // Garante Visibility Collapsed + MemoryUsageTargetLevel Low nas recém-criadas
+            // (EnsureAccountViewAsync já aplica, mas reaplicar é idempotente e cobre quem foi pulada).
+            ApplyAccountVisibility();
+        }
     }
 
     // Usa um WebView2 previamente inicializado. Nenhum EnsureCoreWebView2Async
@@ -1727,6 +1808,9 @@ public partial class MainWindow : Window
             await ConfigurarAccountViewAsync(view, key);
             view.Source = new Uri(GameUrl);
 
+            // Garante que contas criadas em segundo plano ja nascem com o target de memoria correto.
+            ApplyAccountVisibility();
+
             return view;
         }
         catch
@@ -1846,9 +1930,31 @@ public partial class MainWindow : Window
     private void ApplyAccountVisibility()
     {
         foreach (var kvp in _accountViews)
+        {
             kvp.Value.Visibility = string.Equals(kvp.Key, _settings.ContaAtiva, StringComparison.OrdinalIgnoreCase)
                 ? Visibility.Visible
                 : Visibility.Collapsed;
+            SetMemoryUsageTargetLevel(kvp.Value, kvp.Key, _settings.ContaAtiva);
+        }
+    }
+
+    // Reduz o consumo de memoria das contas fora de foco (best-effort; scripts continuam rodando).
+    private void SetMemoryUsageTargetLevel(Microsoft.Web.WebView2.Wpf.WebView2 view, string key, string contaAtiva)
+    {
+        try
+        {
+            var core = view.CoreWebView2;
+            if (core == null)
+                return; // view ainda nao inicializada; ignora silenciosamente
+            bool isActive = string.Equals(key, contaAtiva, StringComparison.OrdinalIgnoreCase);
+            core.MemoryUsageTargetLevel = isActive
+                ? CoreWebView2MemoryUsageTargetLevel.Normal
+                : CoreWebView2MemoryUsageTargetLevel.Low;
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"MemoryUsageTargetLevel ({key}): {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     // Alterna para a conta indicada, criando a WebView sob demanda na primeira troca.
@@ -3868,7 +3974,7 @@ public partial class MainWindow : Window
         ((TranslateTransform)SidebarPanel.RenderTransform).BeginAnimation(TranslateTransform.XProperty, animShowX);
     }
 
-    // Abre a janela "Ajustes" (Notificações + Opções de fechamento em abas)
+    // Abre a janela "Ajustes" (Notificações + Inicialização em abas)
     private void Ajustes_Click(object sender, RoutedEventArgs e)
     {
         var accountKeys = new List<string> { DefaultAccountName };
@@ -5515,8 +5621,10 @@ public partial class MainWindow : Window
         }
     }
 
-    // Fecha com base na preferência CloseBehavior:
-    // 0 = perguntar, 1 = continuar em segundo plano, 2 = sair e desligar as contas.
+    // Fecha com base na preferência CloseBehavior + PerguntarAoFechar:
+    // 1 = continuar em segundo plano (bandeja); 2 = sair e desligar as contas.
+    // Com CloseBehavior = 2 e PerguntarAoFechar ligado, pergunta a cada × entre
+    // continuar em segundo plano ou sair (a menos que o usuário persista a escolha).
     private void RequestClose()
     {
         if (_settings.CloseBehavior == 1)
@@ -5524,26 +5632,33 @@ public partial class MainWindow : Window
             HideToTray();
             return;
         }
-        if (_settings.CloseBehavior == 2)
+
+        // CloseBehavior == 2
+        if (_settings.PerguntarAoFechar)
         {
-            ExitApplication();
+            var dialog = new CloseConfirmWindow(this);
+            if (dialog.ShowDialog() != true)
+                return; // cancelou ou fechou pelo X
+
+            var result = dialog.Result;
+            if (result.Remember)
+            {
+                // Persistiu: a opção vira o novo CloseBehavior e o × não pergunta mais.
+                _settings.CloseBehavior = result.Selected;
+                _settings.PerguntarAoFechar = false;
+                SaveWindowSettings();
+            }
+            // Sem "Lembrar": nada persiste — pergunta novamente na próxima vez.
+
+            if (result.Selected == 1)
+                HideToTray();
+            else
+                ExitApplication();
             return;
         }
 
-        // Perguntar ao usuário
-        var dialog = new CloseConfirmWindow(this);
-        if (dialog.ShowDialog() != true)
-            return; // cancelou ou fechou pelo X
-
-        var result = dialog.Result;
-        if (result.Remember)
-            _settings.CloseBehavior = result.Selected;
-        SaveWindowSettings();
-
-        if (result.Selected == 1)
-            HideToTray();
-        else
-            ExitApplication();
+        // CloseBehavior == 2 sem pergunta (escolha persistida): sai direto.
+        ExitApplication();
     }
 
     private void Close_Click(object sender, RoutedEventArgs e)

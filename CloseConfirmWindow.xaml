@@ -4,6 +4,7 @@
         Title="Fechar o LoL Idle?"
         Width="480"
         SizeToContent="Height"
+        MaxHeight="640"
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
@@ -11,22 +12,22 @@
         ShowInTaskbar="False"
         WindowStartupLocation="CenterOwner">
     <Window.Resources>
-        <!-- Paleta azul local deste diálogo (não afeta o resto do app) -->
+        <!-- Paleta azul local deste dialogo (selecao "segundo plano" + botao primario) -->
         <SolidColorBrush x:Key="DialogBlue"          Color="#5B8BD6" />
         <SolidColorBrush x:Key="DialogBlueHover"     Color="#6FA4E0" />
-        <SolidColorBrush x:Key="DialogBlueDeep"      Color="#4F7ACC" />
         <SolidColorBrush x:Key="DialogBlueSoft"      Color="#1E2B42" />
-        <SolidColorBrush x:Key="ConfirmHoverBrush"   Color="#6190D9" />
-
-        <!-- DarkCheckBox local com check azul (o global continua cobre) -->
-        <Style x:Key="DialogCheckBox" TargetType="CheckBox">
-            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
-            <Setter Property="Cursor" Value="Hand" />
+        <SolidColorBrush x:Key="DialogBlueSoftHover" Color="#1E3049" />
+        <SolidColorBrush x:Key="ConfirmHoverBrush" Color="#6190D9" />
+        <!-- CheckBox azul so para a opcao "segundo plano" deste dialogo -->
+        <Style x:Key="BlueCheckBox" TargetType="CheckBox" BasedOn="{StaticResource DarkCheckBox}">
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="CheckBox">
-                        <StackPanel Orientation="Horizontal"
-                                    VerticalAlignment="Center">
+                        <Grid VerticalAlignment="Center">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
                             <Border x:Name="box"
                                     Width="17" Height="17"
                                     CornerRadius="4"
@@ -36,7 +37,7 @@
                                     VerticalAlignment="Center">
                                 <Path x:Name="check"
                                       Data="M 3 8.6 L 6.6 12 L 13.5 4.3"
-                                      Stroke="{StaticResource DialogBlueHover}"
+                                      Stroke="{StaticResource DialogBlue}"
                                       StrokeThickness="2.2"
                                       StrokeStartLineCap="Round"
                                       StrokeEndLineCap="Round"
@@ -49,9 +50,10 @@
                                       VerticalAlignment="Center" />
                             </Border>
                             <ContentPresenter x:Name="content"
+                                              Grid.Column="1"
                                               Margin="9,0,0,0"
                                               VerticalAlignment="Center" />
-                        </StackPanel>
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource BorderSoft}" />
@@ -91,7 +93,8 @@
                                FontWeight="SemiBold"
                                FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
                                VerticalAlignment="Center" />
-                    <Button HorizontalAlignment="Right"
+                    <Button x:Name="CloseHeaderButton"
+                            HorizontalAlignment="Right"
                             VerticalAlignment="Center"
                             Width="30" Height="30"
                             Content="✕"
@@ -104,7 +107,12 @@
             <!-- Conteúdo -->
             <StackPanel Grid.Row="1" Margin="18,16">
 
-                <!-- Opção 1: continuar rodando -->
+                <TextBlock Text="Selecione como fechar:"
+                           Foreground="{StaticResource TextSecondary}"
+                           FontSize="12"
+                           Margin="2,0,0,10" />
+
+                <!-- Opção 1: continuar em segundo plano -->
                 <Border x:Name="OptionSegundoPlano"
                         Background="{StaticResource DialogBlueSoft}"
                         BorderBrush="{StaticResource DialogBlue}"
@@ -134,29 +142,28 @@
                                      HorizontalAlignment="Center"
                                      VerticalAlignment="Center">
                                 <Path Data="M 2 2 L 20 11 L 2 20 Z"
-                                      Fill="{StaticResource DialogBlueHover}"
+                                      Fill="{StaticResource DialogBlue}"
                                       Stroke="{StaticResource DialogBlueHover}"
                                       StrokeThickness="2.2"
                                       StrokeLineJoin="Round" />
                             </Viewbox>
                         </Border>
 
-                        <!-- Mesmo estilo do checkmark das Notificações -->
                         <StackPanel Grid.Column="1"
                                     Orientation="Horizontal"
                                     VerticalAlignment="Center">
                             <CheckBox x:Name="RadioSegundoPlano"
-                                      Style="{StaticResource DialogCheckBox}"
+                                      Style="{StaticResource BlueCheckBox}"
                                       IsHitTestVisible="False"
                                       IsChecked="True"
                                       Margin="0,0,16,0"
                                       VerticalAlignment="Center" />
                             <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="Continuar rodando em segundo plano"
+                                <TextBlock Text="Continuar em segundo plano"
                                            Foreground="{StaticResource TextPrimary}"
                                            FontSize="13"
                                            FontWeight="SemiBold" />
-                                <TextBlock Text="A conta ligada segue farmando. O LoL Idle fica no ícone ao lado do relógio."
+                                <TextBlock Text="O jogo continua farmando na bandeja; o LoL Idle fica ao lado do relógio."
                                            Foreground="{StaticResource TextSecondary}"
                                            FontSize="11.5"
                                            TextWrapping="Wrap"
@@ -204,12 +211,11 @@
                             </Viewbox>
                         </Border>
 
-                        <!-- Mesmo estilo do checkmark das Notificações -->
                         <StackPanel Grid.Column="1"
                                     Orientation="Horizontal"
                                     VerticalAlignment="Center">
                             <CheckBox x:Name="RadioSair"
-                                      Style="{StaticResource DialogCheckBox}"
+                                      Style="{StaticResource DarkCheckBox}"
                                       IsHitTestVisible="False"
                                       Margin="0,0,16,0"
                                       VerticalAlignment="Center" />
@@ -218,7 +224,7 @@
                                            Foreground="{StaticResource TextPrimary}"
                                            FontSize="13"
                                            FontWeight="SemiBold" />
-                                <TextBlock Text="A conta para de farmar. O login continua salvo."
+                                <TextBlock Text="O app encerra e as contas desligam. O login continua salvo."
                                            Foreground="{StaticResource TextSecondary}"
                                            FontSize="11.5"
                                            TextWrapping="Wrap"
@@ -233,7 +239,7 @@
                 <CheckBox x:Name="RememberCheckbox"
                           Content="Lembrar minha escolha e não perguntar de novo"
                           Margin="2,14,0,0"
-                          Style="{StaticResource DialogCheckBox}"
+                          Style="{StaticResource DarkCheckBox}"
                           FontSize="12"
                           VerticalContentAlignment="Center" />
             </StackPanel>
@@ -244,10 +250,11 @@
                     BorderBrush="{StaticResource BorderSubtle}"
                     BorderThickness="0 1 0 0">
                 <Grid>
-                    <Button Content="Cancelar"
+                    <Button x:Name="CancelButton"
+                            Content="Cancelar"
                             HorizontalAlignment="Left"
                             Width="110" Height="40"
-                            Background="Transparent"
+                            Background="{StaticResource BgPanel2}"
                             BorderThickness="0"
                             Foreground="{StaticResource TextPrimary}"
                             FontSize="13"
@@ -281,13 +288,28 @@
                             HorizontalAlignment="Right"
                             Width="220" Height="40"
                             Content="Fechar e continuar rodando"
-                            Background="{StaticResource DialogBlueDeep}"
-                            Foreground="#0A1B2E"
+                            Background="{StaticResource DialogBlue}"
+                            Foreground="{StaticResource BgApp}"
                             BorderThickness="0"
                             FontSize="13"
                             FontWeight="SemiBold"
                             Cursor="Hand"
                             Click="Confirm_Click">
+                        <Button.FocusVisualStyle>
+                            <Style TargetType="Control">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Control">
+                                            <Border CornerRadius="8"
+                                                    BorderThickness="2"
+                                                    BorderBrush="{StaticResource DialogBlueHover}"
+                                                    Background="Transparent"
+                                                    Margin="-3" />
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </Button.FocusVisualStyle>
                         <Button.Template>
                             <ControlTemplate TargetType="Button">
                                 <Border x:Name="border"

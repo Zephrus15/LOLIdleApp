@@ -1,31 +1,63 @@
 <UserControl x:Class="LoLIdleDesktop.CloseBehaviorPanel"
+             x:Name="CloseBehaviorPanelRoot"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <StackPanel Margin="18,16,18,10">
-        <TextBlock Text="Comportamento do botão Fechar do app."
+        <!-- ===== Chave no início do conteúdo: pré-carregar contas no startup ===== -->
+        <Border Background="{StaticResource BgPanel2}"
+                BorderBrush="{StaticResource BorderSubtle}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="12,10"
+                Margin="0,0,0,4">
+            <CheckBox x:Name="PrecarregarContasCheck"
+                      Style="{StaticResource SwitchStyle}"
+                      VerticalContentAlignment="Center"
+                      Checked="Precarregar_Changed"
+                      Unchecked="Precarregar_Changed">
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Pré-carregar contas no startup"
+                               Foreground="{StaticResource TextPrimary}"
+                               FontSize="13"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="Ao abrir o app, carrega também as outras contas no segundo plano; alternar entre elas fica instantâneo. Bastante útil, mas aumenta o custo de abertura/uso do app."
+                               Foreground="{StaticResource TextSecondary}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Margin="0,3,0,0" />
+                </StackPanel>
+            </CheckBox>
+        </Border>
+        <TextBlock Text="Vale a partir da próxima abertura do app."
                    Foreground="{StaticResource TextSecondary}"
                    FontSize="11"
-                   TextWrapping="Wrap"
-                   Margin="0,0,0,14" />
+                   Margin="2,0,0,12" />
 
-        <!-- Opção 1: sempre perguntar -->
+        <!-- ===== Seção 1: como o app inicia ===== -->
+        <TextBlock Text="Como o app inicia"
+                   Foreground="#E8CF8F"
+                   FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
+                   FontSize="12"
+                   FontWeight="SemiBold"
+                   Margin="2,0,0,6" />
+
         <Border Background="{StaticResource BgPanel2}"
                 BorderBrush="{StaticResource BorderSubtle}"
                 BorderThickness="1"
                 CornerRadius="6"
                 Padding="12,10"
                 Margin="0,0,0,10">
-            <CheckBox x:Name="AskCheck"
-                      Style="{StaticResource DarkCheckBox}"
+            <CheckBox x:Name="StartWithWindowsCheck"
+                      Style="{StaticResource SwitchStyle}"
                       VerticalContentAlignment="Center"
-                      Checked="Option_Checked"
-                      Unchecked="Option_Unchecked">
+                      Checked="Startup_Changed"
+                      Unchecked="Startup_Changed">
                 <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="Sempre perguntar"
+                    <TextBlock Text="Iniciar com o Windows"
                                Foreground="{StaticResource TextPrimary}"
                                FontSize="13"
                                FontWeight="SemiBold" />
-                    <TextBlock Text="Abre o diálogo 'Fechar o LoL Idle?' toda vez que clicar em Fechar"
+                    <TextBlock Text="Abre o LoL Idle automaticamente quando o computador ligar"
                                Foreground="{StaticResource TextSecondary}"
                                FontSize="11"
                                TextWrapping="Wrap"
@@ -34,7 +66,42 @@
             </CheckBox>
         </Border>
 
-        <!-- Opção 2: continuar em segundo plano -->
+        <!-- Sub-checkbox: só aparece com "Iniciar com o Windows" ativo -->
+        <Border x:Name="StartTrayRow"
+                Background="{StaticResource BgPanel2}"
+                BorderBrush="{StaticResource BorderSubtle}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="12,10"
+                Margin="26,0,0,10"
+                Visibility="Collapsed">
+            <CheckBox x:Name="StartTrayCheck"
+                      Style="{StaticResource DarkCheckBox}"
+                      VerticalContentAlignment="Center"
+                      Checked="StartTray_Changed"
+                      Unchecked="StartTray_Changed">
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Abrir na bandeja"
+                               Foreground="{StaticResource TextPrimary}"
+                               FontSize="13"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="Ao iniciar, o app não abre a janela: ícone só na bandeja do sistema; quando você clica no ícone, a janela abre"
+                               Foreground="{StaticResource TextSecondary}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Margin="0,3,0,0" />
+                </StackPanel>
+            </CheckBox>
+        </Border>
+
+        <!-- ===== Seção 2: como o app fecha ===== -->
+        <TextBlock Text="Como o app fecha"
+                   Foreground="#E8CF8F"
+                   FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
+                   FontSize="12"
+                   FontWeight="SemiBold"
+                   Margin="2,4,0,6" />
+
         <Border Background="{StaticResource BgPanel2}"
                 BorderBrush="{StaticResource BorderSubtle}"
                 BorderThickness="1"
@@ -42,16 +109,15 @@
                 Padding="12,10"
                 Margin="0,0,0,10">
             <CheckBox x:Name="BackgroundCheck"
-                      Style="{StaticResource DarkCheckBox}"
+                      Style="{StaticResource SwitchStyle}"
                       VerticalContentAlignment="Center"
-                      Checked="Option_Checked"
-                      Unchecked="Option_Unchecked">
+                      Click="CloseBehavior_Click">
                 <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="Sempre continuar em segundo plano"
+                    <TextBlock Text="Continuar farmando em segundo plano"
                                Foreground="{StaticResource TextPrimary}"
                                FontSize="13"
                                FontWeight="SemiBold" />
-                    <TextBlock Text="Fecha direto para a bandeja; o jogo continua farmando"
+                    <TextBlock Text="Quando você clicar em Fechar (×), o app fecha para a bandeja; o jogo continua farmando. Desligue para encerrar o app."
                                Foreground="{StaticResource TextSecondary}"
                                FontSize="11"
                                TextWrapping="Wrap"
@@ -60,24 +126,26 @@
             </CheckBox>
         </Border>
 
-        <!-- Opção 3: sair e desligar -->
-        <Border Background="{StaticResource BgPanel2}"
+        <!-- Sub-checkbox: só aparece com "Continuar farmando em segundo plano" desligado (CloseBehavior = 2) -->
+        <Border x:Name="AskCloseRow"
+                Background="{StaticResource BgPanel2}"
                 BorderBrush="{StaticResource BorderSubtle}"
                 BorderThickness="1"
                 CornerRadius="6"
                 Padding="12,10"
-                Margin="0,0,0,4">
-            <CheckBox x:Name="ExitCheck"
+                Margin="26,0,0,10"
+                Visibility="Collapsed">
+            <CheckBox x:Name="AskCloseCheck"
                       Style="{StaticResource DarkCheckBox}"
                       VerticalContentAlignment="Center"
-                      Checked="Option_Checked"
-                      Unchecked="Option_Unchecked">
+                      Checked="AskClose_Changed"
+                      Unchecked="AskClose_Changed">
                 <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="Sempre sair e desligar as contas"
+                    <TextBlock Text="Perguntar ao fechar"
                                Foreground="{StaticResource TextPrimary}"
                                FontSize="13"
                                FontWeight="SemiBold" />
-                    <TextBlock Text="Encerra o app e desliga todas as contas"
+                    <TextBlock Text="Pergunta entre Continuar em segundo plano ou Sair e desligar as contas, toda vez que você clicar no ×"
                                Foreground="{StaticResource TextSecondary}"
                                FontSize="11"
                                TextWrapping="Wrap"
