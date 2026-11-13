@@ -930,6 +930,12 @@ public partial class MainWindow : Window
         _ = ApplyAudioSettingsAsync();
     }
 
+    private void ClearWindowsNotificationHistory()
+    {
+        try { ToastNotificationManagerCompat.History.Clear(); }
+        catch (Exception ex) { LogFloatingWindowEvent($"History.Clear falhou: {ex.Message}"); }
+    }
+
     private void RestoreFromTray()
     {
         _isHiddenToTray = false;
@@ -967,6 +973,7 @@ public partial class MainWindow : Window
         if (WindowState == WindowState.Minimized)
             WindowState = WindowState.Normal;
         Activate();
+        ClearWindowsNotificationHistory();
         _ = ApplyAudioSettingsAsync();
         _ = AtualizarContaConectadaUIAsync(); // fire-and-forget
     }
@@ -1350,6 +1357,7 @@ public partial class MainWindow : Window
     {
         RestoreWindowSettings();
         IniciarUsoRecursosTimer();
+        ClearWindowsNotificationHistory();
 
         try
         {

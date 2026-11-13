@@ -1,4 +1,4 @@
-﻿LoL Idle Desktop - versão 1.4.4
+﻿LoL Idle Desktop - versão 1.4.5
 Aplicativo desktop não oficial para Windows
 
 O que é
@@ -59,6 +59,19 @@ Gerar instalador
 
 O instalador verifica o Microsoft Edge WebView2 Runtime e o instala
 automaticamente quando necessário.
+
+Novidades (v1.4.5 — hotfix de 2026-11-13)
+-----------------------------------------
+- **Correção crítica: nenhuma notificação restaurava o app**.
+  Clicar num toast, na linha de histórico ou no balão não faria o app voltar.
+  Causa: a janela de Missões travava o fechamento do app (virava uma janela
+  invisível mas viva); depois que a Janela principal fechava, qualquer
+  clique em notificação fazia o app tentar mostrar uma janela já fechada —
+  erro que acontecia com qualquer tipo de notificação.
+  Correção: a Missões agora fecha de verdade; e o app detecta se a janela
+  principal está fechada e não tenta mostrar nada nela.
+- **Ao abrir o app** (e ao restaurar da bandeja), a Central de Ações do
+  Windows é limpa das notificações do app — você não acumula toasts antigos.
 
 Novidades (v1.4.4)
 ------------------

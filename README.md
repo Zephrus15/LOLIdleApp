@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.4.4](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.4)**
+**[Baixar LoL Idle Desktop v1.4.5](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.5)**
 
 ### Instalador (quando disponível na Release)
 
@@ -138,6 +138,16 @@ artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.4.5 — 2026-11-13
+
+**Hotfix.** Uma correção crítica, sem novas funcionalidades:
+
+- **Correção crítica: nenhuma notificação restaurava o app** — clicar num toast, numa linha de histórico ou no balão não fazia o app/jogo voltar.
+  - **Causa:** o handler `Closing` da janela de Missões cancelava o fechamento inclusive durante o `ExitApplication` — a Missões virava uma janela invisível, mas viva, impedindo o processo WPF de encerrar. Depois que o modo flutuante fechava a janela principal, qualquer clique em notificação fazia o app tentar `Show()` numa janela já fechada → `InvalidOperationException`.
+  - **Correção:** a Missões agora fecha de verdade quando `_allowExit` é `true`; `RestoreFromTray()` detecta deterministicamente (campo `_mainWindowClosed`) que a janela principal foi fechada e não tenta `Show()` nela — traz de volta a janela flutuante (se existir) ou retorna com log. O clique no toast agora restaura o app/jogo.
+- **Limpeza interna**: brushes `Success` e `Warning` sem referências removidos do `App.xaml`; campo write-only `_missionsRoot` removido de `MainWindow.xaml.cs`; `using System;` redundante removido; ~17 atributos `x:Name` não referenciados removidos; `FontFamily="Barlow"` corrigido para o pack URI da Barlow embutida no botão "↻ Atualizar" do Hunt.
+- **Ao abrir o app** (e ao restaurar da bandeja), o app agora descarta o histórico da Central de Ações do Windows (somente notificações do app, via `ToastNotificationManagerCompat.History.Clear()`) — você não verá toasts antigos acumulados.
 
 ### v1.4.4 — 2026-11-12
 - **Hunt for LoL Idle** — instalação sob demanda da extensão do Chrome no perfil WebView2 do app (baixa da Chrome Web Store só quando o usuário clica em "🏹 Hunt" e confirma; nada é distribuído junto com o app). Instalada como *unpacked* e **sanitizada** para remover a permissão `notifications` do `manifest.json` — o service worker continua funcionando como leitor de tela do jogo, mas **não envia mais notificações do Windows** (sem toast externo). O ID registrado nos perfis é `jnokkeaaaionjjooccdkiilhebohfkaa`. Painel da extensão disponível em janela própria no tema do app (botão de mira 🏹 na barra de título, ao lado de minimizar); instalação feita em todos os perfis WebView2 existentes (principal + contas criadas). O painel também pode atualizar de forma acionada/sob demanda — botão **"↻ Atualizar"** aparece quando há atualização disponível na loja (v1.4.4).

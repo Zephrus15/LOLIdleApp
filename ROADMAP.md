@@ -1,6 +1,7 @@
 ﻿# 🗺️ Roadmap — LoL Idle Desktop
 
-> Base: **v1.4.4** · Última atualização: 2026-11-12
+> Base: **v1.4.5** · Última atualização: 2026-11-13
+> v1.4.5 é um **hotfix** (correção crítica de notificações), sem novas funcionalidades — ver "Concluído (v1.4.4 / v1.4.5)".
 > Versão web estilizada: [`ROADMAP.html`](./ROADMAP.html) — abra no navegador para visualizar como site.
 
 <p align="center">
@@ -16,10 +17,10 @@
 
 | Painel / Recurso | Status | Versão |
 |---|---|---|
-| 📖 **Missões** | ✅ **Confirmado** | v1.2.5 / v1.2.6 / v1.4.4 (foco não rouba mais; toggle pelo botão de livro do jogo) |
+| 📖 **Missões** | ✅ **Confirmado** | v1.2.5 / v1.2.6 / v1.4.4 (foco não rouba mais; toggle pelo botão de livro do jogo) / v1.4.5 (fecha de verdade no encerramento do app — notificações restauram) |
 | 🏹 **Hunt for LoL Idle (extensão sob demanda)** | ✅ **Feito** | v1.4.4 |
 | 🔔 **Bandeja inteligente (sons + clique abre app e troca de conta)** | ✅ **Confirmado** | v1.2.0 → v1.3.0 / v1.3.7 / v1.3.8 |
-| 🔔 **Toasts modernos + Central de Ações clicável** | ✅ **Feito** | v1.4.0 / v1.4.1 / v1.4.2 (conta ativa na frente não notifica) / v1.4.3 (tema tático + uso de recursos) / v1.4.4 (toast silencioso, som assíncrono, toast antes do som) |
+| 🔔 **Toasts modernos + Central de Ações clicável** | ✅ **Feito** | v1.4.0 / v1.4.1 / v1.4.2 (conta ativa na frente não notifica) / v1.4.3 (tema tático + uso de recursos) / v1.4.4 (toast silencioso, som assíncrono, toast antes do som) / v1.4.5 (clique na notificação restaura o app) |
 | 🎛️ **Barra lateral de contas** | ✅ **Feito** | v1.3.2 / v1.3.3 / v1.3.5 / v1.3.6 / v1.3.7 / v1.3.8 / v1.3.9 / v1.4.3 / v1.4.4 |
 | 🖼️ **Avatares das contas (3 fontes)** | ✅ **Feito** | v1.3.6 |
 | 🔴 **Sinalizações de não lida / últimas notificações na sidebar** | ✅ **Feito** | v1.3.7 / v1.3.8 / v1.3.9 / v1.4.1 / v1.4.2 / v1.4.3 / v1.4.4 (bolinha na hora + Limpar preserva recém-chegadas) |
@@ -46,6 +47,7 @@ Painel separado e destacável que **já está pronto** (v1.2.5 / v1.2.6):
 - Ícone sincronizado com o estado real
 - **v1.4.4:** a janela ganhou cabeçalho destacado com título "📖 Missões" (Rajdhani), moldura arredondada com `CornerRadius=10` (conteúdo recortado pelos cantos), resize grip ◢ e `WindowChrome` (resize pela borda, sem frame visível do Windows). **Bug de foco resolvido:** a Missões não rouba mais o foco espontaneamente (`_missionsWindow.Activate()` removido de `ShowMissions`; o handler `window.Activated` da flutuante usa `SetWindowPos(HWND_TOP, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)` em vez de `BringWindowToTop`). O botão de livro do jogo abre/fecha a Missões com toggle funcional, e o jogo continua recebendo cliques normalmente pelo WebView2.
 - **v1.4.4:** minimizar/restaurar pela barra de tarefas **esconde/exibe a flutuante e a Missões juntas** (só a visibilidade muda; a preferência `ShowMissions` é mantida)
+- **v1.4.5 (hotfix):** a Missões **fecha de verdade** no encerramento do app — o handler `Closing` deixa a janela fechar quando `_allowExit` é `true` (antes sempre cancelava o fechamento, inclusive no `ExitApplication`, deixando a janela invisível mas viva e impedindo o processo WPF de encerrar). Corrige o cenário em que nenhuma notificação restaurava o app
 
 > ℹ️ É um painel **só-texto** (igual ao que a Barra lateral poderia ser), sem segunda sessão do jogo.
 
@@ -118,6 +120,7 @@ A sidebar de contas passou a sinalizar notificações pendentes sem precisar abr
 - **Conta ativa na frente não notifica** (v1.4.2) — com a principal (não minimizada) ou a flutuante visíveis, `HandleNotification` retorna cedo: sem som, sem toast/balão e sem registro no histórico; em segundo plano e minimizada/na bandeja, volta a avisar
 - **Bolinha de não lida aparece na hora** (v1.4.4) — `_contasNaoLidas.Add()` agora ocorre **antes** do rebuild disparado por `RegistrarNotificacao`, então chips/faixas/linhas do histórico já nascem com o estado final
 - **"Limpar" preserva notificações recém-chegadas** (v1.4.4) — as linhas animadas são capturadas antes da animação; notificações que chegarem durante ela sobrevivem (inclusive no fallback de erro), e a bolinha só é zerada das contas que ficaram sem nenhuma notificação restante (antes, o conjunto inteiro era zerado)
+- **Notificações voltaram a restaurar o app** (v1.4.5, hotfix) — clicar numa notificação (toast, linha de histórico ou balão) não fazia mais nada: com a principal fechada pelo modo flutuante, a tentativa de `Show()` na janela fechada lançava `InvalidOperationException`. Correção: Missões fecha de verdade quando `_allowExit` e `RestoreFromTray()` detecta `_mainWindowClosed` (sem `Show()` na principal fechada) — o clique no toast volta a restaurar o app/jogo
 
 > ℹ️ O rastreamento das notificações (`_ultimasNotificacoes`, `_contasNaoLidas`) é **somente em memória** — nada é persistido no `window-settings.json`.
 
@@ -160,6 +163,7 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 - Sessão permanece ativa enquanto oculto
 - Clicar no balão restaura/abre a janela principal e troca para a conta da notificação (v1.3.0 → v1.3.8); se o aviso for de poções, também manda o personagem de volta para a Fonte (somente no modo automático)
 - **v1.4.4** — toast **silencioso** (`AddAudio { Silent = true }`, sem o "ding" padrão do Windows); o **toast aparece antes do som**; o som é carregado em memória (`SoundPlayer(MemoryStream)`, sem arquivo temporário e sem `PlaySync()` bloqueante, tocando em thread separada)
+- **v1.4.5 (hotfix)** — clicar na notificação (toast/balão/histórico) não restaurava o app/jogo; causa: a Missões impedia o processo WPF de encerrar; correção: a Missões fecha de verdade no `ExitApplication` e `RestoreFromTray()` não tenta `Show()` com a principal fechada (`_mainWindowClosed`) — o clique volta a restaurar
 
 > **Polimento atual:** ajustar volumes/timbre de cada som (lendário, épico, missão, nível, inventário).
 
@@ -186,8 +190,9 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 
 ## 🎯 Próximos passos
 
-### ✅ Concluído (v1.4.4 — 2026-11-12)
+### ✅ Concluído (v1.4.4 / v1.4.5 — 2026-11-12/13)
 
+- [x] **Notificações que não restauravam o app — hotfix v1.4.5** — nenhuma notificação (toast, linha de histórico ou balão) restaurava o app/jogo; causa: o handler `Closing` da janela Missões cancelava o fechamento inclusive durante o `ExitApplication`, deixando a janela invisível mas viva e impedindo o processo WPF de encerrar; com a principal já fechada pelo modo flutuante, qualquer clique em notificação tentava `Show()` numa janela fechada → `InvalidOperationException`. Correção: a Missões fecha de verdade quando `_allowExit` é `true` e `RestoreFromTray()` detecta deterministicamente (`_mainWindowClosed`) a principal fechada — sem `Show()`; traz de volta a flutuante (se existir) ou retorna com log. Limpeza interna na mesma versão (brushes `Success`/`Warning` removidos, `x:Name` não usados removidos, `FontFamily` da Barlow corrigido no botão "↻ Atualizar" do Hunt). Resolve também a dúvida pendente "Decidir se haverá v1.4.5". — **feito na v1.4.5**
 - [x] Tema tático cobre/ardósia em todas as janelas (tooltips, Ajustes em abas, flutuante via WindowChrome, Missões com cabeçalho destacado e tema) — **feito na v1.4.4**
 - [x] Hunt for LoL Idle — instalação sob demanda da extensão (download da Chrome Web Store sob pedido, unpacked, manifest sanitizado sem `notifications`), botão 🏹 na barra de título, painel em janela própria no tema, instalação em todos os perfis WebView2, atualização sob demanda ("↻ Atualizar") — **feito na v1.4.4**
 - [x] Ajustes em abas — `NotifySettingsWindow` + `CloseBehaviorWindow` unificadas em `AjustesWindow` (abas 🔔 Notificações e ⚙ Opções de fechamento) — **feito na v1.4.4**
@@ -215,11 +220,10 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 - [ ] **Cantos arredondados da flutuante fora do Windows 11** — `DWMWA_WINDOW_CORNER_PREFERENCE = 0x02` falha no Windows do usuário (exibida como janela quadrada); não há alternativa técnica sem perda de input
 - [ ] **Janela flutuante sem botão de Maximizar** — incompatível com o modo de janela sem chrome
 - [ ] **Sound mixing no WinMM** — confirmar se resta algum problema (som da agenda tocando em cima); o usuário reportou ok após a correção, mas não foi confirmado de forma definitiva
-- [ ] **Decidir se haverá v1.4.5** — com correções adicionais de fluxo/interação refinada
 - [ ] Sons de notificação (volume/timbre por evento)
 - [ ] Áudio separado (música/efeitos) — **decisão necessária:** recriar uma tela de configurações (a antiga foi removida do código) ou manter apenas os botões `bt-musica`/`bt-efeitos` do jogo
 - [ ] Aviso de nova versão (GitHub)
 
 ---
 
-<sub>Documento atualizado a partir do estado atual do app (estado v1.4.4). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site (o HTML ainda descreve a base v1.4.3 e precisa ser regenerado).</sub>
+<sub>Documento atualizado a partir do estado atual do app (estado v1.4.5 — hotfix, 2026-11-13). Veja o <a href="./ROADMAP.html">ROADMAP.html</a> para a versão visual like-site (o HTML ainda descreve a base v1.4.3 e precisa ser regenerado).</sub>
