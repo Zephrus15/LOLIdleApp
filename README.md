@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.4.3](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.3)**
+**[Baixar LoL Idle Desktop v1.4.4](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.4)**
 
 ### Instalador (quando disponível na Release)
 
@@ -45,6 +45,7 @@ O projeto é gratuito e feito por um desenvolvedor independente — contribuiç�
 - Sessão e cookies persistidos entre execuções.
 - Links externos (fora de `lolidle.com`) abrem no navegador padrão.
 - Na janela principal: o link não abre a flutuante.
+- Botão **"🏹 Hunt"** (mira) na barra de título, ao lado de minimizar: instala sob demanda (com confirmação) e abre/fecha o painel da extensão "Hunt for LoL Idle" em janela própria (v1.4.4).
 - Na janela flutuante: o link abre no navegador real. Se vier via `window.open` (nova janela), a flutuante fica aberta; se for navegação direta da própria flutuante, ela fecha e o link abre no navegador.
 - Hosts tratados: `discord.com`, `discordapp.com`, `discord.gg`, `accounts.google.com`, `topidle.com/voto`, YouTube, TikTok, Instagram.
 
@@ -76,8 +77,8 @@ O projeto é gratuito e feito por um desenvolvedor independente — contribuiç�
 - Restauração das dimensões e da posição da janela principal, da janela flutuante e da janela de Missões.
 - Preferência "sempre no topo" salva separadamente para a janela flutuante e para a janela de Missões.
 - Gerenciamento da sessão do WebView2.
-- Botão ⚙ "Opções de fechamento" na sidebar para trocar a preferência do botão Fechar (perguntar / continuar na bandeja / sair e desligar as contas).
-- Arquivos em `%LOCALAPPDATA%\LoLIdleDesktop`: `window-settings.json` (preferências/geometria), `WebView2\` (sessão/cookies) e `floating-window.log` (log técnico).
+- Botão ⚙ "Opções de fechamento" na sidebar para trocar a preferência do botão Fechar (perguntar / continuar na bandeja / sair e desligar as contas) — desde a v1.4.4, dentro da janela **Ajustes**, na aba ⚙ "Opções de fechamento" (a aba 🔔 "Notificações" fica ao lado).
+- Arquivos em `%LOCALAPPDATA%\LoLIdleDesktop`: `window-settings.json` (preferências/geometria), `WebView2\` (sessão/cookies), `Extensions\HuntForLoLIdle\` (extensão Hunt, instalada sob demanda) e `floating-window.log` (log técnico).
 
 ### Limitações desta versão
 - Painéis disponíveis: **Missões** (somente leitura) incluído. **Barra lateral interativa** e **Personagem** não incluídos (o jogo bloqueia a segunda sessão).
@@ -137,6 +138,20 @@ artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.4.4 — 2026-11-12
+- **Hunt for LoL Idle** — instalação sob demanda da extensão do Chrome no perfil WebView2 do app (baixa da Chrome Web Store só quando o usuário clica em "🏹 Hunt" e confirma; nada é distribuído junto com o app). Instalada como *unpacked* e **sanitizada** para remover a permissão `notifications` do `manifest.json` — o service worker continua funcionando como leitor de tela do jogo, mas **não envia mais notificações do Windows** (sem toast externo). O ID registrado nos perfis é `jnokkeaaaionjjooccdkiilhebohfkaa`. Painel da extensão disponível em janela própria no tema do app (botão de mira 🏹 na barra de título, ao lado de minimizar); instalação feita em todos os perfis WebView2 existentes (principal + contas criadas). O painel também pode atualizar de forma acionada/sob demanda — botão **"↻ Atualizar"** aparece quando há atualização disponível na loja (v1.4.4).
+- **Ajustes em abas** — `NotifySettingsWindow` e `CloseBehaviorWindow` foram unificados numa única janela chamada **Ajustes** (`AjustesWindow`), com duas abas: 🔔 **Notificações** (mesmo conteúdo de antes: ativar/desativar geral, por conta, por tipo, poções) e ⚙ **Opções de fechamento** (perguntar / continuar na bandeja / sair). Mantém a moldura no tema (BgPanel, Rajdhani, cantos escuros).
+- **Tooltips arredondadas/tema** — todos os tooltips agora usam o tema tático (Barlow, fundo ardósia `BgPanel2`, borda sutil `BorderSubtle`, cantos arredondados, Padding 10,6).
+- **Tema flutuante + Missões** — janela flutuante com `WindowChrome` (resize pelas bordas) e moldura externa no tema com `CornerRadius=10` (sem frame visível do Windows); Missões com cabeçalho destacado com título "📖 Missões" (Rajdhani), conteúdo recortado pelos cantos arredondados (clip), resize grip ◢ e `WindowChrome` com resize pela borda. Tooltips no tema na flutuante e em Missões.
+- **Notificações refinadas**:
+  - **Bolinha de não lida aparece na hora** — `_contasNaoLidas.Add()` agora acontece antes do rebuild da UI (chips/faixas já nascem com o estado final).
+  - **"Limpar" preserva notificações recém-chegadas** — notificações que chegarem durante a animação não são apagadas; só as contas realmente esvaziadas têm a bolinha zerada.
+  - **Toast aparece antes do som**; som carregado em memória (`SoundPlayer(MemoryStream)`) — sem arquivo temporário e sem `PlaySync()` bloqueante (o som toca em thread separada); toast não toca mais o "ding" padrão do Windows (silencioso via `AddAudio { Silent = true }`).
+- **Bug de foco com Missões** — Missões não rouba o foco espontaneamente (`_missionsWindow.Activate()` removido de `ShowMissions`; o handler `window.Activated` da flutuante usa `SetWindowPos(HWND_TOP, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE)` em vez de `BringWindowToTop`); Missões e o jogo nunca ficam com o foco travado; o botão de livro do jogo abre/fecha a janela Missões com toggle funcional, e o jogo continua recebendo cliques pelo WebView2.
+- **Barra de tarefas** — minimizar/restaurar pela barra de tarefas esconde/exibe tanto a flutuante quanto Missões juntas (só a visibilidade muda; a preferência `ShowMissions` é mantida).
+- **Tamanho padrão da primeira abertura** — a janela flutuante abre em 360×287 na primeira vez (era 900×650); ajustes salvos continuam restaurando normalmente.
+- **Meta de RAM** — agora **200 MB fixos para o app + 1 GB por conta aberta** (antes era 1 GB por conta cadastrada, mesmo fechada); texto "Meta de referência: X,X GB".
 
 ### v1.4.3
 - **Tema tático novo**: fundo ardósia-acinzentado com acento cobre (`#D97B36`), texto frio (`#D6DAE6`), tipografia `Rajdhani` (títulos) e `Barlow` (corpo).Cantos menores (raio 4–7), compatível com todas as telas do app.

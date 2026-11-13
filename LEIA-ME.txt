@@ -1,4 +1,4 @@
-﻿LoL Idle Desktop - versão 1.4.3
+﻿LoL Idle Desktop - versão 1.4.4
 Aplicativo desktop não oficial para Windows
 
 O que é
@@ -59,6 +59,34 @@ Gerar instalador
 
 O instalador verifica o Microsoft Edge WebView2 Runtime e o instala
 automaticamente quando necessário.
+
+Novidades (v1.4.4)
+------------------
+- Hunt for LoL Idle: a extensão do navegador agora é instalada pelo
+  próprio LoL Idle Desktop (download do Chrome Web Store sob pedido —
+  nunca embutida no instalador —, sanitizada para não enviar notificações
+  pelo Windows). Você abre ela pelo botão de mira na barra de título do app.
+  Quando houver uma versão mais recente na loja, o botão "↻ Atualizar"
+  aparece no painel do Hunt.
+- Ajustes unificado: as antigas janelas "Notificações" e "Opções de fechamento"
+  viraram uma janela só com abas (🔔 Notificações, ⚙ Opções de fechamento).
+  Acessível pelo botão de engrenagem da sidebar.
+- Janela flutuante reformulada: cantos arredondados, moldura tática
+  (ardósia + cobre), resize pelas bordas (~26 px), arrasto preservado
+  pela área do jogo.
+- Missões: cabeçalho escuro destacado com título "📖 Missões", pin e
+  fechar no estilo GhostIconButton; conteúdo cortado pelos cantos da
+  moldura; resize pelas bordas; foco do jogo preservado com a janela aberta.
+- Toast do Windows chegando junto com o som; o Windows não toca o "ding"
+  padrão — só o som do app; .wav tocado em memória (sem temp file);
+  toast aparece antes do som começar (sem atraso).
+- Bolinha de não lida na sidebar aparece na hora; "Limpar" preserva os
+  itens que chegaram durante a animação.
+- Barra de tarefas do Windows mostra/esconde a flutuante E a Missões juntas.
+- Meta de RAM: 200 MB fixos para o app + 1 GB por conta aberta
+  (antes: 1 GB por conta cadastrada).
+- Primeira abertura com janela flutuante em 360×287; o que você ajusta
+  depois continua salvo normalmente.
 
 Novidades (v1.4.3)
 ------------------
