@@ -61,7 +61,7 @@ Extensão do Chrome ("Hunt for LoL Idle", leitor de tela do jogo) instala **sob 
 - **Atualização sob demanda** — a janela consulta em background a versão publicada na loja (update-check público); se houver versão maior, mostra o botão **"↻ Atualizar"** no cabeçalho; o clique refaz o ciclo completo (download → sanitize → re-registro nos perfis) e recarrega o painel
 - **Botão de mira na barra de título** — abre/fecha o painel (toggle); durante a instalação inicial mostra aviso de espera
 
-> ℹ️ **Nota de honestidade:** este documento descreve o que está no código; não atesta teste ao vivo da extensão no jogo. A v1.4.4 está em preparação (publicação pendente).
+> ℹ️ **Nota de honestidade:** este documento descreve o que está no código; não atesta teste ao vivo da extensão no jogo. A v1.4.4 está publicada (2026-11-12); o uso intra-HUD da extensão ainda não foi validado pelo usuário.
 
 ### 🎛️ Barra lateral de contas — `FEITO` ✅ (v1.3.2 / v1.3.3 / v1.3.5 / v1.3.6 / v1.3.7 / v1.3.8 / v1.3.9 / v1.4.3 / v1.4.4)
 
@@ -184,14 +184,21 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 
 ---
 
-## 🎯 Próximo foco
+## 🎯 Próximos passos
 
-- [ ] Sons de notificação (volume/timbre por evento)
-- [ ] Detalhes da flutuante + Missões
-- [ ] Teste ao vivo da notificação de poções — seletores confirmados apenas por análise estática; verificação no jogo ainda pendente
-- [ ] Áudio separado (música/efeitos) — **decisão necessária:** recriar uma tela de configurações (a antiga foi removida do código) ou manter apenas os botões `bt-musica`/`bt-efeitos` do jogo
+### ✅ Concluído (v1.4.4 — 2026-11-12)
+
+- [x] Tema tático cobre/ardósia em todas as janelas (tooltips, Ajustes em abas, flutuante via WindowChrome, Missões com cabeçalho destacado e tema) — **feito na v1.4.4**
+- [x] Hunt for LoL Idle — instalação sob demanda da extensão (download da Chrome Web Store sob pedido, unpacked, manifest sanitizado sem `notifications`), botão 🏹 na barra de título, painel em janela própria no tema, instalação em todos os perfis WebView2, atualização sob demanda ("↻ Atualizar") — **feito na v1.4.4**
+- [x] Ajustes em abas — `NotifySettingsWindow` + `CloseBehaviorWindow` unificadas em `AjustesWindow` (abas 🔔 Notificações e ⚙ Opções de fechamento) — **feito na v1.4.4**
+- [x] Notificações refinadas — bolinha de não lida na hora (`_contasNaoLidas.Add` antes do rebuild); "Limpar" preserva notificações que chegam durante a animação (só zera bolinha das contas esvaziadas); toast silencioso, toast antes do som, som assíncrono em memória (`SoundPlayer(MemoryStream)`); 1 GB por conta + 200 MB de app base; meta de RAM de **1 GB por conta aberta**; tamanho padrão da flutuante 360×287 — **feito na v1.4.4**
+- [x] Foco do jogo preservado com Missões aberta — Missões não rouba mais o foco (`SetWindowPos` com `SWP_NOACTIVATE` na z-order); toggle do botão de livro do jogo funcional; barra de tarefas sincroniza ocultar/restaurar da flutuante + Missões — **feito na v1.4.4**
+- [x] Flutuante — abre em 360×287 na primeira vez (era 900×650), `WindowChrome` (resize pelas bordas), moldura externa no tema com `CornerRadius=10`, toasts/tooltips no tema; tooltips arredondados globais (Barlow, BgPanel2) — **feito na v1.4.4**
+- [x] Meta de RAM — **200 MB fixos para o app + 1 GB por conta aberta** (antes: 1 GB por conta cadastrada, mesmo fechada) — **feito na v1.4.4**
+
+**Concluído em versões anteriores (mantido para referência):**
+
 - [x] Sempre no topo persistente — **feito na v1.2.7** (`FloatingTopmost` / `MissionsTopmost`, com sincronia visual)
-- [ ] Aviso de nova versão (GitHub)
 - [x] Avatares das contas (3 fontes) + aba Campeões + janela "Alterar avatar" com zoom — **feito na v1.3.6**
 - [x] Sinalizações de não lida / últimas notificações na sidebar — **feito na v1.3.7**
 - [x] Poções: notificação + retorno à Fonte (modo Automático) — **feito na v1.3.8**
@@ -200,12 +207,18 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 - [x] Botão "Limpar" em "Últimas notificações" também remove as bolinhas de não lida — **feito na v1.4.1**
 - [x] Conta ativa na frente não notifica; limpeza preserva recém-chegadas; toast/balão remove item correspondente e linha órfã de conta removida; HUD de poções analisado estaticamente — **feito na v1.4.2**
 - [x] Parte superior do sidebar com consumo total (CPU à esquerda, RAM à direita, barra de RAM com meta dinâmica 1 GB por conta; pill Normal/Acima da meta); rodapé com pills de CPU e RAM; tema tático copper + ardósia (slate); botão recarregar por conta — **feito na v1.4.3**
-- [x] Hunt for LoL Idle — instalação sob demanda da extensão (download da Chrome Web Store sob pedido, unpacked, manifest sanitizado sem `notifications`), botão 🏹 na barra de título, painel em janela própria no tema, instalação em todos os perfis WebView2, atualização sob demanda ("↻ Atualizar") — **feito na v1.4.4**
-- [x] Ajustes em abas — `NotifySettingsWindow` + `CloseBehaviorWindow` unificadas em `AjustesWindow` (abas 🔔 Notificações e ⚙ Opções de fechamento) — **feito na v1.4.4**
-- [x] Bug de foco com Missões — Missões não rouba mais o foco (`SetWindowPos` com `SWP_NOACTIVATE` na z-order); toggle do botão de livro do jogo funcional — **feito na v1.4.4**
-- [x] Notificações refinadas — bolinha de não lida na hora (`_contasNaoLidas.Add` antes do rebuild); "Limpar" preserva notificações que chegam durante a animação (só zera bolinha das contas esvaziadas); toast silencioso, toast antes do som, som assíncrono em memória (`SoundPlayer(MemoryStream)`) — **feito na v1.4.4**
-- [x] Flutuante — abre em 360×287 na primeira vez (era 900×650), `WindowChrome` (resize pelas bordas), moldura externa no tema com `CornerRadius=10`, toasts/tooltips no tema; tooltips arredondados globais (Barlow, BgPanel2); barra de tarefas sincroniza flutuante/Missões — **feito na v1.4.4**
-- [x] Meta de RAM — **200 MB fixos para o app + 1 GB por conta aberta** (antes: 1 GB por conta cadastrada, mesmo fechada) — **feito na v1.4.4**
+
+### ⏳ Pendente / Aberto
+
+- [ ] **Poções — teste ao vivo pendente** — seletores do HUD ainda não testados ao vivo pelo usuário; mantida a anotação "teste ao vivo pendente" (limitação atual). Inclui documentar a detecção ao vivo (análise do HUD + teste in-game com o usuário)
+- [ ] **Hunt for LoL Idle — validação em gameplay real** — extensão não testada nas zonas/HUD ao vivo; a instalação está ok (verificada via `Secure Preferences` do perfil), mas o uso intra-HUD ainda não foi validado pelo usuário
+- [ ] **Cantos arredondados da flutuante fora do Windows 11** — `DWMWA_WINDOW_CORNER_PREFERENCE = 0x02` falha no Windows do usuário (exibida como janela quadrada); não há alternativa técnica sem perda de input
+- [ ] **Janela flutuante sem botão de Maximizar** — incompatível com o modo de janela sem chrome
+- [ ] **Sound mixing no WinMM** — confirmar se resta algum problema (som da agenda tocando em cima); o usuário reportou ok após a correção, mas não foi confirmado de forma definitiva
+- [ ] **Decidir se haverá v1.4.5** — com correções adicionais de fluxo/interação refinada
+- [ ] Sons de notificação (volume/timbre por evento)
+- [ ] Áudio separado (música/efeitos) — **decisão necessária:** recriar uma tela de configurações (a antiga foi removida do código) ou manter apenas os botões `bt-musica`/`bt-efeitos` do jogo
+- [ ] Aviso de nova versão (GitHub)
 
 ---
 
