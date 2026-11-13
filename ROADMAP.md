@@ -1,7 +1,7 @@
 ﻿# 🗺️ Roadmap — LoL Idle Desktop
 
 > Base: **v1.4.5** · Última atualização: 2026-11-13
-> v1.4.5 é um **hotfix** (correção crítica de notificações), sem novas funcionalidades — ver "Concluído (v1.4.4 / v1.4.5)".
+> v1.4.5 é um **hotfix** (correção crítica de notificações + limpeza automática do histórico da Central de Ações), sem novas funcionalidades de gameplay — ver "Concluído (v1.4.4 / v1.4.5)".
 > Versão web estilizada: [`ROADMAP.html`](./ROADMAP.html) — abra no navegador para visualizar como site.
 
 <p align="center">
@@ -18,12 +18,12 @@
 | Painel / Recurso | Status | Versão |
 |---|---|---|
 | 📖 **Missões** | ✅ **Confirmado** | v1.2.5 / v1.2.6 / v1.4.4 (foco não rouba mais; toggle pelo botão de livro do jogo) / v1.4.5 (fecha de verdade no encerramento do app — notificações restauram) |
-| 🏹 **Hunt for LoL Idle (extensão sob demanda)** | ✅ **Feito** | v1.4.4 |
+| 🏹 **Hunt for LoL Idle (extensão sob demanda)** | ✅ **Feito** | v1.4.4 / v1.4.5 (correção interna: FontFamily da Barlow no botão "↻ Atualizar") |
 | 🔔 **Bandeja inteligente (sons + clique abre app e troca de conta)** | ✅ **Confirmado** | v1.2.0 → v1.3.0 / v1.3.7 / v1.3.8 |
-| 🔔 **Toasts modernos + Central de Ações clicável** | ✅ **Feito** | v1.4.0 / v1.4.1 / v1.4.2 (conta ativa na frente não notifica) / v1.4.3 (tema tático + uso de recursos) / v1.4.4 (toast silencioso, som assíncrono, toast antes do som) / v1.4.5 (clique na notificação restaura o app) |
+| 🔔 **Toasts modernos + Central de Ações clicável** | ✅ **Feito** | v1.4.0 / v1.4.1 / v1.4.2 (conta ativa na frente não notifica) / v1.4.3 (tema tático + uso de recursos) / v1.4.4 (toast silencioso, som assíncrono, toast antes do som) / v1.4.5 (clique na notificação restaura o app; histórico da Central de Ações limpo ao abrir/restaurar) |
 | 🎛️ **Barra lateral de contas** | ✅ **Feito** | v1.3.2 / v1.3.3 / v1.3.5 / v1.3.6 / v1.3.7 / v1.3.8 / v1.3.9 / v1.4.3 / v1.4.4 |
 | 🖼️ **Avatares das contas (3 fontes)** | ✅ **Feito** | v1.3.6 |
-| 🔴 **Sinalizações de não lida / últimas notificações na sidebar** | ✅ **Feito** | v1.3.7 / v1.3.8 / v1.3.9 / v1.4.1 / v1.4.2 / v1.4.3 / v1.4.4 (bolinha na hora + Limpar preserva recém-chegadas) |
+| 🔴 **Sinalizações de não lida / últimas notificações na sidebar** | ✅ **Feito** | v1.3.7 / v1.3.8 / v1.3.9 / v1.4.1 / v1.4.2 / v1.4.3 / v1.4.4 (bolinha na hora + Limpar preserva recém-chegadas) / v1.4.5 (clique na notificação restaura o app) |
 | 🔔 **Notificações por conta e por tipo** | ✅ **Feito** | v1.3.3 / v1.4.0 (Toasts modernos) |
 | 🧪 **Poções: notificação + retorno à Fonte (modo Automático)** | ✅ **Feito** | v1.3.8 / v1.4.0 (Central de Ações clicável) |
 | 🧙 **Personagem (interativo)** | ❌ **Impossível** | — (jogo bloqueia 2ª sessão) |
@@ -51,7 +51,7 @@ Painel separado e destacável que **já está pronto** (v1.2.5 / v1.2.6):
 
 > ℹ️ É um painel **só-texto** (igual ao que a Barra lateral poderia ser), sem segunda sessão do jogo.
 
-### 🏹 Hunt for LoL Idle — `FEITO` ✅ (v1.4.4)
+### 🏹 Hunt for LoL Idle — `FEITO` ✅ (v1.4.4 / v1.4.5)
 
 Extensão do Chrome ("Hunt for LoL Idle", leitor de tela do jogo) instala **sob demanda** no perfil WebView2 do app:
 
@@ -62,6 +62,7 @@ Extensão do Chrome ("Hunt for LoL Idle", leitor de tela do jogo) instala **sob 
 - **Painel em janela própria** — tema do app, cabeçalho escuro com título "🏹 Hunt for LoL Idle" (Rajdhani), arrastável, `WindowStyle=None` com cantos arredondados; usa o **mesmo environment da conta ativa** (descartada e recriada ao trocar de conta)
 - **Atualização sob demanda** — a janela consulta em background a versão publicada na loja (update-check público); se houver versão maior, mostra o botão **"↻ Atualizar"** no cabeçalho; o clique refaz o ciclo completo (download → sanitize → re-registro nos perfis) e recarrega o painel
 - **Botão de mira na barra de título** — abre/fecha o painel (toggle); durante a instalação inicial mostra aviso de espera
+- **v1.4.5 (hotfix)** — `FontFamily` da Barlow corrigido no botão "↻ Atualizar" do painel (limpeza interna da versão, sem mudança de comportamento)
 
 > ℹ️ **Nota de honestidade:** este documento descreve o que está no código; não atesta teste ao vivo da extensão no jogo. A v1.4.4 está publicada (2026-11-12); o uso intra-HUD da extensão ainda não foi validado pelo usuário.
 
@@ -102,7 +103,7 @@ A sidebar **de contas** (lado direito, com toggle esconder/mostrar) foi implemen
 
 > ℹ️ **O que continua inviável** é um **painel do jogo interativo dentro da barra** (2ª sessão viva acoplada ao painel) — o LoL Idle bloqueia uma segunda WebView com o jogo absoluto no mesmo momento. A barra feita aqui é **seletor + gerenciador de contas**, não um painel vivo.
 
-### 🔔 Sinalizações de não lida / últimas notificações na sidebar — `FEITO` ✅ (v1.3.7 / v1.3.8 / v1.3.9 / v1.4.1 / v1.4.2 / v1.4.3 / v1.4.4)
+### 🔔 Sinalizações de não lida / últimas notificações na sidebar — `FEITO` ✅ (v1.3.7 / v1.3.8 / v1.3.9 / v1.4.1 / v1.4.2 / v1.4.3 / v1.4.4 / v1.4.5)
 
 A sidebar de contas passou a sinalizar notificações pendentes sem precisar abrir a janela do jogo:
 
@@ -121,6 +122,7 @@ A sidebar de contas passou a sinalizar notificações pendentes sem precisar abr
 - **Bolinha de não lida aparece na hora** (v1.4.4) — `_contasNaoLidas.Add()` agora ocorre **antes** do rebuild disparado por `RegistrarNotificacao`, então chips/faixas/linhas do histórico já nascem com o estado final
 - **"Limpar" preserva notificações recém-chegadas** (v1.4.4) — as linhas animadas são capturadas antes da animação; notificações que chegarem durante ela sobrevivem (inclusive no fallback de erro), e a bolinha só é zerada das contas que ficaram sem nenhuma notificação restante (antes, o conjunto inteiro era zerado)
 - **Notificações voltaram a restaurar o app** (v1.4.5, hotfix) — clicar numa notificação (toast, linha de histórico ou balão) não fazia mais nada: com a principal fechada pelo modo flutuante, a tentativa de `Show()` na janela fechada lançava `InvalidOperationException`. Correção: Missões fecha de verdade quando `_allowExit` e `RestoreFromTray()` detecta `_mainWindowClosed` (sem `Show()` na principal fechada) — o clique no toast volta a restaurar o app/jogo
+- **Histórico da Central de Ações do Windows é limpo automaticamente** (v1.4.5) — ao abrir o app e ao restaurar da bandeja, o app apaga apenas as notificações dele na Central de Ações (`ToastNotificationManagerCompat.History.Clear()`), evitando acúmulo de toasts antigos
 
 > ℹ️ O rastreamento das notificações (`_ultimasNotificacoes`, `_contasNaoLidas`) é **somente em memória** — nada é persistido no `window-settings.json`.
 
@@ -164,6 +166,7 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 - Clicar no balão restaura/abre a janela principal e troca para a conta da notificação (v1.3.0 → v1.3.8); se o aviso for de poções, também manda o personagem de volta para a Fonte (somente no modo automático)
 - **v1.4.4** — toast **silencioso** (`AddAudio { Silent = true }`, sem o "ding" padrão do Windows); o **toast aparece antes do som**; o som é carregado em memória (`SoundPlayer(MemoryStream)`, sem arquivo temporário e sem `PlaySync()` bloqueante, tocando em thread separada)
 - **v1.4.5 (hotfix)** — clicar na notificação (toast/balão/histórico) não restaurava o app/jogo; causa: a Missões impedia o processo WPF de encerrar; correção: a Missões fecha de verdade no `ExitApplication` e `RestoreFromTray()` não tenta `Show()` com a principal fechada (`_mainWindowClosed`) — o clique volta a restaurar
+- **v1.4.5 (hotfix)** — ao abrir o app (e ao restaurar da bandeja), o app limpa automaticamente o histórico de notificações do próprio app na Central de Ações do Windows (`ToastNotificationManagerCompat.History.Clear()`) — sem acúmulo de toasts antigos
 
 > **Polimento atual:** ajustar volumes/timbre de cada som (lendário, épico, missão, nível, inventário).
 
@@ -192,7 +195,7 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 
 ### ✅ Concluído (v1.4.4 / v1.4.5 — 2026-11-12/13)
 
-- [x] **Notificações que não restauravam o app — hotfix v1.4.5** — nenhuma notificação (toast, linha de histórico ou balão) restaurava o app/jogo; causa: o handler `Closing` da janela Missões cancelava o fechamento inclusive durante o `ExitApplication`, deixando a janela invisível mas viva e impedindo o processo WPF de encerrar; com a principal já fechada pelo modo flutuante, qualquer clique em notificação tentava `Show()` numa janela fechada → `InvalidOperationException`. Correção: a Missões fecha de verdade quando `_allowExit` é `true` e `RestoreFromTray()` detecta deterministicamente (`_mainWindowClosed`) a principal fechada — sem `Show()`; traz de volta a flutuante (se existir) ou retorna com log. Limpeza interna na mesma versão (brushes `Success`/`Warning` removidos, `x:Name` não usados removidos, `FontFamily` da Barlow corrigido no botão "↻ Atualizar" do Hunt). Resolve também a dúvida pendente "Decidir se haverá v1.4.5". — **feito na v1.4.5**
+- [x] **Notificações que não restauravam o app — hotfix v1.4.5** — nenhuma notificação (toast, linha de histórico ou balão) restaurava o app/jogo; causa: o handler `Closing` da janela Missões cancelava o fechamento inclusive durante o `ExitApplication`, deixando a janela invisível mas viva e impedindo o processo WPF de encerrar; com a principal já fechada pelo modo flutuante, qualquer clique em notificação tentava `Show()` numa janela fechada → `InvalidOperationException`. Correção: a Missões fecha de verdade quando `_allowExit` é `true` e `RestoreFromTray()` detecta deterministicamente (`_mainWindowClosed`) a principal fechada — sem `Show()`; traz de volta a flutuante (se existir) ou retorna com log. Adicionalmente, ao abrir o app (e ao restaurar da bandeja), o app limpa automaticamente o histórico de notificações do próprio app na Central de Ações do Windows (`ToastNotificationManagerCompat.History.Clear()`). Limpeza interna na mesma versão (brushes `Success`/`Warning` removidos, `x:Name` não usados removidos, `FontFamily` da Barlow corrigido no botão "↻ Atualizar" do Hunt). Resolve também a dúvida pendente "Decidir se haverá v1.4.5". — **feito na v1.4.5**
 - [x] Tema tático cobre/ardósia em todas as janelas (tooltips, Ajustes em abas, flutuante via WindowChrome, Missões com cabeçalho destacado e tema) — **feito na v1.4.4**
 - [x] Hunt for LoL Idle — instalação sob demanda da extensão (download da Chrome Web Store sob pedido, unpacked, manifest sanitizado sem `notifications`), botão 🏹 na barra de título, painel em janela própria no tema, instalação em todos os perfis WebView2, atualização sob demanda ("↻ Atualizar") — **feito na v1.4.4**
 - [x] Ajustes em abas — `NotifySettingsWindow` + `CloseBehaviorWindow` unificadas em `AjustesWindow` (abas 🔔 Notificações e ⚙ Opções de fechamento) — **feito na v1.4.4**
@@ -214,6 +217,8 @@ Ao minimizar para a bandeja, o app fica **mutado por padrão** (configurável):
 - [x] Parte superior do sidebar com consumo total (CPU à esquerda, RAM à direita, barra de RAM com meta dinâmica 1 GB por conta; pill Normal/Acima da meta); rodapé com pills de CPU e RAM; tema tático copper + ardósia (slate); botão recarregar por conta — **feito na v1.4.3**
 
 ### ⏳ Pendente / Aberto
+
+> ⚠️ **v1.4.5 é uma atualização crítica** — instale no lugar da v1.4.4: corrige o bug que impedia qualquer notificação (toast, histórico ou balão) de restaurar o app/jogo. Quem está na v1.4.4 deve atualizar.
 
 - [ ] **Poções — teste ao vivo pendente** — seletores do HUD ainda não testados ao vivo pelo usuário; mantida a anotação "teste ao vivo pendente" (limitação atual). Inclui documentar a detecção ao vivo (análise do HUD + teste in-game com o usuário)
 - [ ] **Hunt for LoL Idle — validação em gameplay real** — extensão não testada nas zonas/HUD ao vivo; a instalação está ok (verificada via `Secure Preferences` do perfil), mas o uso intra-HUD ainda não foi validado pelo usuário
