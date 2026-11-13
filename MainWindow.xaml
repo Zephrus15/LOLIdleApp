@@ -165,7 +165,6 @@
                 </StackPanel>
 
                 <Button Grid.Column="1"
-                        x:Name="HuntTitleButton"
                         Click="HuntTitle_Click"
                         Style="{StaticResource WindowButton}"
                         ToolTip="Hunt for LoL Idle (painel de zonas e builds)"
@@ -324,8 +323,7 @@
                                 </Grid>
 
                                 <StackPanel>
-                                    <Button x:Name="AjustesButton"
-                                            Content="⚙ Ajustes"
+                                    <Button Content="⚙ Ajustes"
                                             Click="Ajustes_Click"
                                             ToolTip="Central de configurações do app"
                                             Style="{StaticResource AddAccountButtonStyle}"

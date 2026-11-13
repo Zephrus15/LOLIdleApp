@@ -17,9 +17,7 @@
         <SolidColorBrush x:Key="AccentHover"  Color="#E8903F" />
         <SolidColorBrush x:Key="AccentSoft"   Color="#3A2A1C" />
         <SolidColorBrush x:Key="AccentIce"    Color="#4FD1D9" />
-        <SolidColorBrush x:Key="Success"      Color="#3BAF6B" />
         <SolidColorBrush x:Key="Danger"       Color="#E05B4B" />
-        <SolidColorBrush x:Key="Warning"      Color="#E08F1F" />
 
         <!-- Corpo do app em Barlow; tÃ­tulos usam Rajdhani localmente -->
         <Style TargetType="TextBlock">

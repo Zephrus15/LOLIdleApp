@@ -91,8 +91,7 @@
                     BorderThickness="0 0 0 1">
                 <Grid>
                     <StackPanel VerticalAlignment="Center">
-                        <TextBlock x:Name="HeaderTitle"
-                                   Text="✏️ Editar conta"
+                        <TextBlock Text="✏️ Editar conta"
                                    Foreground="{StaticResource TextPrimary}"
                                    FontSize="14"
                                    FontWeight="SemiBold"
@@ -105,8 +104,7 @@
                                    Margin="0,1,0,0"
                                    TextTrimming="CharacterEllipsis" />
                     </StackPanel>
-                    <Button x:Name="CloseHeaderButton"
-                            HorizontalAlignment="Right"
+                    <Button HorizontalAlignment="Right"
                             VerticalAlignment="Center"
                             Width="28" Height="28"
                             Content="✕"
@@ -197,8 +195,7 @@
                         <ColumnDefinition Width="Auto" />
                         <ColumnDefinition Width="*" />
                     </Grid.ColumnDefinitions>
-                    <Button x:Name="ChooseImageButton"
-                            Grid.Column="0"
+                    <Button Grid.Column="0"
                             Content="Escolher arquivo…"
                             Height="30"
                             Padding="14,0"
@@ -246,40 +243,35 @@
                                Margin="2,0,0,6" />
                     <StackPanel Orientation="Horizontal"
                                 HorizontalAlignment="Center">
-                        <Button x:Name="OffsetLeftButton"
-                                Content="◀"
+                        <Button Content="◀"
                                 Width="40" Height="30"
                                 Margin="0,0,6,0"
                                 FontSize="13"
                                 Style="{StaticResource OffsetButton}"
                                 ToolTip="Mostrar mais a parte esquerda da imagem"
                                 Click="OffsetLeft_Click" />
-                        <Button x:Name="OffsetUpButton"
-                                Content="▲"
+                        <Button Content="▲"
                                 Width="40" Height="30"
                                 Margin="0,0,6,0"
                                 FontSize="13"
                                 Style="{StaticResource OffsetButton}"
                                 ToolTip="Mostrar mais a parte de cima da imagem"
                                 Click="OffsetUp_Click" />
-                        <Button x:Name="OffsetDownButton"
-                                Content="▼"
+                        <Button Content="▼"
                                 Width="40" Height="30"
                                 Margin="0,0,6,0"
                                 FontSize="13"
                                 Style="{StaticResource OffsetButton}"
                                 ToolTip="Mostrar mais a parte de baixo da imagem"
                                 Click="OffsetDown_Click" />
-                        <Button x:Name="OffsetRightButton"
-                                Content="▶"
+                        <Button Content="▶"
                                 Width="40" Height="30"
                                 Margin="0,0,6,0"
                                 FontSize="13"
                                 Style="{StaticResource OffsetButton}"
                                 ToolTip="Mostrar mais a parte direita da imagem"
                                 Click="OffsetRight_Click" />
-                        <Button x:Name="OffsetResetButton"
-                                Content="Redefinir"
+                        <Button Content="Redefinir"
                                 Height="30"
                                 Padding="10,0"
                                 FontSize="11"
@@ -296,8 +288,7 @@
                     Padding="14,10"
                     BorderBrush="{StaticResource BorderSubtle}"
                     BorderThickness="0 1 0 0">
-                <Button x:Name="DoneButton"
-                        Content="Concluído"
+                <Button Content="Concluído"
                         HorizontalAlignment="Right"
                         Width="110" Height="34"
                         Foreground="{StaticResource BgApp}"

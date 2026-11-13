@@ -444,7 +444,6 @@ public partial class MainWindow : Window
     })();";
 
     private Window? _missionsWindow;
-    private Grid? _missionsRoot;
     private TextBlock? _missionsTitle;
     private TextBlock? _missionsBody;
     private System.Windows.Controls.ProgressBar? _missionsPasseBar;
@@ -1043,7 +1042,6 @@ public partial class MainWindow : Window
         var root = new Grid { Background = ThemeBrush("BgPanel", "#1C2129") };
         root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        _missionsRoot = root;
 
         // Cabeçalho escuro destacado (mesmo esquema dos diálogos Ajustes/Hunt): faixa BgPanel2 com título à esquerda e pin/close à direita.
         var header = new Border

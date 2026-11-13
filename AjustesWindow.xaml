@@ -100,8 +100,7 @@
                                FontWeight="SemiBold"
                                FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
                                VerticalAlignment="Center" />
-                    <Button x:Name="CloseHeaderButton"
-                            HorizontalAlignment="Right"
+                    <Button HorizontalAlignment="Right"
                             VerticalAlignment="Center"
                             Width="28" Height="28"
                             Content="✕"
@@ -122,8 +121,7 @@
                     BorderBrush="{StaticResource BorderSubtle}"
                     BorderThickness="0 1 0 0">
                 <Grid>
-                    <Button x:Name="DoneButton"
-                            Content="Concluído"
+                    <Button Content="Concluído"
                             HorizontalAlignment="Right"
                             Width="110" Height="36"
                             Foreground="{StaticResource BgApp}"

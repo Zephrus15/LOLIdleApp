@@ -120,8 +120,7 @@
                                FontWeight="SemiBold"
                                FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
                                VerticalAlignment="Center" />
-                    <Button x:Name="CloseHeaderButton"
-                            HorizontalAlignment="Right"
+                    <Button HorizontalAlignment="Right"
                             VerticalAlignment="Center"
                             Width="28" Height="28"
                             Content="✕"
@@ -248,8 +247,7 @@
                     BorderThickness="0 1 0 0">
                 <StackPanel Orientation="Horizontal"
                             HorizontalAlignment="Right">
-                    <Button x:Name="CancelButton"
-                            Content="Cancelar"
+                    <Button Content="Cancelar"
                             Width="100" Height="36"
                             Padding="14,0"
                             Margin="0,0,8,0"
