@@ -343,6 +343,9 @@ public partial class MainWindow : Window
     private Forms.ToolStripMenuItem? _trayTrayMuteItem;
     private bool _floatingOpened;
     private bool _allowExit;
+    // True depois que o MainWindow dispara Closed (ex.: via ExitApplication):
+    // Show()/Activate() em janela fechada lança InvalidOperationException.
+    private bool _mainWindowClosed;
     private bool _isHiddenToTray;
     private bool _settingsReady;
 
@@ -596,6 +599,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         ToastNotificationManagerCompat.OnActivated += ToastActivated;
+        Closed += (_, _) => _mainWindowClosed = true;
         InitializeComponent();
         _settingsSaveTimer = new System.Windows.Threading.DispatcherTimer
         {
@@ -949,6 +953,14 @@ public partial class MainWindow : Window
         }
 
         // comportamento atual (janela principal)
+        // MainWindow já fechado (Closed disparado, ex.: ExitApplication):
+        // Show()/Activate() em janela fechada lança InvalidOperationException.
+        // Não há o que restaurar — sai sem tocar na janela.
+        if (_mainWindowClosed)
+        {
+            LogFloatingWindowEvent("RestoreFromTray: janela principal já fechada — restauração ignorada (app encerrando).");
+            return;
+        }
         Show();
         if (_trayIcon != null)
             _trayIcon.Visible = false;
@@ -1158,7 +1170,9 @@ public partial class MainWindow : Window
                 frame.Clip = new RectangleGeometry(new Rect(0, 0, frame.ActualWidth, frame.ActualHeight), 10, 10);
         };
         win.Content = frame;
-        win.Closing += (_, e) => { e.Cancel = true; win.Hide(); if (!_allowExit) { _settings.ShowMissions = false; SaveWindowSettings(); SyncFloatingControls(); } };
+        // Na saída do app (ExitApplication, _allowExit == true) deixa fechar de verdade.
+        // Cancelar sempre impedia o shutdown (OnLastWindowClose) e deixava o processo vivo invisível.
+        win.Closing += (_, e) => { if (_allowExit) return; e.Cancel = true; win.Hide(); _settings.ShowMissions = false; SaveWindowSettings(); SyncFloatingControls(); };
         win.GotFocus += (_, _) => win.BorderThickness = new Thickness(1);
         win.LostFocus += (_, _) => win.BorderThickness = new Thickness(0);
         win.Opacity = 1.0;
