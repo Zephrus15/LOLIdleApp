@@ -3,12 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
-using Button = System.Windows.Controls.Button;
 using CheckBox = System.Windows.Controls.CheckBox;
+using UserControl = System.Windows.Controls.UserControl;
 
 namespace LoLIdleDesktop
 {
-    public partial class NotifySettingsWindow : Window
+    public partial class NotifySettingsPanel : UserControl
     {
         private readonly MainWindow.WindowSettings _settings;
         private readonly Action _save;
@@ -26,26 +26,17 @@ namespace LoLIdleDesktop
             new("potion", "Poções de HP ou MP acabaram")
         };
 
-        public NotifySettingsWindow(MainWindow.WindowSettings settings,
-                                    IEnumerable<string> accountKeys,
-                                    Func<string, string> displayNameSelector,
-                                    Action saveAction,
-                                    Window? owner)
+        public NotifySettingsPanel(MainWindow.WindowSettings settings,
+                                   IEnumerable<string> accountKeys,
+                                   Func<string, string> displayNameSelector,
+                                   Action saveAction)
         {
             _settings = settings;
             _save = saveAction;
             _allKeys = accountKeys.Where(k => !string.IsNullOrWhiteSpace(k)).ToList();
             DisplayNameSelector = displayNameSelector;
-            Owner = owner;
 
             InitializeComponent();
-            MouseLeftButtonDown += (_, e) =>
-            {
-                if (e.LeftButton == System.Windows.Input.MouseButtonState.Pressed &&
-                    e.OriginalSource is not Button &&
-                    e.OriginalSource is not System.Windows.Controls.Primitives.ButtonBase)
-                    DragMove();
-            };
 
             RebuildAccountsList();
             RebuildTypesList();
@@ -135,18 +126,6 @@ namespace LoLIdleDesktop
             TypesListPanel.Opacity = _settings.NotifyEnabled ? 1.0 : 0.4;
             MultiAccountHint.Opacity = _settings.NotifyEnabled ? 1.0 : 0.4;
             _save();
-        }
-
-        private void CloseHeader_Click(object sender, RoutedEventArgs e)
-        {
-            DialogResult = true;
-            Close();
-        }
-
-        private void Done_Click(object sender, RoutedEventArgs e)
-        {
-            DialogResult = true;
-            Close();
         }
     }
 }

@@ -1,32 +1,24 @@
 using System;
 using System.Windows;
+using System.Windows.Controls;
 using CheckBox = System.Windows.Controls.CheckBox;
-using Button = System.Windows.Controls.Button;
+using UserControl = System.Windows.Controls.UserControl;
 
 namespace LoLIdleDesktop
 {
-    public partial class CloseBehaviorWindow : Window
+    public partial class CloseBehaviorPanel : UserControl
     {
         private readonly MainWindow.WindowSettings _settings;
         private readonly Action _save;
         private bool _syncing;
 
-        public CloseBehaviorWindow(MainWindow.WindowSettings settings,
-                                   Action saveAction,
-                                   Window? owner)
+        public CloseBehaviorPanel(MainWindow.WindowSettings settings,
+                                  Action saveAction)
         {
             _settings = settings;
             _save = saveAction;
-            Owner = owner;
 
             InitializeComponent();
-            MouseLeftButtonDown += (_, e) =>
-            {
-                if (e.LeftButton == System.Windows.Input.MouseButtonState.Pressed &&
-                    e.OriginalSource is not Button &&
-                    e.OriginalSource is not System.Windows.Controls.Primitives.ButtonBase)
-                    DragMove();
-            };
 
             LoadCurrentOption();
         }
@@ -98,18 +90,6 @@ namespace LoLIdleDesktop
                     _syncing = false;
                 }
             }
-        }
-
-        private void CloseHeader_Click(object sender, RoutedEventArgs e)
-        {
-            DialogResult = true;
-            Close();
-        }
-
-        private void Done_Click(object sender, RoutedEventArgs e)
-        {
-            DialogResult = true;
-            Close();
         }
     }
 }

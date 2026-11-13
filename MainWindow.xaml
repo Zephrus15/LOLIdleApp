@@ -138,6 +138,7 @@
                     <ColumnDefinition Width="44"/>
                     <ColumnDefinition Width="44"/>
                     <ColumnDefinition Width="44"/>
+                    <ColumnDefinition Width="44"/>
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Orientation="Horizontal"
@@ -164,6 +165,20 @@
                 </StackPanel>
 
                 <Button Grid.Column="1"
+                        x:Name="HuntTitleButton"
+                        Click="HuntTitle_Click"
+                        Style="{StaticResource WindowButton}"
+                        ToolTip="Hunt for LoL Idle (painel de zonas e builds)"
+                        Width="36" Height="34">
+                    <Canvas Width="14" Height="14">
+                        <Path Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.6"
+                              StrokeStartLineCap="Round"
+                              Data="M 7 1.5 V 4.5 M 7 9.5 V 12.5 M 1.5 7 H 4.5 M 9.5 7 H 12.5 M 7 7 m -3.2 0 a 3.2 3.2 0 1 0 6.4 0 a 3.2 3.2 0 1 0 -6.4 0"/>
+                    </Canvas>
+                </Button>
+
+                <Button Grid.Column="2"
                         Click="Minimize_Click"
                         Style="{StaticResource WindowButton}"
                         ToolTip="Minimizar para a barra de tarefas"
@@ -176,14 +191,14 @@
                     </Canvas>
                 </Button>
 
-                <Button Grid.Column="2"
+                <Button Grid.Column="3"
                         x:Name="MaximizeButton"
                         Click="Maximize_Click"
                         Style="{StaticResource WindowButton}"
                         ToolTip="Maximizar"
                         Width="36" Height="34"/>
 
-                <Button Grid.Column="3"
+                <Button Grid.Column="4"
                         Click="Close_Click"
                         Style="{StaticResource CloseButton}"
                         ToolTip="Fechar para a bandeja"
@@ -221,10 +236,11 @@
                     <Button x:Name="SidebarToggleButton"
                             Click="SidebarToggle_Click"
                         Style="{StaticResource GhostIconButton}"
-                        ToolTip="Esconder contas"
-                        Width="26" Height="36"
+                        ToolTip="Esconder barra lateral"
+                        Width="26" Height="28"
                         VerticalAlignment="Center"
-                        HorizontalAlignment="Center">
+                        HorizontalAlignment="Right"
+                        Margin="0,0,2,0">
                     <Canvas Width="11" Height="11">
                         <Path x:Name="SidebarToggleLeftIcon"
                               Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
@@ -278,12 +294,12 @@
                             </Grid.RowDefinitions>
 
                             <StackPanel Grid.Row="0" VerticalAlignment="Top">
-                                <StackPanel x:Name="ContasStripPanel"
+                                <WrapPanel x:Name="ContasStripPanel"
                                             Visibility="Collapsed"
                                             Margin="0,4,0,0"
                                             HorizontalAlignment="Left"
                                             VerticalAlignment="Top"
-                                            Orientation="Vertical"/>
+                                            Orientation="Horizontal"/>
 
                                 <Grid x:Name="ContasListPanel">
                                     <StackPanel VerticalAlignment="Top">
@@ -308,19 +324,12 @@
                                 </Grid>
 
                                 <StackPanel>
-                                    <Button Content="🔔 Notificações"
-                                            Click="Notifications_Click"
-                                            ToolTip="Configurar como os avisos do jogo chegam (conta, tipo, ativar/desativar)"
+                                    <Button x:Name="AjustesButton"
+                                            Content="⚙ Ajustes"
+                                            Click="Ajustes_Click"
+                                            ToolTip="Central de configurações do app"
                                             Style="{StaticResource AddAccountButtonStyle}"
                                             Margin="0,16,0,0"
-                                            HorizontalAlignment="Left"
-                                            FontSize="12"/>
-
-                                    <Button Content="⚙ Opções de fechamento"
-                                            Click="CloseBehavior_Click"
-                                            ToolTip="Escolher o que acontece ao clicar em Fechar"
-                                            Style="{StaticResource AddAccountButtonStyle}"
-                                            Margin="0,8,0,0"
                                             HorizontalAlignment="Left"
                                             FontSize="12"/>
                                 </StackPanel>

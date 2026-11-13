@@ -1,0 +1,49 @@
+<UserControl x:Class="LoLIdleDesktop.NotifySettingsPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Margin="18,16,18,10">
+        <!-- Ativar/desativar global -->
+        <Border Background="{StaticResource BgPanel2}"
+                BorderBrush="{StaticResource BorderSubtle}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="12,10"
+                Margin="0,0,0,10">
+            <CheckBox x:Name="NotifyEnabledCheck"
+                      Style="{StaticResource DarkCheckBox}"
+                      FontSize="13"
+                      FontWeight="SemiBold"
+                      Checked="NotifyEnabledCheck_Changed"
+                      Unchecked="NotifyEnabledCheck_Changed">
+                <TextBlock Text="Ativar notificações" TextWrapping="Wrap" />
+            </CheckBox>
+        </Border>
+
+        <!-- Contas que notificam -->
+        <TextBlock Text="Notificar de:"
+                   Foreground="#E8CF8F" FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
+                   FontSize="12"
+                   FontWeight="SemiBold"
+                   Margin="2,0,0,6" />
+        <StackPanel x:Name="ContasListPanel" Margin="0,0,0,12">
+            <!-- Checkboxes por conta gerados no code-behind -->
+        </StackPanel>
+
+        <!-- Tipos de notificação -->
+        <TextBlock Text="Tipos de notificação:"
+                   Foreground="#E8CF8F" FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
+                   FontSize="12"
+                   FontWeight="SemiBold"
+                   Margin="2,0,0,6" />
+        <StackPanel x:Name="TypesListPanel">
+            <!-- Checkboxes por tipo gerados no code-behind -->
+        </StackPanel>
+
+        <TextBlock x:Name="MultiAccountHint"
+                   Margin="2,10,0,0"
+                   FontSize="11"
+                   Foreground="{StaticResource TextSecondary}"
+                   TextWrapping="Wrap"
+                   Text="Quando mais de uma conta está marcada, o balão mostra o nome da conta que gerou o aviso (ex: Yasuo — Missão concluída!)." />
+    </StackPanel>
+</UserControl>

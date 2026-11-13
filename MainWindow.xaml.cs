@@ -126,11 +126,11 @@ public partial class MainWindow : Window
                     color:#fff; background:#1C2129; cursor:pointer;
                     display:grid; place-items:center; }
                 #lol-idle-floating-controls button:hover { background:#2B313F; }
-                #lol-idle-floating-controls button.active { color:#e8cf8f; }
+                #lol-idle-floating-controls button.active { color:#E8903F; }
                 #lol-idle-floating-controls svg { width:16px; height:16px; fill:none; stroke:currentColor;
                     stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; pointer-events:none; }
                 #lol-idle-settings svg path { fill:#fff; stroke:none; }
-                #lol-idle-floating-controls button.active svg { fill:#e8cf8f; stroke:#e8cf8f; }
+                #lol-idle-floating-controls button.active svg { fill:none; stroke:#E8903F; }
             `;
             document.head.appendChild(style);
             const panel = document.createElement('div');
@@ -191,6 +191,7 @@ public partial class MainWindow : Window
             try { window.chrome.webview.postMessage('lol-idle-begin-window-drag'); } catch (_) {}
         }, true);
     })();";
+
 
     // Observa #avisos-saque (loot real do jogo) + #log (missões) para notificar na bandeja.
     private const string TrayNotifyScript = @"(() => {
@@ -376,11 +377,18 @@ public partial class MainWindow : Window
     private string _lastFloatingUri = GameUrl;
     private Window? _floatingWindow;
     private Microsoft.Web.WebView2.Wpf.WebView2? _floatingView;
+    // Janela Hunt (painel da extensão Hunt for LoL Idle) e guarda de instalação concorrente.
+    private HuntWindow? _huntWindow;
+    private bool _huntInstalling;
+    private readonly System.Threading.SemaphoreSlim _huntInstallLock = new(1, 1);
     // Conta dona da flutuante no momento da criação (evita rótulo errado em notificação)
     private string _floatingAccountKey = DefaultAccountName;
     private Window? _preparedFloatingWindow;
     private Microsoft.Web.WebView2.Wpf.WebView2? _preparedFloatingView;
     private bool _isPreparingFloatingView;
+    // Coalesced one-shot: pedido de recriação do host feito enquanto uma
+    // preparação estava em andamento. Aplicado ao final da preparação atual.
+    private bool _prepareRestartRequested;
     private const string VoteButtonScript = @"(() => {
         if (window.__lolIdleVoteButtonInstalled) return;
         window.__lolIdleVoteButtonInstalled = true;
@@ -436,7 +444,7 @@ public partial class MainWindow : Window
     })();";
 
     private Window? _missionsWindow;
-    private StackPanel? _missionsRoot;
+    private Grid? _missionsRoot;
     private TextBlock? _missionsTitle;
     private TextBlock? _missionsBody;
     private System.Windows.Controls.ProgressBar? _missionsPasseBar;
@@ -446,6 +454,11 @@ public partial class MainWindow : Window
     private Button? _missionsPinBtn;
     private string? _lastMissionsJson;
     private System.Windows.Threading.DispatcherTimer? _missionsPollTimer;
+
+    // Brush do tema (ardósia+cobre) por chave, com fallback para o hex original caso o recurso não exista.
+    private static SolidColorBrush ThemeBrush(string key, string fallbackHex)
+        => System.Windows.Application.Current?.Resources[key] as SolidColorBrush
+           ?? new SolidColorBrush((Color)ColorConverter.ConvertFromString(fallbackHex));
 
     // Painel "Consumo total": RAM/CPU totais + barra/pill (via WMI + WorkingSet64), RAM/CPU por conta e limpeza de cache.
     private System.Windows.Threading.DispatcherTimer? _usoTimer;
@@ -469,11 +482,12 @@ public partial class MainWindow : Window
     private readonly List<LinhaUsoVisual> _usoLinhasVisual = new();
 
     // Meta de referência de RAM do dispositivo/app (bloco "Consumo total").
-    // 1,0 GB por conta conectada (incluindo a principal).
+    // 200 MB para o app + 1,0 GB por conta ABERTA (WebView instanciada).
     private double MetaRamBytes()
     {
-        int totalContas = (_settings.ContasAdicionadas?.Count ?? 0) + 1; // +1 para principal
-        return totalContas * 1024.0 * 1024.0 * 1024.0; // 1 GB por conta
+        double baseBytes = 200.0 * 1024.0 * 1024.0;          // 200 MB para o app em si
+        double porConta  = (_accountViews?.Count ?? 1) * 1024.0 * 1024.0 * 1024.0; // 1 GB por WebView instanciada
+        return baseBytes + porConta;
     }
     private static readonly CultureInfo PtBrCulture = CultureInfo.GetCultureInfo("pt-BR");
     private System.Windows.Threading.DispatcherTimer? _consumoRevertTimer;
@@ -508,6 +522,19 @@ public partial class MainWindow : Window
     [DllImport("user32.dll")]
     private static extern IntPtr SendMessage(IntPtr hWnd, int message, IntPtr wParam, IntPtr lParam);
 
+    // SetWindowPos com SWP_NOACTIVATE: reordena a z-order SEM ativar a janela
+    // (BringWindowToTop ativava a Missões a cada clique no jogo, roubando o foco).
+    private static readonly IntPtr HWND_TOP = IntPtr.Zero;
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_NOACTIVATE = 0x0010;
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
+    [DllImport("dwmapi.dll", PreserveSig = true)]
+    private static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, ref uint pvAttribute, int cbAttribute);
+
     private double _normalWidth = 1280;
     private double _normalHeight = 800;
 
@@ -519,8 +546,8 @@ public partial class MainWindow : Window
         public double Top { get; set; } = 100;
         // Persistência do "Sempre no topo" por janela (A).
         // IsAlwaysOnTop (legado, sem uso) foi substituído por estas duas preferências.
-        public bool FloatingTopmost { get; set; }
-        public bool MissionsTopmost { get; set; }
+        public bool FloatingTopmost { get; set; } = false;
+        public bool MissionsTopmost { get; set; } = false;
         public bool HasFloatingBounds { get; set; }
         public double FloatingWidth { get; set; } = 900;
         public double FloatingHeight { get; set; } = 650;
@@ -562,6 +589,9 @@ public partial class MainWindow : Window
         public List<string> NotifyAccountsDisabled { get; set; } = new();
         // Tipos de notificação desativados (legendary / epic / mission / inventory / level)
         public List<string> NotifyTypesDisabled { get; set; } = new();
+        // Hunt for LoL Idle (extensão opcional, instalada só no clique do botão Hunt)
+        public string? HuntExtensionId { get; set; }
+        public bool HuntTopmost { get; set; } = true;
     }
 
     public MainWindow()
@@ -900,14 +930,31 @@ public partial class MainWindow : Window
     private void RestoreFromTray()
     {
         _isHiddenToTray = false;
-        Show();
 
+        if (_floatingWindow != null)   // flutuante aberta: traz ELA de volta, não a principal
+        {
+            if (_floatingWindow.WindowState == WindowState.Minimized)
+                _floatingWindow.WindowState = WindowState.Normal;
+            if (!_floatingWindow.IsVisible)
+                _floatingWindow.Show();
+            _floatingWindow.Activate();
+
+            if (_trayIcon != null)
+                _trayIcon.Visible = false;
+
+            if (_settings.ShowMissions)
+            {
+                try { ShowMissions(); } catch { }
+            }
+            return;
+        }
+
+        // comportamento atual (janela principal)
+        Show();
         if (_trayIcon != null)
             _trayIcon.Visible = false;
-
         if (WindowState == WindowState.Minimized)
             WindowState = WindowState.Normal;
-
         Activate();
         _ = ApplyAudioSettingsAsync();
         _ = AtualizarContaConectadaUIAsync(); // fire-and-forget
@@ -919,9 +966,10 @@ public partial class MainWindow : Window
         {
             _missionsWindow.Topmost = _settings.MissionsTopmost;
             if (_missionsPinBtn != null)
-                _missionsPinBtn.Foreground = _missionsWindow.Topmost ? new SolidColorBrush(Color.FromRgb(232, 207, 143)) : Brushes.White;
+                _missionsPinBtn.Foreground = _missionsWindow.Topmost ? ThemeBrush("Accent", "#D97B36") : ThemeBrush("TextSecondary", "#93A0B4");
             _missionsWindow.Show();
-            _missionsWindow.Activate();
+            // Mantém só visível, sem forçar foco: a Missões não é stateful e o jogo deve continuar
+            // com o foco (o usuário clica nela quando quiser interagir).
             try { _missionsPollTimer?.Start(); } catch { }
             SyncFloatingControls();
             return;
@@ -938,48 +986,128 @@ public partial class MainWindow : Window
             ShowInTaskbar = false,
             ShowActivated = false,
             Topmost = _settings.MissionsTopmost,
-            Background = new SolidColorBrush(Color.FromRgb(28, 33, 41)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(242, 192, 58)),
+            AllowsTransparency = true,
+            Background = Brushes.Transparent,
+            BorderBrush = ThemeBrush("BorderSubtle", "#2B313F"),
             BorderThickness = new Thickness(1)
         };
+        // Chrome invisível para resize pelas bordas (CaptionHeight=0: o arrasto é o próprio DragMove do conteúdo).
+        var chrome = new System.Windows.Shell.WindowChrome
+        {
+            CaptionHeight = 0,
+            ResizeBorderThickness = new Thickness(20),
+            CornerRadius = new CornerRadius(10),
+            GlassFrameThickness = new Thickness(0),
+            UseAeroCaptionButtons = false,
+            NonClientFrameEdges = System.Windows.Shell.NonClientFrameEdges.None
+        };
+        System.Windows.Shell.WindowChrome.SetWindowChrome(win, chrome);
         win.WindowStartupLocation = WindowStartupLocation.Manual;
         win.Left = _settings.HasMissionsBounds ? _settings.MissionsLeft : 200;
         win.Top = _settings.HasMissionsBounds ? _settings.MissionsTop : 200;
         win.LocationChanged += (_, _) => { _settings.MissionsLeft = win.Left; _settings.MissionsTop = win.Top; _settings.HasMissionsBounds = true; SaveWindowSettings(); };
         win.SizeChanged += (_, _) => { _settings.MissionsWidth = win.Width; _settings.MissionsHeight = win.Height; _settings.HasMissionsBounds = true; SaveWindowSettings(); };
-        var root = new StackPanel { Margin = new Thickness(10), Background = new SolidColorBrush(Color.FromRgb(28, 33, 41)) };
+        var textPrimaryBrush = ThemeBrush("TextPrimary", "#D6DAE6");
+        var textSecondaryBrush = ThemeBrush("TextSecondary", "#93A0B4");
+        var accentBrush = ThemeBrush("Accent", "#D97B36");
+        var accentHoverBrush = ThemeBrush("AccentHover", "#E8903F");
+        var accentIceBrush = ThemeBrush("AccentIce", "#4FD1D9");
+        var ghostIconButtonStyle = (Style)System.Windows.Application.Current.Resources["GhostIconButton"];
+        const string rajdhani = "pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani";
+        const string barlow = "pack://application:,,,/Assets/Fonts/Barlow-Regular.ttf#Barlow";
+
+        // Ícones dos botões de controle: SVG 24x24 com o traço ligado ao Foreground do botão (hover/ativo do GhostIconButton).
+        var strokeForegroundBinding = new System.Windows.Data.Binding("Foreground")
+        {
+            RelativeSource = new System.Windows.Data.RelativeSource(
+                System.Windows.Data.RelativeSourceMode.FindAncestor, typeof(Button), 1)
+        };
+        System.Windows.Shapes.Path MakeIcon(string geometry)
+        {
+            var path = new System.Windows.Shapes.Path
+            {
+                Data = Geometry.Parse(geometry),
+                StrokeThickness = 1.8,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                StrokeLineJoin = PenLineJoin.Round,
+                Fill = System.Windows.Media.Brushes.Transparent,
+                Stretch = Stretch.Uniform,
+                Width = 15,
+                Height = 15
+            };
+            path.SetBinding(System.Windows.Shapes.Shape.StrokeProperty, strokeForegroundBinding);
+            return path;
+        }
+
+        var root = new Grid { Background = ThemeBrush("BgPanel", "#1C2129") };
+        root.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        root.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
         _missionsRoot = root;
-        var top = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right, Margin = new Thickness(0, 0, 0, 6) };
-        var pinBtn = new Button { Content = "📌", Width = 20, Height = 20, Background = Brushes.Transparent, Foreground = win.Topmost ? new SolidColorBrush(Color.FromRgb(232, 207, 143)) : Brushes.White, BorderThickness = new Thickness(0) };
-        pinBtn.ToolTip = "Manter na frente (fixar)";
+
+        // Cabeçalho escuro destacado (mesmo esquema dos diálogos Ajustes/Hunt): faixa BgPanel2 com título à esquerda e pin/close à direita.
+        var header = new Border
+        {
+            Background = ThemeBrush("BgPanel2", "#222733"),
+            Padding = new Thickness(14, 10, 10, 10),
+            BorderBrush = ThemeBrush("BorderSubtle", "#2B313F"),
+            BorderThickness = new Thickness(0, 0, 0, 1)
+        };
+        Grid.SetRow(header, 0);
+        var headerGrid = new Grid();
+        _missionsTitle = new TextBlock { Text = "📖 Missões", Foreground = textPrimaryBrush, FontSize = 14, FontWeight = FontWeights.SemiBold, FontFamily = new System.Windows.Media.FontFamily(rajdhani), VerticalAlignment = VerticalAlignment.Center };
+        headerGrid.Children.Add(_missionsTitle);
+        var top = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, HorizontalAlignment = System.Windows.HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
+        var pinBtn = new Button
+        {
+            Content = MakeIcon("M16 3 L21 8 L17 9 L13 13 L15 15 L13 17 L9 13 L4 18 M8 8 L16 16"),
+            Style = ghostIconButtonStyle,
+            Width = 26,
+            Height = 26,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = win.Topmost ? accentBrush : textSecondaryBrush,
+            ToolTip = "Manter na frente (fixar)"
+        };
         _missionsPinBtn = pinBtn;
         pinBtn.Click += (_, _) =>
         {
             win.Topmost = !win.Topmost;
             _settings.MissionsTopmost = win.Topmost;
             SaveWindowSettings();
-            pinBtn.Foreground = win.Topmost ? new SolidColorBrush(Color.FromRgb(232, 207, 143)) : Brushes.White;
+            pinBtn.Foreground = win.Topmost ? accentBrush : textSecondaryBrush;
         };
-        win.MouseEnter += (_, _) => { if (win.Topmost) pinBtn.Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143)); };
+        win.MouseEnter += (_, _) => { if (win.Topmost) pinBtn.Foreground = accentBrush; };
         top.Children.Add(pinBtn);
-        var closeBtn = new Button { Content = "×", Width = 20, Height = 20, Background = Brushes.Transparent, Foreground = Brushes.White, BorderThickness = new Thickness(0) };
+        var closeBtn = new Button
+        {
+            Content = MakeIcon("M6 6 L18 18 M18 6 L6 18"),
+            Style = ghostIconButtonStyle,
+            Width = 26,
+            Height = 26,
+            VerticalAlignment = VerticalAlignment.Center,
+            ToolTip = "Fechar missões"
+        };
         closeBtn.Click += (_, _) => { win.Hide(); _settings.ShowMissions = false; SaveWindowSettings(); SyncFloatingControls(); };
         top.Children.Add(closeBtn);
-        root.Children.Add(top);
-        _missionsTitle = new TextBlock { Text = "Missões", Foreground = new SolidColorBrush(Color.FromRgb(232, 207, 143)), FontSize = 14, FontWeight = FontWeights.SemiBold, FontFamily = new System.Windows.Media.FontFamily("pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"), Margin = new Thickness(0, 0, 0, 8) };
-        root.Children.Add(_missionsTitle);
-        _missionsPasseTxt = new TextBlock { Text = "Passe", Foreground = Brushes.White, FontSize = 12, Margin = new Thickness(0, 0, 0, 4) };
-        _missionsPasseBar = new System.Windows.Controls.ProgressBar { Height = 14, Margin = new Thickness(0, 0, 0, 10), Foreground = new LinearGradientBrush { GradientStops = new GradientStopCollection { new GradientStop(Color.FromRgb(180, 132, 26), 0), new GradientStop(Color.FromRgb(242, 192, 58), 1) }, StartPoint = new System.Windows.Point(0, 0), EndPoint = new System.Windows.Point(0, 1) }, Background = new SolidColorBrush(Color.FromRgb(30, 34, 42)) };
-        _missionsTarefaTxt = new TextBlock { Text = "Tarefa", Foreground = Brushes.White, FontSize = 12, Margin = new Thickness(0, 0, 0, 4) };
-        _missionsTarefaBar = new System.Windows.Controls.ProgressBar { Height = 14, Margin = new Thickness(0, 0, 0, 10), Foreground = new LinearGradientBrush { GradientStops = new GradientStopCollection { new GradientStop(Color.FromRgb(30, 100, 180), 0), new GradientStop(Color.FromRgb(52, 152, 219), 1) }, StartPoint = new System.Windows.Point(0, 0), EndPoint = new System.Windows.Point(0, 1) }, Background = new SolidColorBrush(Color.FromRgb(30, 34, 42)) };
-        root.Children.Add(_missionsPasseTxt); root.Children.Add(_missionsPasseBar);
-        root.Children.Add(_missionsTarefaTxt); root.Children.Add(_missionsTarefaBar);
-        _missionsBody = new TextBlock { Text = "Carregando missões...", Foreground = Brushes.White, FontSize = 12, TextWrapping = TextWrapping.Wrap };
-        root.Children.Add(_missionsBody);
+        headerGrid.Children.Add(top);
+        header.Child = headerGrid;
+        root.Children.Add(header);
+
+        var content = new StackPanel { Margin = new Thickness(10) };
+        Grid.SetRow(content, 1);
+        _missionsPasseTxt = new TextBlock { Text = "Passe", Foreground = textPrimaryBrush, FontSize = 12, FontWeight = FontWeights.SemiBold, FontFamily = new System.Windows.Media.FontFamily(rajdhani), Margin = new Thickness(0, 0, 0, 4) };
+        _missionsPasseBar = new System.Windows.Controls.ProgressBar { Height = 14, Margin = new Thickness(0, 0, 0, 10), Foreground = new LinearGradientBrush { GradientStops = new GradientStopCollection { new GradientStop(accentBrush.Color, 0), new GradientStop(accentHoverBrush.Color, 1) }, StartPoint = new System.Windows.Point(0, 0), EndPoint = new System.Windows.Point(0, 1) }, Background = ThemeBrush("BgPanel3", "#262C39") };
+        _missionsTarefaTxt = new TextBlock { Text = "Tarefa", Foreground = textPrimaryBrush, FontSize = 12, FontWeight = FontWeights.SemiBold, FontFamily = new System.Windows.Media.FontFamily(rajdhani), Margin = new Thickness(0, 0, 0, 4) };
+        _missionsTarefaBar = new System.Windows.Controls.ProgressBar { Height = 14, Margin = new Thickness(0, 0, 0, 10), Foreground = accentIceBrush, Background = ThemeBrush("BgPanel3", "#262C39") };
+        content.Children.Add(_missionsPasseTxt); content.Children.Add(_missionsPasseBar);
+        content.Children.Add(_missionsTarefaTxt); content.Children.Add(_missionsTarefaBar);
+        _missionsBody = new TextBlock { Text = "Carregando missões...", Foreground = textSecondaryBrush, FontSize = 12, FontFamily = new System.Windows.Media.FontFamily(barlow), TextWrapping = TextWrapping.Wrap };
+        content.Children.Add(_missionsBody);
+        root.Children.Add(content);
         root.MouseLeftButtonDown += (_, _) => win.DragMove();
         var layout = new DockPanel();
         var grip = new Border { Width = 18, Height = 18, HorizontalAlignment = System.Windows.HorizontalAlignment.Right, VerticalAlignment = System.Windows.VerticalAlignment.Bottom, Background = Brushes.Transparent, Cursor = Cursors.SizeNWSE };
-        grip.Child = new TextBlock { Text = "◢", Foreground = Brushes.DimGray, FontSize = 10, HorizontalAlignment = System.Windows.HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        grip.Child = new TextBlock { Text = "◢", Foreground = ThemeBrush("TextDim", "#6B7689"), FontSize = 10, HorizontalAlignment = System.Windows.HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
         DockPanel.SetDock(grip, Dock.Bottom);
         layout.Children.Add(grip);
         layout.Children.Add(root);
@@ -1014,13 +1142,30 @@ public partial class MainWindow : Window
             _settings.HasMissionsBounds = true;
             SaveWindowSettings();
         };
-        win.Content = layout;
+        // Moldura externa arredondada (mesmo visual da janela flutuante); o conteúdo interno fica inalterado.
+        var frame = new Border
+        {
+            CornerRadius = new CornerRadius(10),
+            Background = ThemeBrush("BgPanel", "#1C2129"),
+            BorderBrush = ThemeBrush("BorderSubtle", "#2B313F"),
+            BorderThickness = new Thickness(1),
+            Child = layout,
+            ClipToBounds = true
+        };
+        // ClipToBounds corta só no retângulo externo; o Clip arredondado recorta o conteúdo
+        // (cabeçalho BgPanel2) pelos cantos da moldura. Atualiza junto com o resize.
+        frame.SizeChanged += (_, _) =>
+        {
+            if (frame.ActualWidth > 0 && frame.ActualHeight > 0)
+                frame.Clip = new RectangleGeometry(new Rect(0, 0, frame.ActualWidth, frame.ActualHeight), 10, 10);
+        };
+        win.Content = frame;
         win.Closing += (_, e) => { e.Cancel = true; win.Hide(); if (!_allowExit) { _settings.ShowMissions = false; SaveWindowSettings(); SyncFloatingControls(); } };
         win.GotFocus += (_, _) => win.BorderThickness = new Thickness(1);
         win.LostFocus += (_, _) => win.BorderThickness = new Thickness(0);
         win.Opacity = 1.0;
-        win.MouseEnter += (_, _) => { root.Background = new SolidColorBrush(Color.FromRgb(28, 33, 41)); };
-        win.MouseLeave += (_, _) => { root.Background = new SolidColorBrush(Color.FromRgb(28, 33, 41)); };
+        win.MouseEnter += (_, _) => { root.Background = ThemeBrush("BgPanel", "#1C2129"); };
+        win.MouseLeave += (_, _) => { root.Background = ThemeBrush("BgPanel", "#1C2129"); };
         _missionsWindow = win;
         _lastMissionsJson = null;
         win.Show();
@@ -1118,7 +1263,7 @@ public partial class MainWindow : Window
                 _missionsBody.Inlines.Add(new System.Windows.Documents.LineBreak());
                 AddBoldLine(_missionsBody, diaria, new[] { "Missões de hoje:", "Tarefa:" });
             }
-            if (_missionsTitle != null) _missionsTitle.Text = "Missões " + Get("missoes") + "  •  Eventos " + Get("eventos");
+            if (_missionsTitle != null) _missionsTitle.Text = "📖 Missões";
             if (_missionsPasseTxt != null)
             {
                 _missionsPasseTxt.Inlines.Clear();
@@ -1162,6 +1307,13 @@ public partial class MainWindow : Window
             _preparedFloatingView = null;
             prepared.Close();
         }
+        // Fecha a janela Hunt junto com o processo quando o usuário escolhe Sair.
+        if (_huntWindow != null)
+        {
+            var hunt = _huntWindow;
+            _huntWindow = null;
+            try { hunt.Close(); } catch { }
+        }
         // Libera as WebViews de conta ao sair do aplicativo (as pastas de sessão NÃO são apagadas).
         foreach (var accountView in _accountViews.Values)
         {
@@ -1197,6 +1349,8 @@ public partial class MainWindow : Window
 
             var envOptions = new CoreWebView2EnvironmentOptions();
             envOptions.AdditionalBrowserArguments = AccountBrowserArguments;
+            // Permite instalar/carregar extensões (Hunt for LoL Idle) nos perfis WebView2.
+            envOptions.AreBrowserExtensionsEnabled = true;
             _webViewEnvironment = await CoreWebView2Environment.CreateAsync(
                 userDataFolder: userData, options: envOptions);
             // Registra o ambiente padrão como o da conta principal
@@ -1235,7 +1389,7 @@ public partial class MainWindow : Window
             }
             ApplyAccountVisibility();
             _ = AtualizarContaConectadaUIAsync();
-            _ = PrepareFloatingWebViewAsync(this);
+            _ = PrepareFloatingWebViewAsync(this, "Window_Loaded");
         }
         catch (Exception ex)
         {
@@ -1323,6 +1477,7 @@ public partial class MainWindow : Window
                 return;
             }
 
+            LogFloatingWindowEvent($"Popup: estado do host — preparedWindowNull={_preparedFloatingWindow == null}, preparedViewNull={_preparedFloatingView == null}, coreWebView2Null={_preparedFloatingView?.CoreWebView2 == null}");
             if (_preparedFloatingWindow == null || _preparedFloatingView?.CoreWebView2 == null)
             {
                 LogFloatingWindowEvent("Popup: WebView pré-inicializado indisponível; mantendo comportamento padrão do WebView2.");
@@ -1337,6 +1492,7 @@ public partial class MainWindow : Window
             _preparedFloatingView = null;
             _floatingWindow = window;
             _floatingView = view;
+            LogFloatingWindowEvent("Prepare: host preparado consumido nesta navegação.");
 
             try
             {
@@ -1362,7 +1518,7 @@ public partial class MainWindow : Window
             }
             LogFloatingWindowEvent("Popup: janela exibida. Janela principal fechada (sem bandeja).");
 
-            _ = PrepareFloatingWebViewAsync(this);
+            _ = PrepareFloatingWebViewAsync(this, "HandleNewWindowRequested");
         }
         catch (Exception ex)
         {
@@ -1377,8 +1533,8 @@ public partial class MainWindow : Window
         var areaTop = SystemParameters.VirtualScreenTop;
         var areaRight = areaLeft + SystemParameters.VirtualScreenWidth;
         var areaBottom = areaTop + SystemParameters.VirtualScreenHeight;
-        var width = _settings.HasFloatingBounds ? _settings.FloatingWidth : 900;
-        var height = _settings.HasFloatingBounds ? _settings.FloatingHeight : 650;
+        var width = _settings.HasFloatingBounds ? _settings.FloatingWidth : 360;
+        var height = _settings.HasFloatingBounds ? _settings.FloatingHeight : 287;
         width = Math.Clamp(width, 360, Math.Max(360, SystemParameters.VirtualScreenWidth));
         height = Math.Clamp(height, 240, Math.Max(240, SystemParameters.VirtualScreenHeight));
 
@@ -1411,6 +1567,37 @@ public partial class MainWindow : Window
             {
                 CaptureFloatingWindowBounds();
                 SaveWindowSettings();
+            };
+            // Clique/ativação na flutuante reordena a z-order da Missões para ela reaparecer junto,
+            // mas SEM ativar a Missões (BringWindowToTop roubava o foco do jogo a cada clique).
+            window.Activated += (_, _) =>
+            {
+                if (_settings.ShowMissions && _missionsWindow != null && _missionsWindow.IsVisible)
+                {
+                    try
+                    {
+                        var hwnd = new System.Windows.Interop.WindowInteropHelper(_missionsWindow).Handle;
+                        SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                    }
+                    catch { }
+                }
+            };
+            // Minimizar/restaurar a flutuante (ex.: clique no ícone da barra de tarefas) esconde/restaura a Missões.
+            // Só oculta/exibe a janela visual — _settings.ShowMissions (preferência do usuário) é mantida.
+            window.StateChanged += (_, _) =>
+            {
+                if (window.WindowState == WindowState.Minimized || !window.IsVisible)
+                {
+                    _missionsWindow?.Hide();
+                    return;
+                }
+                if (window.WindowState == WindowState.Normal
+                    && _settings.ShowMissions
+                    && _missionsWindow != null
+                    && !_missionsWindow.IsVisible)
+                {
+                    _missionsWindow.Show();
+                }
             };
         }
 
@@ -1449,7 +1636,7 @@ public partial class MainWindow : Window
     }
 
     // Log técnico mínimo, sem gravar URLs completas, cookies ou tokens.
-    private static void LogFloatingWindowEvent(string message)
+    internal static void LogFloatingWindowEvent(string message)
     {
         try
         {
@@ -1508,7 +1695,8 @@ public partial class MainWindow : Window
 
                 var options = new CoreWebView2EnvironmentOptions
                 {
-                    AdditionalBrowserArguments = AccountBrowserArguments
+                    AdditionalBrowserArguments = AccountBrowserArguments,
+                    AreBrowserExtensionsEnabled = true // idem: extensão Hunt sob demanda
                 };
                 env = await CoreWebView2Environment.CreateAsync(
                     userDataFolder: folder, options: options);
@@ -1547,10 +1735,36 @@ public partial class MainWindow : Window
             try
             {
                 var msg = args.TryGetWebMessageAsString();
-                if (msg != null && msg.StartsWith("lol-idle-notify:"))
+                if (msg == "lol-idle-control:missions")
+                {
+                    LogFloatingWindowEvent($"Missões: toggle pedido (de {_settings.ShowMissions} para {!_settings.ShowMissions}).");
+                    _settings.ShowMissions = !_settings.ShowMissions;
+                    SaveWindowSettings();
+                    if (_settings.ShowMissions)
+                    {
+                        LogFloatingWindowEvent("Missões: exibindo janela de Missões.");
+                        ShowMissions();
+                    }
+                    else
+                    {
+                        LogFloatingWindowEvent("Missões: ocultando janela de Missões.");
+                        _missionsWindow?.Hide();
+                    }
+                    _ = core.ExecuteScriptAsync($"document.querySelector('#lol-idle-missions')?.classList.toggle('active', {_settings.ShowMissions.ToString().ToLower()});");
+                }
+                else if (msg != null && msg.StartsWith("lol-idle-notify:"))
                     HandleNotification(key, msg["lol-idle-notify:".Length..]);
+                else if (msg == "lol-idle-control:hunt")
+                    ToggleHuntFromControl();
             }
-            catch { }
+            catch (InvalidOperationException)
+            {
+                LogFloatingWindowEvent("Missões: InvalidOperationException no handler da principal (provável chamada fora da UI thread).");
+            }
+            catch (Exception ex)
+            {
+                LogFloatingWindowEvent($"Missões: exceção inesperada no handler da principal: {ex.GetType().Name}: {ex.Message}");
+            }
         };
 
         core.Settings.AreDefaultContextMenusEnabled = true;
@@ -1594,6 +1808,18 @@ public partial class MainWindow : Window
         {
             HandleNewWindowRequested(args);
         };
+
+        // Se a extensão Hunt já estiver extraída, garante que ESTE profile também a tem.
+        // (Este é o ponto único por onde passam TODOS os ambientes de conta + principal.)
+        try
+        {
+            if (HuntExtensionInstaller.IsExtensionExtracted())
+                await EnsureHuntInAllProfilesAsync();
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"HuntBootstrap ({key}): {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     // Alterna visibilidade: só a conta ativa fica visível; as demais colapsadas (continuam rodando).
@@ -1630,6 +1856,13 @@ public partial class MainWindow : Window
             if (_floatingWindow != null)
             {
                 try { _floatingWindow.Close(); } catch { }
+            }
+
+            // O Hunt usa o environment da conta ativa; trocar de conta invalida a janela.
+            if (_huntWindow != null)
+            {
+                try { _huntWindow.Close(); } catch { }
+                _huntWindow = null;
             }
 
             _ = ApplyAudioSettingsAsync();
@@ -2069,13 +2302,12 @@ public partial class MainWindow : Window
             if (ConsumoRamText != null)
                 ConsumoRamText.Text = FormatarRamPtBr(totalRamBytes);
 
-            int totalContas = (_settings.ContasAdicionadas?.Count ?? 0) + 1; // +1 para principal
             double metaRamBytes = MetaRamBytes();
             double ratio = Math.Clamp(totalRamBytes / metaRamBytes, 0, 1);
             bool acimaDaMeta = totalRamBytes > metaRamBytes;
 
             if (ConsumoMetaRefText != null)
-                ConsumoMetaRefText.Text = $"Meta de referência: {totalContas},0 GB";
+                ConsumoMetaRefText.Text = $"Meta de referência: {FormatarRamPtBr((long)metaRamBytes)}";
 
             if (ConsumoRamFillScale != null)
                 ConsumoRamFillScale.ScaleX = ratio;
@@ -2448,6 +2680,10 @@ public partial class MainWindow : Window
         catch { }
     }
 
+    // Expostos para a HuntWindow (mesmo assembly).
+    internal bool HuntTopmostSetting => _settings.HuntTopmost;
+    internal string? HuntExtensionIdSetting => _settings.HuntExtensionId;
+
     // Ambiente compartilhado pelo WebView da conta ativa (para a flutuante).
     private CoreWebView2Environment GetActiveAccountEnvironment()
     {
@@ -2458,29 +2694,330 @@ public partial class MainWindow : Window
             ?? throw new InvalidOperationException("Ambiente WebView2 padrão não inicializado.");
     }
 
+    // Botão 🏹 Hunt na barra de título: abre/fecha o painel da extensão.
+    private void HuntTitle_Click(object sender, RoutedEventArgs e) => ToggleHuntFromControl();
+
+    // Clique no botão Hunt (barra de título): abre/fecha a janela.
+    private async void ToggleHuntFromControl()
+    {
+        try { await ToggleHuntWindowAsync(); }
+        catch (Exception ex) { LogFloatingWindowEvent($"Hunt: erro ao alternar a janela — {ex.GetType().Name}: {ex.Message}"); }
+    }
+
+    // Alterna a janela Hunt; se a conta ativa mudou desde a criação, descarta e recria.
+    private async Task ToggleHuntWindowAsync()
+    {
+        if (_huntInstalling)
+        {
+            MostrarMensagemSimples(
+                "Hunt for LoL Idle",
+                "Ainda estou instalando a extensão, tenta de novo daqui a pouco.",
+                "OK",
+                MessageKind.Info);
+            return;
+        }
+
+        bool precisaInstalar = !HuntExtensionInstaller.IsExtensionExtracted() ||
+                               string.IsNullOrWhiteSpace(_settings.HuntExtensionId);
+        if (precisaInstalar)
+        {
+            bool confirmar = MostrarConfirmacaoRemover(
+                "Instalar Hunt for LoL Idle?",
+                "O app vai baixar a extensão da Chrome Web Store (~270 KB) e instalar no perfil do app.",
+                "Acontece só uma vez e o painel lê só a sessão do jogo deste app.",
+                "Instalar");
+            if (!confirmar) return;
+
+            _huntInstalling = true;
+            (bool ok, string? error) resultado;
+            try { resultado = await InstallHuntExtensionAsync(); }
+            finally { _huntInstalling = false; }
+
+            if (!resultado.ok)
+            {
+                LogFloatingWindowEvent($"HuntInstall: falha — {resultado.error}");
+                MostrarMensagemSimples(
+                    "Não deu",
+                    resultado.error ?? "Não foi possível instalar a extensão.",
+                    "OK",
+                    MessageKind.Error);
+                return;
+            }
+        }
+        else
+        {
+            // Pasta extraída + ID conhecido: confere que o profile atual tem a extensão
+            // (chamada barata; se já tiver, não faz nada).
+            await EnsureHuntInAllProfilesAsync();
+        }
+
+        var env = GetActiveAccountEnvironment();
+        if (_huntWindow != null)
+        {
+            if (ReferenceEquals(_huntWindow.SharedEnvironment, env))
+            {
+                if (_huntWindow.IsVisible)
+                {
+                    try { _huntWindow.Close(); } catch { }
+                    return;
+                }
+                _huntWindow.Show();
+                _huntWindow.Activate();
+                return;
+            }
+            // A conta ativa mudou desde a criação: o ambiente é outro — recria a janela.
+            try { _huntWindow.Close(); } catch { }
+            _huntWindow = null;
+        }
+
+        Window? owner = (_floatingWindow != null && _floatingWindow.IsVisible) ? _floatingWindow : (IsVisible ? this : null);
+        _huntWindow = new HuntWindow(this, env, owner);
+        _huntWindow.Closed += (_, _) => _huntWindow = null;
+        _huntWindow.Show();
+        _huntWindow.Activate();
+    }
+
+    // Fluxo completo: extrai (se preciso) e instala em TODOS os perfis criados.
+    private async Task<(bool ok, string? error)> InstallHuntExtensionAsync()
+    {
+        LogFloatingWindowEvent("HuntInstall: iniciando instalação sob pedido.");
+        if (!HuntExtensionInstaller.IsExtensionExtracted())
+        {
+            var extraida = await HuntExtensionInstaller.DownloadAndExtractAsync();
+            if (!extraida.ok)
+                return (false, extraida.error ?? "Falha ao baixar a extensão.");
+        }
+        return await EnsureHuntInAllProfilesAsync();
+    }
+
+    // Fluxo completo FORÇADO: baixa a versão da loja de novo (mesmo que a atual pareça OK),
+    // extrai, sanitiza e re-registra em todos os perfis (removendo instalações obsoletas).
+    // Usado pelo botão "↻ Atualizar" do painel do Hunt.
+    internal async Task<(bool ok, string? error)> UpdateHuntExtensionAsync()
+    {
+        LogFloatingWindowEvent("HuntUpdate: forçando ciclo completo de atualização.");
+        var extraida = await HuntExtensionInstaller.DownloadAndExtractAsync();
+        if (!extraida.ok)
+            return (false, extraida.error ?? "Falha ao baixar a extensão.");
+        return await EnsureHuntInAllProfilesAsync();
+    }
+
+    // Adiciona a extensão aos perfis de TODAS as WebViews já criadas (conta principal + contas).
+    // Antes de instalar, remove instalações obsoletas (ex.: 0.8.3 com "notifications") via RemoveAsync.
+    // Perfis que já têm a extensão atualizada e nada obsoleto não são mexidos.
+    private async Task<(bool ok, string? error)> EnsureHuntInAllProfilesAsync()
+    {
+        await _huntInstallLock.WaitAsync();
+        try
+        {
+            string? ultimoErro = null;
+            bool algumOk = false;
+            foreach (var kvp in _accountViews)
+            {
+                var core = kvp.Value.CoreWebView2;
+                if (core == null)
+                    continue;
+                try
+                {
+                    await EnsureHuntInProfileCoreAsync(core);
+                    algumOk = true;
+                }
+                catch (Exception ex)
+                {
+                    ultimoErro = $"perfil '{kvp.Key}': {ex.Message}";
+                    LogFloatingWindowEvent($"HuntInstall: falha ao ativar no perfil '{kvp.Key}' — {ex.GetType().Name}: {ex.Message}");
+                }
+            }
+
+            if (!algumOk && ultimoErro != null)
+                return (false, "Não consegui ativar a extensão nos perfis do jogo. " + ultimoErro);
+
+            LogFloatingWindowEvent($"HuntInstall: extensão ativa nos perfis (id={_settings.HuntExtensionId ?? "?"}).");
+            return (true, null);
+        }
+        finally
+        {
+            _huntInstallLock.Release();
+        }
+    }
+
+    // ID conhecido da instalação antiga (0.8.3, com permissão "notifications"), registrada
+    // por versões anteriores do app a partir de ...\Extensions\hunt-for-lol-idle\0.8.3.
+    // Não adianta apagar a pasta: quem manda no perfil é o WebView2 — por isso a remoção
+    // acontece via CoreWebView2BrowserExtension.RemoveAsync().
+    private const string LegacyHuntExtensionId = "hkaaipkllejfjgncdpkgbjgedkpkcnho";
+
+    // Identifica uma instalação obsoleta do "Hunt for LoL Idle" no perfil:
+    //  1) id legado conhecido (0.8.3);
+    //  2) mesmo nome esperado, mas id diferente do que temos salvo — veio de outra
+    //     pasta/versão (ex.: instalação antiga que não conhecemos).
+    // Sem id salvo, só o id legado é considerado obsoleto (não removemos nada às cegas).
+    private static bool IsStaleHuntExtension(CoreWebView2BrowserExtension ext, string? salvoId)
+    {
+        if (string.Equals(ext.Id, LegacyHuntExtensionId, StringComparison.Ordinal))
+            return true;
+
+        if (!string.IsNullOrWhiteSpace(ext.Name) &&
+            string.Equals(ext.Name, HuntExtensionInstaller.ExpectedName, StringComparison.OrdinalIgnoreCase) &&
+            !string.IsNullOrWhiteSpace(salvoId) &&
+            !string.Equals(ext.Id, salvoId, StringComparison.Ordinal))
+            return true;
+
+        return false;
+    }
+
+    // Garante a extensão num profile específico; devolve o ID efetivo da extensão.
+    private async Task<string> EnsureHuntInProfileCoreAsync(CoreWebView2 core)
+    {
+        var profile = core.Profile;
+        string? salvo = string.IsNullOrWhiteSpace(_settings.HuntExtensionId) ? null : _settings.HuntExtensionId;
+
+        List<CoreWebView2BrowserExtension>? instaladas = null;
+        try
+        {
+            instaladas = (await profile.GetBrowserExtensionsAsync())?.ToList() ?? new List<CoreWebView2BrowserExtension>();
+        }
+        catch (Exception ex)
+        {
+            // Não sabendo listar, tenta adicionar direto (add é idempotente para a mesma pasta).
+            LogFloatingWindowEvent($"HuntInstall: GetBrowserExtensionsAsync falhou — {ex.GetType().Name}: {ex.Message}");
+        }
+
+        bool salvoRemovido = false;
+        var removidas = new HashSet<string>(StringComparer.Ordinal);
+        if (instaladas != null)
+        {
+            // 1) Remove instalações obsoletas ANTES de qualquer coisa (0.8.3 etc.).
+            foreach (var ext in instaladas)
+            {
+                if (!IsStaleHuntExtension(ext, salvo))
+                    continue;
+
+                try
+                {
+                    string nome = string.IsNullOrWhiteSpace(ext.Name) ? "(nome indisponível)" : ext.Name;
+                    await ext.RemoveAsync();
+                    removidas.Add(ext.Id);
+                    if (string.Equals(salvo, ext.Id, StringComparison.Ordinal))
+                        salvoRemovido = true;
+                    LogFloatingWindowEvent($"Hunt: removida instalação antiga da extensão (id={ext.Id}, nome={nome}) do perfil.");
+                }
+                catch (Exception ex)
+                {
+                    // RemoveAsync falhou: a antiga pode continuar ativa aqui. Segue o jogo
+                    // e reporta no log — não aborta a instalação da versão sanitizada.
+                    LogFloatingWindowEvent($"Hunt: NÃO consegui remover a instalação antiga da extensão (id={ext.Id}) — {ex.GetType().Name}: {ex.Message}. A versão antiga pode continuar ativa neste perfil.");
+                }
+            }
+
+            if (salvoRemovido)
+            {
+                // O id salvo apontava para a instalação recém-removida: zera para não
+                // reutilizar um id morto. Será regravado com o id novo logo abaixo.
+                _settings.HuntExtensionId = null;
+                salvo = null;
+                SaveWindowSettings();
+            }
+
+            // 2) Se, após a limpeza, sobrou uma instalação atual (não obsoleta), reutiliza.
+            //    A lista é um snapshot de antes da remoção: exclui explicitamente o que removemos.
+            var atual = instaladas.FirstOrDefault(e =>
+                !removidas.Contains(e.Id) &&
+                string.Equals(e.Name, HuntExtensionInstaller.ExpectedName, StringComparison.OrdinalIgnoreCase));
+            if (atual != null)
+            {
+                PersistHuntId(atual.Id);
+                return atual.Id;
+            }
+
+            if (instaladas.Count == 0)
+            {
+                // A API não enxergou nada, mesmo que o perfil tenha a antiga registrada
+                // (Secure Preferences). O Add abaixo reinstala a sanitizada; se a antiga
+                // sobreviver, ela NÃO some por aqui — fica o aviso no log.
+                LogFloatingWindowEvent($"HuntInstall: GetBrowserExtensionsAsync retornou lista vazia neste perfil; se a extensão antiga (id={LegacyHuntExtensionId}) continuar ativa, será preciso removê-la por uma via que o WebView2 exponha.");
+            }
+        }
+
+        // 3) (Re)instala a versão sanitizada da pasta local.
+        //    Fluxo de download/extract fica por conta de InstallHuntExtensionAsync —
+        //    aqui só garantimos que a pasta está íntegra antes de registrar.
+        if (!HuntExtensionInstaller.IsExtensionExtracted())
+            throw new InvalidOperationException("A pasta local da extensão não está extraída/íntegra; o fluxo de instalação (download + extract + sanitize) precisa rodar antes.");
+
+        var adicionada = await profile.AddBrowserExtensionAsync(HuntExtensionInstaller.TargetFolder);
+        PersistHuntId(adicionada.Id);
+        return adicionada.Id;
+    }
+
+    private void PersistHuntId(string id)
+    {
+        if (!string.Equals(_settings.HuntExtensionId, id, StringComparison.Ordinal))
+        {
+            _settings.HuntExtensionId = id;
+            SaveWindowSettings();
+        }
+    }
+
     // Descarta a flutuante pré-inicializada e recria com o ambiente da conta ativa.
     // Só faz isso quando a flutuante não estiver aberta (a aberta continuará com a conta ativa).
     private void RestartPreparedFloating()
     {
-        if (_floatingWindow != null) return; // flutuante aberta: não mexe
+        if (_floatingWindow != null)
+        {
+            LogFloatingWindowEvent("RestartPreparedFloating: ignorado — flutuante aberta; nada a recriar.");
+            return; // flutuante aberta: não mexe
+        }
+
+        // Preparação em andamento: NÃO fecha o host pela metade nem descarta a
+        // recriação silenciosamente. Enfileira uma recriação única (coalesced),
+        // aplicada ao final da preparação atual.
+        if (_isPreparingFloatingView)
+        {
+            _prepareRestartRequested = true;
+            LogFloatingWindowEvent("RestartPreparedFloating: preparação em andamento; recriação será aplicada ao final dela.");
+            return;
+        }
+
+        ApplyPreparedFloatingRestart();
+    }
+
+    private void ApplyPreparedFloatingRestart()
+    {
+        _prepareRestartRequested = false;
 
         if (_preparedFloatingWindow != null)
         {
             var w = _preparedFloatingWindow;
             _preparedFloatingWindow = null;
             _preparedFloatingView = null;
-            try { w.Close(); } catch { }
+            LogFloatingWindowEvent("RestartPreparedFloating: host preparado descartado; recriando com a conta ativa.");
+            try { w.Close(); }
+            catch (Exception ex) { LogFloatingWindowEvent($"RestartPreparedFloating: erro ao fechar host preparado — {ex.Message}"); }
         }
 
-        _ = PrepareFloatingWebViewAsync(this);
+        _ = PrepareFloatingWebViewAsync(this, "RestartPreparedFloating");
     }
 
     // Prepara uma janela invisível antes de qualquer pedido do jogo.
-    private async Task PrepareFloatingWebViewAsync(Window? owner)
+    private async Task PrepareFloatingWebViewAsync(Window? owner, string origin = "?")
     {
-        if (_webViewEnvironment == null || _isPreparingFloatingView ||
-            (_preparedFloatingWindow != null && _preparedFloatingView?.CoreWebView2 != null))
+        LogFloatingWindowEvent($"Prepare: chamada a partir de {origin}.");
+        if (_webViewEnvironment == null)
+        {
+            LogFloatingWindowEvent("Prepare: ignorado — ambiente WebView2 ainda não inicializado.");
             return;
+        }
+        if (_isPreparingFloatingView)
+        {
+            LogFloatingWindowEvent("Prepare: ignorado — preparação já em andamento.");
+            return;
+        }
+        if (_preparedFloatingWindow != null && _preparedFloatingView?.CoreWebView2 != null)
+        {
+            LogFloatingWindowEvent("Prepare: ignorado — host já preparado.");
+            return;
+        }
 
         // Captura a conta ativa no momento da preparação (dona da flutuante/popup no jogo)
         _floatingAccountKey = _settings.ContaAtiva ?? DefaultAccountName;
@@ -2505,19 +3042,75 @@ public partial class MainWindow : Window
                 ShowActivated = false,
                 WindowStyle = WindowStyle.None,
                 ResizeMode = ResizeMode.NoResize,
-                Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(23, 26, 33))
+                AllowsTransparency = true,
+                Background = System.Windows.Media.Brushes.Transparent // Janela transparente: a moldura arredondada é o Border externo (experimento estilo Missões/diálogos)
             };
 
-            var root = new Grid();
+            // Chrome invisível para habilitar resize pelas bordas (CaptionHeight=0: o jogo tem o próprio arrasto).
+            var chrome = new System.Windows.Shell.WindowChrome
+            {
+                CaptionHeight = 0,
+                ResizeBorderThickness = new Thickness(26),
+                CornerRadius = new CornerRadius(10),
+                GlassFrameThickness = new Thickness(0),
+                UseAeroCaptionButtons = false,
+                NonClientFrameEdges = System.Windows.Shell.NonClientFrameEdges.None
+            };
+            System.Windows.Shell.WindowChrome.SetWindowChrome(popupWindow, chrome);
 
+            var bgApp = ThemeBrush("BgApp", "#171A21").Color;
             var view = new Microsoft.Web.WebView2.Wpf.WebView2
             {
-                DefaultBackgroundColor = System.Drawing.Color.FromArgb(23, 26, 33)
+                DefaultBackgroundColor = System.Drawing.Color.FromArgb(bgApp.A, bgApp.R, bgApp.G, bgApp.B)
             };
-            root.Children.Add(view);
 
-            popupWindow.Content = root;
+            // Experimento: janela com AllowsTransparency=true + Background=Transparent,
+            // moldura arredondada externa (Border CornerRadius=10) e o WebView2 como
+            // filho direto. Risco conhecido: HwndHost em janela layered pode não
+            // renderizar/receber input — aguardando teste em runtime.
+            var frame = new Border
+            {
+                CornerRadius = new CornerRadius(10),
+                Background = ThemeBrush("BgPanel", "#1C2129"),
+                BorderBrush = ThemeBrush("BorderSubtle", "#2B313F"),
+                BorderThickness = new Thickness(1),
+                Child = view
+            };
+
+            popupWindow.Content = frame;
+
+            // Força a borda do frame externo do Windows para o tema (DWMWA_BORDER_COLOR, Win11 22000+).
+            // Sem isto, o Windows 11 pinta a borda da janela ativa com a cor de acento da sessão.
+            popupWindow.SourceInitialized += (_, _) =>
+            {
+                try
+                {
+                    var hwnd = new System.Windows.Interop.WindowInteropHelper(popupWindow).Handle;
+                    uint cor = 0xFFFFFFFE; // DWMWA_COLOR_NONE: borda invisível
+                    int atributo = 34;     // DWMWA_BORDER_COLOR
+                    int size = sizeof(uint);
+                    int hr = DwmSetWindowAttribute(hwnd, atributo, ref cor, size);
+                    // Força cantos arredondados no chrome externo (Win11 22000+).
+                    // DWMWA_WINDOW_CORNER_PREFERENCE = 33, DWMWCP_ROUND = 2.
+                    // Sem isto, a moldura interna arredonda mas o HWND quadrado vaza por fora.
+                    uint preferencia = 2; // DWMWCP_ROUND
+                    int atributoCanto = 33; // DWMWA_WINDOW_CORNER_PREFERENCE
+                    int hrCanto = DwmSetWindowAttribute(hwnd, atributoCanto, ref preferencia, sizeof(uint));
+                    if (hrCanto != 0)
+                    {
+                        LogFloatingWindowEvent($"DWM: DWMWA_WINDOW_CORNER_PREFERENCE não suportado (hr=0x{hrCanto:X8})");
+                    }
+                    else LogFloatingWindowEvent("DWM: cantos arredondados da janela flutuante aplicados (DWMWCP_ROUND).");
+
+                    if (hr != 0)
+                    {
+                        LogFloatingWindowEvent($"DWM: DwmSetWindowAttribute(BORDER_COLOR) falhou hr=0x{hr:X8}");
+                        LogFloatingWindowEvent("DWM: BORDER_COLOR não suportado neste Windows para janelas sem frame; a borda violeta é imposta pelo sistema.");
+                    }
+                    else LogFloatingWindowEvent("DWM: borda da janela flutuante ajustada para o tema.");
+                }
+                catch (Exception ex) { LogFloatingWindowEvent($"DWM: falha ao aplicar BORDER_COLOR — {ex.Message}"); }
+            };
 
             _preparedFloatingWindow = popupWindow;
             _preparedFloatingView = view;
@@ -2530,6 +3123,7 @@ public partial class MainWindow : Window
                 {
                     _preparedFloatingWindow = null;
                     _preparedFloatingView = null;
+                    LogFloatingWindowEvent("Prepare: host preparado fechado; referências liberadas.");
                 }
 
                 if (wasActiveFloatingWindow)
@@ -2555,13 +3149,13 @@ public partial class MainWindow : Window
                             // da bandeja para a janela principal.
                             RestoreFromTray();
                             LogFloatingWindowEvent("FloatingWindow: janela principal restaurada após fechar o modo flutuante.");
-                            _ = PrepareFloatingWebViewAsync(this);
+                            _ = PrepareFloatingWebViewAsync(this, "FloatingWindow.Closed");
                         }
                     }), System.Windows.Threading.DispatcherPriority.Background);
                 }
                 else if (wasPreparedWindow)
                 {
-                    LogFloatingWindowEvent("FloatingWindow: host preparado fechado; referências liberadas.");
+                    LogFloatingWindowEvent("FloatingWindow: host preparado encerrado sem entrega ao jogo.");
                 }
             };
 
@@ -2651,6 +3245,10 @@ public partial class MainWindow : Window
                     {
                         popupWindow.Close();
                     }
+                    else if (message == "lol-idle-control:hunt")
+                    {
+                        ToggleHuntFromControl();
+                    }
                     else if (message == "lol-idle-vote-button")
                     {
                         LogFloatingWindowEvent("VoteButton: abrir TopIdle no navegador.");
@@ -2667,10 +3265,20 @@ public partial class MainWindow : Window
                     }
                     else if (message == "lol-idle-control:missions")
                     {
+                        LogFloatingWindowEvent($"Missões: toggle pedido (de {_settings.ShowMissions} para {!_settings.ShowMissions}).");
                         _settings.ShowMissions = !_settings.ShowMissions;
                         SaveWindowSettings();
-                        if (_settings.ShowMissions) ShowMissions();
-                        else _missionsWindow?.Hide();
+                        if (_settings.ShowMissions)
+                        {
+                            LogFloatingWindowEvent("Missões: exibindo janela de Missões.");
+                            ShowMissions();
+                        }
+                        else
+                        {
+                            LogFloatingWindowEvent("Missões: ocultando janela de Missões.");
+                            _missionsWindow?.Hide();
+                        }
+                        LogFloatingWindowEvent($"Missões: toggle concluído, janela {(_missionsWindow == null ? "nula" : (_missionsWindow.IsVisible ? "visível" : "oculta"))}.");
                         var core2 = _floatingView?.CoreWebView2;
                         if (core2 != null) _ = core2.ExecuteScriptAsync($"document.querySelector('#lol-idle-missions')?.classList.toggle('active', {_settings.ShowMissions.ToString().ToLower()});");
                     }
@@ -2686,6 +3294,7 @@ public partial class MainWindow : Window
                 catch (InvalidOperationException)
                 {
                     // O ponteiro pode soltar antes de o Windows iniciar o movimento.
+                    LogFloatingWindowEvent("Missões/controles: InvalidOperationException no handler da flutuante (provável chamada fora da UI thread).");
                 }
             };
             LogFloatingWindowEvent("Prepare: EnsureCoreWebView2Async concluído, áudio e arraste instalados.");
@@ -2750,12 +3359,24 @@ public partial class MainWindow : Window
             {
                 _preparedFloatingWindow = null;
                 _preparedFloatingView = null;
+                LogFloatingWindowEvent("Prepare: host falho descartado; referências liberadas.");
+            }
+            else if (_preparedFloatingWindow == null)
+            {
+                LogFloatingWindowEvent("Prepare: host já havia sido descartado por outra chamada durante a preparação.");
             }
             popupWindow?.Close();
         }
         finally
         {
             _isPreparingFloatingView = false;
+            // Recriação coalesced solicitada durante a preparação (ex.: troca de
+            // conta enquanto o host estava sendo criado). Aplica uma única vez.
+            if (_prepareRestartRequested)
+            {
+                LogFloatingWindowEvent("Prepare: aplicando recriação enfileirada solicitada durante a preparação.");
+                ApplyPreparedFloatingRestart();
+            }
         }
     }
 
@@ -2803,10 +3424,10 @@ public partial class MainWindow : Window
         // usuário não está vendo (outra conta na frente, ou app oculto na bandeja).
         if (key != null)
         {
-            RegistrarNotificacao(key, kind);
-
-            // Só conta como "não lida" quando você NÃO está vendo a conta (caso contrário o early return acima já saiu).
+            // Marca como não lida ANTES do rebuild disparado por RegistrarNotificacao,
+            // para que chips/faixas/bolinha do histórico já nasçam com o estado final.
             _contasNaoLidas.Add(key);
+            RegistrarNotificacao(key, kind);
         }
 
         // Se mais de uma conta estiver habilitada, mostra o nome da conta no balão
@@ -2880,35 +3501,9 @@ public partial class MainWindow : Window
         var (message, sound) = ObterTextoNotificacao(kind);
         var titleFinal = title;
 
-        if (_settings.TrayNotify)
-        {
-            try
-            {
-                var resource = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,," + "/" + sound));
-                if (resource != null)
-                {
-                    // Playback síncrono via arquivo temporário (SoundPlayer.Play() assíncrono não audível quando oculto)
-                    var tmp = Path.Combine(Path.GetTempPath(), Path.GetFileNameWithoutExtension(sound) + "_" + Environment.ProcessId + ".wav");
-                    using (var fs = File.Create(tmp))
-                    using (var rs = resource.Stream)
-                        rs.CopyTo(fs);
-                    using (var player = new System.Media.SoundPlayer(tmp))
-                    {
-                        player.Load();
-                        player.PlaySync();
-                    }
-                    try { File.Delete(tmp); } catch { }
-                    LogFloatingWindowEvent($"TrayNotify: som tocado ({kind}) com {sound}");
-                }
-                else System.Media.SystemSounds.Asterisk.Play();
-            }
-            catch (Exception ex)
-            {
-                LogFloatingWindowEvent($"TrayNotify: falha no som ({kind}): {ex.Message}");
-                try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
-            }
-        }
-
+        // O toast é montado/exibido ANTES do bloco de áudio: o SoundPlayer (SND_ASYNC)
+        // pode bloquear a thread chamadora esperando o som anterior terminar, o que
+        // atrasaria o toast se ele fosse montado depois.
         if (_settings.TrayBalloon)
         {
             _lastBalloonAccount = accountKey;
@@ -2920,7 +3515,9 @@ public partial class MainWindow : Window
                     .AddText(message)
                     .AddArgument("conta", accountKey ?? string.Empty)
                     .AddArgument("kind", kind)
-                    .SetToastScenario(ToastScenario.Default);
+                    .SetToastScenario(ToastScenario.Default)
+                    // Silent: suprime o "ding" padrão do Windows — o app toca o .wav próprio no bloco TrayNotify.
+                    .AddAudio(new ToastAudio { Silent = true });
                 toastContent.Show();
                 LogFloatingWindowEvent($"Toast: {kind}");
             }
@@ -2951,6 +3548,35 @@ public partial class MainWindow : Window
                     };
                     _balloonRestoreTimer.Start();
                 }
+            }
+        }
+
+        if (_settings.TrayNotify)
+        {
+            try
+            {
+                var resource = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,," + "/" + sound));
+                if (resource != null)
+                {
+                    // Toca direto de um MemoryStream (SND_ASYNC): o BCL lê o buffer antes do
+                    // playback, então não vaza arquivo temporário. O MemoryStream NÃO é
+                    // disposed aqui — deve permanecer aberto até o playback terminar; o GC
+                    // recolhe player e stream depois. Sem Dispose imediato do player pelo
+                    // mesmo motivo (playback roda em thread separada).
+                    var ms = new System.IO.MemoryStream();
+                    using (var rs = resource.Stream)
+                        rs.CopyTo(ms);
+                    ms.Position = 0;
+                    var player = new System.Media.SoundPlayer(ms);
+                    player.Play();
+                    LogFloatingWindowEvent($"TrayNotify: som tocado ({kind}) com {sound}");
+                }
+                else System.Media.SystemSounds.Asterisk.Play();
+            }
+            catch (Exception ex)
+            {
+                LogFloatingWindowEvent($"TrayNotify: falha no som ({kind}): {ex.Message}");
+                try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
             }
         }
 
@@ -3143,7 +3769,7 @@ public partial class MainWindow : Window
             SidebarToggleRightIcon.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;   // ▶ quando visível (clique para esconder)
         }
 
-        SidebarToggleButton.ToolTip = visible ? "Esconder contas" : "Mostrar contas";
+        SidebarToggleButton.ToolTip = visible ? "Esconder barra lateral" : "Mostrar barra lateral";
 
         // Ao minimizar, reconstrói a faixa de avatares da borda (e a da sidebar recolhida).
         if (!visible && SidebarRailPanel != null)
@@ -3222,20 +3848,13 @@ public partial class MainWindow : Window
         ((TranslateTransform)SidebarPanel.RenderTransform).BeginAnimation(TranslateTransform.XProperty, animShowX);
     }
 
-    // Abre o painel de Notificações (onde o usuário escolhe contas/tipos)
-    private void Notifications_Click(object sender, RoutedEventArgs e)
+    // Abre a janela "Ajustes" (Notificações + Opções de fechamento em abas)
+    private void Ajustes_Click(object sender, RoutedEventArgs e)
     {
         var accountKeys = new List<string> { DefaultAccountName };
         accountKeys.AddRange(_settings.ContasAdicionadas);
 
-        var window = new NotifySettingsWindow(_settings, accountKeys, GetAccountDisplayName, SaveWindowSettings, this);
-        window.ShowDialog();
-    }
-
-    // Abre o painel de Opções de fechamento (preferência do botão Fechar)
-    private void CloseBehavior_Click(object sender, RoutedEventArgs e)
-    {
-        var window = new CloseBehaviorWindow(_settings, SaveWindowSettings, this);
+        var window = new AjustesWindow(_settings, accountKeys, GetAccountDisplayName, SaveWindowSettings, this);
         window.ShowDialog();
     }
 
@@ -3319,7 +3938,8 @@ public partial class MainWindow : Window
     }
 
     // Cria um item de avatar clicável (usado na faixa da sidebar recolhida e na faixa da borda quando minimizada).
-    private Border CriarAvatarStripItem(string conta, string display, bool destacado)
+    // horizontalStrip: true para a faixa horizontal (WrapPanel) da sidebar; false para a rail vertical da sidebar minimizada.
+    private Border CriarAvatarStripItem(string conta, string display, bool destacado, bool horizontalStrip)
     {
         var verde = new SolidColorBrush(Color.FromRgb(0xD9, 0x7B, 0x36));
         var fundoApp = new SolidColorBrush(Color.FromRgb(0x1C, 0x21, 0x29));
@@ -3361,7 +3981,7 @@ public partial class MainWindow : Window
             BorderBrush = destacado ? verde : Brushes.Transparent,
             Background = Brushes.Transparent,
             Cursor = Cursors.Hand,
-            Margin = new Thickness(0, 0, 0, 6),
+            Margin = horizontalStrip ? new Thickness(0, 0, 6, 6) : new Thickness(0, 0, 0, 6),
             Tag = conta,
             ToolTip = "Trocar para " + display,
             Child = grid
@@ -3370,7 +3990,7 @@ public partial class MainWindow : Window
         return item;
     }
 
-    // Recria a faixa vertical de avatares exibida quando a lista de contas está recolhida.
+    // Recria as faixas de avatares: horizontal (WrapPanel) na sidebar recolhida e vertical na rail da sidebar minimizada.
     private void RebuildContasStrip(string ativa)
     {
         ContasStripPanel.Children.Clear();
@@ -3385,10 +4005,10 @@ public partial class MainWindow : Window
             bool destacado = string.Equals(ativa, conta, StringComparison.OrdinalIgnoreCase);
             string display = GetAccountDisplayName(conta);
 
-            ContasStripPanel.Children.Add(CriarAvatarStripItem(conta, display, destacado));
+            ContasStripPanel.Children.Add(CriarAvatarStripItem(conta, display, destacado, horizontalStrip: true));
 
             if (SidebarRailPanel != null)
-                SidebarRailPanel.Children.Add(CriarAvatarStripItem(conta, display, destacado));
+                SidebarRailPanel.Children.Add(CriarAvatarStripItem(conta, display, destacado, horizontalStrip: false));
         }
     }
 
@@ -3606,9 +4226,27 @@ public partial class MainWindow : Window
         }
     }
 
+    // Marca como lidas apenas as contas cujas notificações saíram na limpeza e que ficaram
+    // SEM nenhuma notificação restante na lista. Conta que recebeu notificação durante a
+    // animação (e continua na lista) mantém a bolinha.
+    private void MarcarContasSemNotificacaoComoLidas(IEnumerable<NotificacaoItem> itensRemovidos)
+    {
+        var contas = itensRemovidos
+            .Select(n => n?.Conta)
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+        foreach (var conta in contas)
+        {
+            bool restante = _ultimasNotificacoes.Any(n =>
+                string.Equals(n.Conta, conta, StringComparison.OrdinalIgnoreCase));
+            if (!restante)
+                _contasNaoLidas.Remove(conta!);
+        }
+    }
+
     // Botão "Limpar" das Últimas notificações: anima o desaparecimento das linhas (fade + deslize para a direita, escalonado)
-    // e só então esvazia a lista. Também marca todas as contas como lidas (_contasNaoLidas) e atualiza a sidebar
-    // (chips/faixas/minimizada) para sumir com as bolinhas de não lido.
+    // e só então esvazia a lista. Também marca como lidas (_contasNaoLidas) apenas as contas cujas notificações
+    // foram removidas e ficaram sem nenhuma restante; contas com notificação recém-chegada mantêm a bolinha.
     private void LimparNotificacoes_Click(object sender, RoutedEventArgs e)
     {
         if (_ultimasNotificacoes.Count == 0 && _contasNaoLidas.Count == 0)
@@ -3627,6 +4265,7 @@ public partial class MainWindow : Window
             {
                 _ultimasNotificacoes.Clear();
                 RebuildUltimasNotificacoes();
+                // Lista vazia: nenhuma conta tem notificação restante, então todas as bolinhas ficam obsoletas.
                 _contasNaoLidas.Clear();
                 _ = AtualizarContaConectadaUIAsync(); // fire-and-forget: recria chips/faixas sem as bolinhas
                 return;
@@ -3666,7 +4305,8 @@ public partial class MainWindow : Window
                         foreach (var it in itensAnimados)
                             _ultimasNotificacoes.Remove(it);
                         RebuildUltimasNotificacoes();
-                        _contasNaoLidas.Clear();
+                        // Zera bolinha só das contas que ficaram sem nenhuma notificação restante.
+                        MarcarContasSemNotificacaoComoLidas(itensAnimados);
                         _ = AtualizarContaConectadaUIAsync(); // fire-and-forget: recria chips/faixas sem as bolinhas
                     };
                 }
@@ -3682,7 +4322,8 @@ public partial class MainWindow : Window
             foreach (var it in itensAnimados)
                 _ultimasNotificacoes.Remove(it);
             RebuildUltimasNotificacoes();
-            _contasNaoLidas.Clear();
+            // Zera bolinha só das contas que ficaram sem nenhuma notificação restante.
+            MarcarContasSemNotificacaoComoLidas(itensAnimados);
             _ = AtualizarContaConectadaUIAsync(); // fire-and-forget: recria chips/faixas sem as bolinhas
         }
     }
@@ -4204,7 +4845,7 @@ public partial class MainWindow : Window
             var btnFechar = new Button
             {
                 Content = "×",
-                FontSize = 14,
+                FontSize = 13,
                 VerticalAlignment = VerticalAlignment.Center,
                 ToolTip = "Remover conta",
                 Style = (Style)System.Windows.Application.Current.Resources["GhostIconButton"]
@@ -4327,7 +4968,7 @@ public partial class MainWindow : Window
         {
             Text = titulo,
             Foreground = new SolidColorBrush(Color.FromRgb(0xD6, 0xDA, 0xE6)),
-            FontSize = 14,
+            FontSize = 13,
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
         });
@@ -4335,8 +4976,8 @@ public partial class MainWindow : Window
         var btnFechar = new Button
         {
             Content = "✕",
-            Width = 30,
-            Height = 30,
+            Width = 26,
+            Height = 26,
             ToolTip = "Cancelar",
             Style = (Style)System.Windows.Application.Current.Resources["GhostIconButton"]
         };
@@ -4528,7 +5169,7 @@ public partial class MainWindow : Window
         {
             Text = titulo,
             Foreground = new SolidColorBrush(Color.FromRgb(0xD6, 0xDA, 0xE6)),
-            FontSize = 14,
+            FontSize = 13,
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center
         });
@@ -4536,8 +5177,8 @@ public partial class MainWindow : Window
         var btnFechar = new Button
         {
             Content = "✕",
-            Width = 30,
-            Height = 30,
+            Width = 26,
+            Height = 26,
             ToolTip = "Fechar",
             Style = (Style)System.Windows.Application.Current.Resources["GhostIconButton"]
         };
@@ -4738,11 +5379,16 @@ public partial class MainWindow : Window
         {
             _settings.ContaAtiva = DefaultAccountName;
 
-            // Fecha a flutuante (mesmo padrão de SwitchAccountAsync): nunca manter
-            // referência à conta removida.
+            // Fecha a flutuante e a janela Hunt (mesmo padrão: nunca manter
+            // referência à conta removida).
             if (_floatingWindow != null)
             {
                 try { _floatingWindow.Close(); } catch { }
+            }
+            if (_huntWindow != null)
+            {
+                try { _huntWindow.Close(); } catch { }
+                _huntWindow = null;
             }
 
             RestartPreparedFloating();
