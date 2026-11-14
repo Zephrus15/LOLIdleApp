@@ -71,7 +71,7 @@ Velopack (vpk pack), no push de tag v* ou por disparo manual
 (.github/workflows/release.yml). Assets publicados na Release:
 LoLIdle-win-Setup.exe, LoLIdle-win-Portable.zip,
 LoLIdle-<versão>-full.nupkg e releases.win.json
-(o -delta.nupkg passa a existir a partir das próximas releases).
+(o -delta.nupkg passou a existir a partir da v1.4.9).
 
 Os scripts Inno Setup (GERAR-INSTALADOR.bat, pasta installer/) ficam
 no repositório apenas como fallback histórico; o CI não os usa mais.
@@ -98,11 +98,12 @@ Novidades (v1.4.9 - 2026-11-14)
   Releases. É hook de teste, não funcionalidade de usuário.
 - Honestidade: CI da v1.4.8 validado (tag v1.4.8,
   run 43637168717, verde, 4 assets anexados). Auto-update validado
-  em teste local end-to-end (feed fake); o caminho pela release
-  pública ainda NÃO foi exercido — a v1.4.9 é a primeira vez
-  pública: quem tem a v1.4.8 verá "Atualização disponível —
-  v1.4.9" no Sobre. Deltas não provados. A v1.4.8 não inclui o
-  hardening da guarda acima.
+  em teste local end-to-end (feed fake) e em produção: a
+  atualização pública v1.4.8 -> v1.4.9 pelo GitHub foi validada no
+  PC do usuário em 2026-11-14 (Sobre -> Atualizar agora). Deltas
+  não provados. O CI da v1.4.9 também passou (tag v1.4.9, com
+  delta 1.4.9 gerado). A v1.4.8 não inclui o hardening da guarda
+  acima.
 - Migração uma vez para quem instalou pelas versões <=1.4.7
   (Inno, Program Files, admin): inalterada — baixe o Setup da
   v1.4.9 e instale uma vez; daí as atualizações são automáticas.
@@ -147,8 +148,10 @@ Novidades (v1.4.8 - 2026-11-14)
   pelo usuário (abre normal e mostra v1.4.8 no Sobre). CI do release
   validado (tag v1.4.8, run 43637168717, verde; 4 assets anexados).
   Auto-update validado em teste local end-to-end (2026-11-14) —
-  feed local fake; o caminho pela release pública ainda não foi
-  exercido. Deltas não provados. Guarda de WebView2 em PC sem o
+  feed local fake; o caminho pela release pública foi exercido
+  depois, em produção (2026-11-14, atualização pública
+  v1.4.8 -> v1.4.9 no PC do usuário). Deltas não provados. Guarda
+  de WebView2 em PC sem o
   runtime ainda não validada; a v1.4.8 não inclui o hardening de
   empty-string (vai na v1.4.9).
 

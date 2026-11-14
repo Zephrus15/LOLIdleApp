@@ -125,7 +125,7 @@ As pastas `bin` e `obj` são geradas automaticamente durante a compilação e n�
 
 ### Gerar o pacote de release
 
-Desde a v1.4.8, o pacote de release é gerado pelo **GitHub Actions** (`.github/workflows/release.yml`) com o [Velopack](https://github.com/velopack/velopack) (`vpk pack`), no push de tag `v*` ou por disparo manual. Assets publicados na Release: `LoLIdle-win-Setup.exe`, `LoLIdle-win-Portable.zip`, `LoLIdle-<versão>-full.nupkg` e `releases.win.json` (o `-delta.nupkg` passa a existir a partir das próximas releases — a v1.4.8 é a primeira release Velopack).
+Desde a v1.4.8, o pacote de release é gerado pelo **GitHub Actions** (`.github/workflows/release.yml`) com o [Velopack](https://github.com/velopack/velopack) (`vpk pack`), no push de tag `v*` ou por disparo manual. Assets publicados na Release: `LoLIdle-win-Setup.exe`, `LoLIdle-win-Portable.zip`, `LoLIdle-<versão>-full.nupkg` e `releases.win.json` (o `-delta.nupkg` passou a existir a partir da v1.4.9 — a v1.4.8 é a primeira release Velopack).
 
 Os scripts de Inno Setup (`GERAR-INSTALADOR.bat`, pasta `installer/`) ficam no repositório apenas como fallback histórico; o CI não os usa mais. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na instalação e nas atualizações.
 
@@ -138,7 +138,7 @@ Os scripts de Inno Setup (`GERAR-INSTALADOR.bat`, pasta `installer/`) ficam no r
 - **🔊 Sons de notificação** — nova seção no Ajustes › 🔔 Notificações: **slider geral de volume (0–100%)** e **timbre por família** (Missão, Poção, Lendário, Épico, Inventário, Nível) escolhendo entre os 6 sons embutidos do app ou "Mudo". O botão **"▶ Tocar"** toca a opção corrente (mesmo antes de salvar). Volume e timbres persistem em `window-settings.json` (`NotificationVolume`, `SoundTimbres`). Padrão = comportamento anterior (100% + sons originais); se a reprodução falhar, toca o `SystemSounds.Asterisk`. **Validado ao vivo pelo usuário** (UI, slider, ▶ Tocar, timbres, tema).
 - **Guarda de WebView2 reforçada** — o `Program.cs` agora trata **exceção OU string vazia/whitespace** de `GetAvailableBrowserVersionString()` como runtime ausente → aviso com o link oficial + `Environment.Exit(1)`. **Ainda não validada ao vivo** (cenário inalcançável na máquina do usuário; caminho de código revisto, nunca exercido).
 - **Hook de teste `LOLIDLE_UPDATE_SOURCE`** — variável de ambiente opcional (em `Helpers/VelopackUpdateService.cs`) que troca o feed do Velopack (ex.: pasta local) para testes de update; sem ela, o caminho padrão é o GitHub Releases. **É um hook de teste, não uma funcionalidade de usuário.**
-- **Honestidade** — o CI da v1.4.8 foi validado (run 43637168717, verde, 4 assets); o auto-update foi validado em teste local end-to-end com feed fake (caminho pela release pública ainda não exercido — a v1.4.9 é a **primeira vez pública**: quem tem a v1.4.8 verá "Atualização disponível — v1.4.9" no Sobre); **deltas não provados**; a v1.4.8 não inclui o hardening da guarda acima.
+- **Honestidade** — o CI da v1.4.8 foi validado (run 43637168717, verde, 4 assets); o auto-update foi validado em teste local end-to-end com feed fake e **em produção: atualização pública v1.4.8→v1.4.9 pelo GitHub, no PC do usuário, 2026-11-14 (Sobre → Atualizar agora)**; **deltas não provados**; o CI da v1.4.9 também passou (tag `v1.4.9`, com delta 1.4.9 gerado); a v1.4.8 não inclui o hardening da guarda acima.
 - Instalação/atualização do usuário: quem tem a v1.4.8 (Velopack) atualiza pelo Sobre. Migração Inno ≤1.4.7 → Velopack continua necessária uma vez (inalterada).
 
 ### v1.4.8 — 2026-11-14
@@ -154,7 +154,7 @@ Os scripts de Inno Setup (`GERAR-INSTALADOR.bat`, pasta `installer/`) ficam no r
 - **Aba 🔁 Atualização virou ℹ️ Sobre completa** (identidade do app, stack .NET 8 · WPF · WebView2, descrição do README, créditos "Feito por Zephrus15 — desenvolvedor independente").
 - **Falha de rede/check** — mensagens discretas, nunca crash; o app mantém o último estado conhecido.
 - **Assets do Release mudaram**: `LoLIdle-win-Setup.exe`, `LoLIdle-win-Portable.zip`, `LoLIdle-1.4.8-full.nupkg`, `releases.win.json`. **Deltas só existem a partir do v1.4.8** — quem atualizar de qualquer versão anterior baixa o pacote completo.
-- **Honestidade**: verificado ao vivo pelo usuário — a instalação local do Setup v1.4.8 abre normal e mostra v1.4.8 no Sobre. **CI do release validado** (tag v1.4.8, run 43637168717, verde; 4 assets anexados à Release). **Auto-update validado em teste local end-to-end (2026-11-14)** — com feed local fake; o caminho pela release pública ainda não foi exercido. **Deltas não provados**; a guarda de WebView2 em PC sem o runtime ainda não foi validada; a v1.4.8 não inclui o hardening de empty-string (vai na v1.4.9).
+- **Honestidade**: verificado ao vivo pelo usuário — a instalação local do Setup v1.4.8 abre normal e mostra v1.4.8 no Sobre. **CI do release validado** (tag v1.4.8, run 43637168717, verde; 4 assets anexados à Release). **Auto-update validado em teste local end-to-end (2026-11-14)** — com feed local fake; o caminho pela release pública foi exercido depois, em produção (2026-11-14, atualização pública v1.4.8→v1.4.9 no PC do usuário). **Deltas não provados**; a guarda de WebView2 em PC sem o runtime ainda não foi validada; a v1.4.8 não inclui o hardening de empty-string (vai na v1.4.9).
 
 ### v1.4.7 — 2026-11-14
 
