@@ -15,13 +15,24 @@ namespace LoLIdleDesktop
     // HTTP do GitHubReleaseChecker. Isso é esperado, não é erro.
     internal sealed class VelopackUpdateService
     {
-        private static readonly GithubSource Source =
-            new(RepoConstants.GitHubRepoUrl, null, false);
+        // Hook de TESTE LOCAL (dev): se LOLIDLE_UPDATE_SOURCE estiver definida e não vazia,
+    // o UpdateManager usa esse feed (ex.: um diretório local com os pacotes Velopack)
+    // em vez do GitHub. Serve para exercitar checagem/download/delta/apply sem publicar
+    // nada. Sem a variável, o caminho é o GithubSource do repositório público, como sempre.
+    // Falhas no caminho local sobem para o fluxo existente (captura + log), nunca crash.
+        private static string? LocalSourceOverride =>
+            Environment.GetEnvironmentVariable("LOLIDLE_UPDATE_SOURCE");
 
-        // Criado sob demanda: instanciar o UpdateManager em dev não quebra nada, mas
-        // evita trabalho desnecessário até a primeira checagem.
         private UpdateManager? _manager;
-        private UpdateManager Manager => _manager ??= new UpdateManager(Source);
+        private UpdateManager Manager => _manager ??= CreateManager();
+
+        private static UpdateManager CreateManager()
+        {
+            string? local = LocalSourceOverride;
+            return string.IsNullOrWhiteSpace(local)
+                ? new UpdateManager(new GithubSource(RepoConstants.GitHubRepoUrl, null, false))
+                : new UpdateManager(local);
+        }
 
         // Devolve null quando não há update (instalação Velopack saudável e atualizada).
         // Lança NotInstalledException fora de instalação Velopack; demais erros sobem

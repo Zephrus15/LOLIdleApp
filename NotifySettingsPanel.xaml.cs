@@ -4,6 +4,8 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using CheckBox = System.Windows.Controls.CheckBox;
+using ComboBox = System.Windows.Controls.ComboBox;
+using Button = System.Windows.Controls.Button;
 using UserControl = System.Windows.Controls.UserControl;
 
 namespace LoLIdleDesktop
@@ -13,6 +15,12 @@ namespace LoLIdleDesktop
         private readonly MainWindow.WindowSettings _settings;
         private readonly Action _save;
         private readonly List<string> _allKeys;
+        // Impede que a inicialização programática dos controles de som dispare
+        // SelectionChanged/ValueChanged (e grave settings) antes da hora.
+        private bool _soundUiReady;
+
+        private static readonly string[] SoundFamilies =
+            { "mission", "potion", "legendary", "epic", "inventory", "level" };
 
         private sealed record NotifyTypeEntry(string Kind, string Label);
 
@@ -53,6 +61,75 @@ namespace LoLIdleDesktop
             NotifyEnabledCheck.IsChecked = _settings.NotifyEnabled;
             ApplyNotifyEnabledState(_settings.NotifyEnabled);
             NaoPerturbarCheck.IsChecked = _settings.NaoPerturbar;
+            InitializeSoundControls();
+        }
+
+        // Carrega volume + timbres salvos nos controles (sem disparar os handlers).
+        private void InitializeSoundControls()
+        {
+            int volume = Math.Clamp(_settings.NotificationVolume, 0, 100);
+            VolumeSlider.Value = volume;
+            VolumeValueText.Text = $"{volume}%";
+
+            foreach (var family in SoundFamilies)
+            {
+                if (FindName($"Combo_{family}") is not ComboBox combo) continue;
+                string selected = family; // default = som original da família
+                if (_settings.SoundTimbres != null &&
+                    _settings.SoundTimbres.TryGetValue(family, out var saved) &&
+                    !string.IsNullOrWhiteSpace(saved))
+                {
+                    selected = saved;
+                }
+
+                foreach (var item in combo.Items.OfType<ComboBoxItem>())
+                {
+                    if (string.Equals(item.Tag as string, selected, StringComparison.OrdinalIgnoreCase))
+                    {
+                        combo.SelectedItem = item;
+                        break;
+                    }
+                }
+                combo.SelectedItem ??= combo.Items.OfType<ComboBoxItem>().FirstOrDefault();
+            }
+
+            _soundUiReady = true;
+        }
+
+        private void VolumeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (!_soundUiReady) return;
+
+            int volume = (int)Math.Round(VolumeSlider.Value);
+            _settings.NotificationVolume = volume;
+            VolumeValueText.Text = $"{volume}%";
+            _save();
+        }
+
+        private void SoundTimbre_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (!_soundUiReady) return;
+            if (sender is not ComboBox combo || combo.Tag is not string family) return;
+            if ((combo.SelectedItem as ComboBoxItem)?.Tag is not string key) return;
+
+            _settings.SoundTimbres ??= new Dictionary<string, string>();
+            // Escolheu o som original da própria família → volta ao default (chave removida).
+            if (string.Equals(key, family, StringComparison.OrdinalIgnoreCase))
+                _settings.SoundTimbres.Remove(family);
+            else
+                _settings.SoundTimbres[family] = key;
+
+            _save();
+        }
+
+        private void PreviewSound_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button button || button.Tag is not string family) return;
+            var combo = FindName($"Combo_{family}") as ComboBox;
+            var key = (combo?.SelectedItem as ComboBoxItem)?.Tag as string ?? family;
+            // Preview toca a opção CORRENTE do dropdown, mesmo sem estar salva.
+            NotificationSoundPlayer.PreviewFamily(family, key, _settings.NotificationVolume,
+                MainWindow.LogFloatingWindowEvent);
         }
 
         // Sub-chaves de poção (na ordem do XAML).

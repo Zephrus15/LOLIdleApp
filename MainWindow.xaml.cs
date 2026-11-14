@@ -682,6 +682,12 @@ public partial class MainWindow : Window
         public List<string> NotifyAccountsDisabled { get; set; } = new();
         // Tipos de notificação desativados (legendary / epic / mission / inventory / level)
         public List<string> NotifyTypesDisabled { get; set; } = new();
+        // Volume geral dos sons de notificação (0–100; 100 = padrão)
+        public int NotificationVolume { get; set; } = 100;
+        // Timbre por família ("mission"/"potion"/"legendary"/"epic"/"inventory"/"level").
+        // Valor = chave do som embutido (uma das 6 famílias) ou "silent" (Mudo).
+        // Chave ausente/vazia = som original da família.
+        public Dictionary<string, string> SoundTimbres { get; set; } = new();
         // Hunt for LoL Idle (extensão opcional, instalada só no clique do botão Hunt)
         public string? HuntExtensionId { get; set; }
         public bool HuntTopmost { get; set; } = true;
@@ -705,6 +711,44 @@ public partial class MainWindow : Window
             SaveWindowSettings();
         };
         InitializeTrayIcon();
+    }
+
+    // Filtra o SoundTimbres lido do JSON: mantém só famílias {mission, potion, legendary,
+    // epic, inventory, level} e valores {mission, potion, legendary, epic, inventory, level,
+    // silent}, tudo normalizado para minúsculo; descarta o resto. Chave duplicada por caixa
+    // (ex.: "Mission" e "mission"): a primeira enumeração do JSON vence. Nunca lança —
+    // qualquer problema resulta em dicionário vazio (default = sons originais).
+    private static Dictionary<string, string> SanitizeSoundTimbres(Dictionary<string, string>? source)
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (source == null)
+            return result;
+
+        var families = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            { "mission", "potion", "legendary", "epic", "inventory", "level" };
+        var values = new HashSet<string>(families, StringComparer.OrdinalIgnoreCase)
+            { "silent" };
+
+        try
+        {
+            foreach (var pair in source)
+            {
+                string family = (pair.Key ?? string.Empty).Trim().ToLowerInvariant();
+                string value = (pair.Value ?? string.Empty).Trim().ToLowerInvariant();
+                if (family.Length == 0 || value.Length == 0)
+                    continue;
+                if (!families.Contains(family) || !values.Contains(value))
+                    continue;
+                if (result.ContainsKey(family))
+                    continue; // duplicata por caixa: primeira vence
+                result[family] = value;
+            }
+        }
+        catch
+        {
+            // Nunca impede o app de subir: o que der para aproveitar fica, o resto cai fora.
+        }
+        return result;
     }
 
     // Lê as preferências e recupera a posição/tamanho usados anteriormente.
@@ -756,6 +800,10 @@ public partial class MainWindow : Window
                 _settings.NotifyAccountsDisabled = new List<string>();
             if (_settings.NotifyTypesDisabled == null)
                 _settings.NotifyTypesDisabled = new List<string>();
+            // Sanitiza o mapa de timbres: só famílias/timbres conhecidos, normalizados
+            // para minúsculo; duplicata por caixa — a primeira enumeração (JSON) vence.
+            _settings.SoundTimbres = SanitizeSoundTimbres(_settings.SoundTimbres);
+            _settings.NotificationVolume = Math.Clamp(_settings.NotificationVolume, 0, 100);
             if (string.IsNullOrWhiteSpace(_settings.ContaAtiva))
                 _settings.ContaAtiva = DefaultAccountName;
 
@@ -810,6 +858,11 @@ public partial class MainWindow : Window
                 _isCustomMaximized = true;
             }
         }
+
+        // Liga o mapa de timbres do settings ao player (mesma referência do Dictionary,
+        // mutado in-place pelo painel — vale para a sessão inteira). Vale para os dois
+        // caminhos (settings carregado do disco ou default em memória).
+        NotificationSoundPlayer.SoundTimbres = _settings.SoundTimbres;
 
         _settingsReady = true;
         if (closeBehaviorMigrated)
@@ -1173,6 +1226,9 @@ public partial class MainWindow : Window
     {
         if (!_settingsReady)
             return;
+
+        // Garante que o player aponte para o Dictionary atual (barato/idempotente).
+        NotificationSoundPlayer.SoundTimbres = _settings.SoundTimbres;
 
         try
         {
@@ -4299,10 +4355,10 @@ public partial class MainWindow : Window
     }
 
     // Monta "Tipo concluída[: Nome curto]!" — o nome curto só aparece quando há contexto com nome.
-    // Usado pela família "mission"; o som é sempre o notify_mission.wav.
+    // Família devolvida: "mission" (o timbre é resolvido pelo NotificationSoundPlayer).
     // `ignorarNome` = true para mission_tarefa: a tarefa é a de voltar à Fonte, então o nome
     // do contexto é descartado e a mensagem sai exatamente "{rotulo} concluída!".
-    private static (string message, string sound) TextoMissao(string rotulo, string? context, bool ignorarNome = false)
+    private static (string message, string family) TextoMissao(string rotulo, string? context, bool ignorarNome = false)
     {
         ClassificarMissao(context, out var shortName);
         string message;
@@ -4320,28 +4376,30 @@ public partial class MainWindow : Window
                 ? $"{shortName} concluída!"
                 : $"{rotulo} concluída: {shortName}!";
         }
-        return (message, "Assets/notify_mission.wav");
+        return (message, "mission");
     }
 
-    // Texto/som compartilhados por tipo de notificação (balão, som e lista "Últimas notificações").
+    // Texto/família por tipo de notificação (balão, som e lista "Últimas notificações").
     // `context` é opcional e retrocompatível: sem ele, a família "mission" sai sem o nome
     // (igual ao comportamento de antes). Os demais kinds ignoram o contexto.
-    private static (string message, string sound) ObterTextoNotificacao(string kind, string? context = null) => kind switch
+    // O segundo elemento é a FAMÍLIA do som (mission/potion/legendary/epic/inventory/level) —
+    // o timbre concreto é resolvido pelo NotificationSoundPlayer (SoundTimbres + volume).
+    private static (string message, string family) ObterTextoNotificacao(string kind, string? context = null) => kind switch
     {
-        "legendary" => ("Item lendário obtido!", "Assets/notify_legendary.wav"),
-        "epic" => ("Item épico obtido!", "Assets/notify_epic.wav"),
+        "legendary" => ("Item lendário obtido!", "legendary"),
+        "epic" => ("Item épico obtido!", "epic"),
         "mission_tarefa" => TextoMissao("Tarefa", context, ignorarNome: true),
         "mission_diaria" => TextoMissao("Diária", context),
         "mission_semanal" => TextoMissao("Semanal", context),
         "mission" => TextoMissao("Missão", context),
-        "inventory" => ("Inventário cheio!", "Assets/notify_inventory.wav"),
-        "level" => ("Subiu de nível!", "Assets/notify_level.wav"),
-        "potion_vida" => ("Poções de HP acabaram! Compre mais com o Lojista.", "Assets/notify_potion.wav"),
-        "potion_vidaF" => ("Poções de Vida Forte acabaram! Compre mais com o Lojista.", "Assets/notify_potion.wav"),
-        "potion_vidaS" => ("Poções de Vida Suprema acabaram! Compre mais com o Lojista.", "Assets/notify_potion.wav"),
-        "potion_mana" => ("Poções de MP acabaram! Compre mais com o Lojista.", "Assets/notify_potion.wav"),
-        "potion_manaF" => ("Poções de Mana Forte acabaram! Compre mais com o Lojista.", "Assets/notify_potion.wav"),
-        _ => ("Evento importante no jogo!", "Assets/notify_mission.wav")
+        "inventory" => ("Inventário cheio!", "inventory"),
+        "level" => ("Subiu de nível!", "level"),
+        "potion_vida" => ("Poções de HP acabaram! Compre mais com o Lojista.", "potion"),
+        "potion_vidaF" => ("Poções de Vida Forte acabaram! Compre mais com o Lojista.", "potion"),
+        "potion_vidaS" => ("Poções de Vida Suprema acabaram! Compre mais com o Lojista.", "potion"),
+        "potion_mana" => ("Poções de MP acabaram! Compre mais com o Lojista.", "potion"),
+        "potion_manaF" => ("Poções de Mana Forte acabaram! Compre mais com o Lojista.", "potion"),
+        _ => ("Evento importante no jogo!", "mission")
     };
 
     private void PlayTrayNotification(string kind, string? accountLabel = null, string? accountKey = null, string? context = null)
@@ -4375,12 +4433,11 @@ public partial class MainWindow : Window
         LogFloatingWindowEvent($"PlayTrayNotification: qns={qns} fullscreen={fs} normal={normal} np={_settings.NaoPerturbar}");
 
         var title = accountLabel ?? "LoL Idle";
-        var (message, sound) = ObterTextoNotificacao(kind, context);
+        var (message, family) = ObterTextoNotificacao(kind, context);
         var titleFinal = title;
 
-        // O toast é montado/exibido ANTES do bloco de áudio: o SoundPlayer (SND_ASYNC)
-        // pode bloquear a thread chamadora esperando o som anterior terminar, o que
-        // atrasaria o toast se ele fosse montado depois.
+        // O toast é montado/exibido ANTES do bloco de áudio: qualquer custo do bloco de som
+        // (extração/dispatcher) não deve atrasar o registro na Central de Ações.
         if (_settings.TrayBalloon)
         {
             _lastBalloonAccount = accountKey;
@@ -4475,33 +4532,10 @@ public partial class MainWindow : Window
         }
 
         // Som: só no estado normal (5) ou tela cheia (3), e nunca em Não Perturbar.
+        // O timbre/volume são resolvidos pelo NotificationSoundPlayer (SoundTimbres + NotificationVolume).
         if (_settings.TrayNotify && soundAllowed)
         {
-            try
-            {
-                // Toca direto de um MemoryStream (SND_ASYNC): o MemoryStream PRECISA permanecer
-                // aberto até o playback terminar — o GC recolhe depois; sem Dispose imediato.
-                var resource = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,," + "/" + sound));
-                if (resource != null)
-                {
-                    var ms = new System.IO.MemoryStream();
-                    using (var rs = resource.Stream)
-                        rs.CopyTo(ms);
-                    ms.Position = 0;
-                    var player = new System.Media.SoundPlayer(ms);
-                    player.Play();
-                    LogFloatingWindowEvent($"TrayNotify: som tocado ({kind}) com {sound}");
-                }
-                else
-                {
-                    System.Media.SystemSounds.Asterisk.Play();
-                }
-            }
-            catch (Exception ex)
-            {
-                LogFloatingWindowEvent($"TrayNotify: falha no som ({kind}): {ex.Message}");
-                try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
-            }
+            NotificationSoundPlayer.PlayFamily(family, _settings.NotificationVolume, LogFloatingWindowEvent);
         }
         else if (_settings.TrayNotify && !soundAllowed && !_settings.NaoPerturbar)
         {

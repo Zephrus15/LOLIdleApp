@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.4.8](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.8)**
+**[Baixar LoL Idle Desktop v1.4.9](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.9)**
 
 ### Instalador (Velopack — instalação por usuário)
 
@@ -16,7 +16,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na instalação e nas atualizações.
 
-> **Migração uma vez (quem instalou pelas versões ≤1.4.7):** a cópia instalada pelas versões antigas (Inno Setup, em Program Files, com admin) **não se atualiza sozinha**. Baixe o `LoLIdle-win-Setup.exe` da v1.4.8 e instale uma vez (instala em `%LocalAppData%\LoLIdle`) — daí em diante as atualizações são automáticas pelo próprio app. Recomenda-se desinstalar a cópia antiga.
+> **Migração uma vez (quem instalou pelas versões ≤1.4.7):** a cópia instalada pelas versões antigas (Inno Setup, em Program Files, com admin) **não se atualiza sozinha**. Baixe o `LoLIdle-win-Setup.exe` da v1.4.9 e instale uma vez (instala em `%LocalAppData%\LoLIdle`) — daí em diante as atualizações são automáticas pelo próprio app. Recomenda-se desinstalar a cópia antiga.
 
 ### Atualização automática (desde a v1.4.8)
 
@@ -131,6 +131,16 @@ Os scripts de Inno Setup (`GERAR-INSTALADOR.bat`, pasta `installer/`) ficam no r
 
 ## 📋 Histórico de versões
 
+### v1.4.9 — 2026-11-14
+
+**Sons de notificação personalizáveis + guarda de WebView2 reforçada.**
+
+- **🔊 Sons de notificação** — nova seção no Ajustes › 🔔 Notificações: **slider geral de volume (0–100%)** e **timbre por família** (Missão, Poção, Lendário, Épico, Inventário, Nível) escolhendo entre os 6 sons embutidos do app ou "Mudo". O botão **"▶ Tocar"** toca a opção corrente (mesmo antes de salvar). Volume e timbres persistem em `window-settings.json` (`NotificationVolume`, `SoundTimbres`). Padrão = comportamento anterior (100% + sons originais); se a reprodução falhar, toca o `SystemSounds.Asterisk`. **Validado ao vivo pelo usuário** (UI, slider, ▶ Tocar, timbres, tema).
+- **Guarda de WebView2 reforçada** — o `Program.cs` agora trata **exceção OU string vazia/whitespace** de `GetAvailableBrowserVersionString()` como runtime ausente → aviso com o link oficial + `Environment.Exit(1)`. **Ainda não validada ao vivo** (cenário inalcançável na máquina do usuário; caminho de código revisto, nunca exercido).
+- **Hook de teste `LOLIDLE_UPDATE_SOURCE`** — variável de ambiente opcional (em `Helpers/VelopackUpdateService.cs`) que troca o feed do Velopack (ex.: pasta local) para testes de update; sem ela, o caminho padrão é o GitHub Releases. **É um hook de teste, não uma funcionalidade de usuário.**
+- **Honestidade** — o CI da v1.4.8 foi validado (run 43637168717, verde, 4 assets); o auto-update foi validado em teste local end-to-end com feed fake (caminho pela release pública ainda não exercido — a v1.4.9 é a **primeira vez pública**: quem tem a v1.4.8 verá "Atualização disponível — v1.4.9" no Sobre); **deltas não provados**; a v1.4.8 não inclui o hardening da guarda acima.
+- Instalação/atualização do usuário: quem tem a v1.4.8 (Velopack) atualiza pelo Sobre. Migração Inno ≤1.4.7 → Velopack continua necessária uma vez (inalterada).
+
 ### v1.4.8 — 2026-11-14
 
 **Release de distribuição: migração do Inno Setup para o Velopack + atualização automática dentro do app.**
@@ -144,7 +154,7 @@ Os scripts de Inno Setup (`GERAR-INSTALADOR.bat`, pasta `installer/`) ficam no r
 - **Aba 🔁 Atualização virou ℹ️ Sobre completa** (identidade do app, stack .NET 8 · WPF · WebView2, descrição do README, créditos "Feito por Zephrus15 — desenvolvedor independente").
 - **Falha de rede/check** — mensagens discretas, nunca crash; o app mantém o último estado conhecido.
 - **Assets do Release mudaram**: `LoLIdle-win-Setup.exe`, `LoLIdle-win-Portable.zip`, `LoLIdle-1.4.8-full.nupkg`, `releases.win.json`. **Deltas só existem a partir do v1.4.8** — quem atualizar de qualquer versão anterior baixa o pacote completo.
-- **Honestidade**: verificado ao vivo pelo usuário — a instalação local do Setup v1.4.8 abre normal e mostra v1.4.8 no Sobre. **Não validado**: o auto-update de fato (só se prova na v1.4.9), os deltas, a guarda de WebView2 em PC sem o runtime e o CI do release na primeira execução real.
+- **Honestidade**: verificado ao vivo pelo usuário — a instalação local do Setup v1.4.8 abre normal e mostra v1.4.8 no Sobre. **CI do release validado** (tag v1.4.8, run 43637168717, verde; 4 assets anexados à Release). **Auto-update validado em teste local end-to-end (2026-11-14)** — com feed local fake; o caminho pela release pública ainda não foi exercido. **Deltas não provados**; a guarda de WebView2 em PC sem o runtime ainda não foi validada; a v1.4.8 não inclui o hardening de empty-string (vai na v1.4.9).
 
 ### v1.4.7 — 2026-11-14
 

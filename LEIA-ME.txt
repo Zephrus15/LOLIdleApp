@@ -1,4 +1,4 @@
-﻿LoL Idle Desktop - versão 1.4.8
+﻿LoL Idle Desktop - versão 1.4.9
 Aplicativo desktop não oficial para Windows
 
 O que é
@@ -40,15 +40,15 @@ Requisitos
 - Microsoft Edge WebView2 Runtime (normalmente já vem instalado com o Edge).
   Se faltar, o app avisa com o link oficial em vez de falhar em silêncio.
 
-Instalar (v1.4.8)
+Instalar (v1.4.9)
 -----------------
-1. Baixe o arquivo LoLIdle-win-Setup.exe na Release v1.4.8 do repositório.
+1. Baixe o arquivo LoLIdle-win-Setup.exe na Release v1.4.9 do repositório.
 2. Execute: não pede admin/UAC; instala por usuário em %LocalAppData%\LoLIdle.
 3. Não precisa instalar o .NET (pacote self-contained, Setup ~80 MB).
 4. As preferências em %LOCALAPPDATA%\LoLIdleDesktop são preservadas.
    Migração (quem instalou pelas versões <=1.4.7): o Setup antigo
    (Inno Setup, em Program Files, com admin) NÃO se atualiza sozinho.
-   Baixe o LoLIdle-win-Setup.exe da v1.4.8 e instale uma vez; daí as
+   Baixe o LoLIdle-win-Setup.exe da v1.4.9 e instale uma vez; daí as
    atualizações são automáticas dentro do app (aba ℹ️ Sobre no Ajustes).
    Recomenda-se desinstalar a cópia antiga.
 
@@ -75,6 +75,37 @@ LoLIdle-<versão>-full.nupkg e releases.win.json
 
 Os scripts Inno Setup (GERAR-INSTALADOR.bat, pasta installer/) ficam
 no repositório apenas como fallback histórico; o CI não os usa mais.
+
+Novidades (v1.4.9 - 2026-11-14)
+-------------------------------
+- Sons de notificação personalizáveis: nova seção no Ajustes >
+  Notificações com slider geral de volume (0-100%) e timbre por
+  família (Missão, Poção, Lendário, Épico, Inventário, Nível)
+  escolhendo entre os 6 sons embutidos ou "Mudo". O botão
+  "▶ Tocar" toca a opção corrente na hora. Volume e timbres
+  persistem em window-settings.json (NotificationVolume,
+  SoundTimbres). Padrão = como antes (100% + sons originais);
+  se a reprodução falhar, toca o aviso padrão do Windows.
+  Validado ao vivo pelo usuário (UI, slider, ▶ Tocar, timbres).
+- Guarda de WebView2 reforçada: o app agora trata exceção OU
+  resposta vazia/whitespace do GetAvailableBrowserVersionString()
+  como runtime ausente -> aviso com o link oficial + saída com
+  código 1. Ainda NÃO validada ao vivo (cenário não simulável
+  nesta máquina; caminho de código revisto, nunca exercido).
+- Hook de teste LOLIDLE_UPDATE_SOURCE: variável de ambiente
+  opcional que troca o feed do Velopack (ex.: pasta local) para
+  testar updates sem publicar; sem ela, o padrão é o GitHub
+  Releases. É hook de teste, não funcionalidade de usuário.
+- Honestidade: CI da v1.4.8 validado (tag v1.4.8,
+  run 43637168717, verde, 4 assets anexados). Auto-update validado
+  em teste local end-to-end (feed fake); o caminho pela release
+  pública ainda NÃO foi exercido — a v1.4.9 é a primeira vez
+  pública: quem tem a v1.4.8 verá "Atualização disponível —
+  v1.4.9" no Sobre. Deltas não provados. A v1.4.8 não inclui o
+  hardening da guarda acima.
+- Migração uma vez para quem instalou pelas versões <=1.4.7
+  (Inno, Program Files, admin): inalterada — baixe o Setup da
+  v1.4.9 e instale uma vez; daí as atualizações são automáticas.
 
 Novidades (v1.4.8 - 2026-11-14)
 -------------------------------
@@ -113,10 +144,13 @@ Novidades (v1.4.8 - 2026-11-14)
   releases.win.json. Deltas só existem a partir do v1.4.8 —
   quem atualiza de qualquer versão anterior baixa o pacote completo.
 - Honestidade: instalação local do Setup v1.4.8 verificada ao vivo
-  pelo usuário (abre normal e mostra v1.4.8 no Sobre). NÃO validado:
-  o auto-update de fato (prova só na v1.4.9), os deltas, a guarda
-  de WebView2 em PC sem o runtime e o CI do release na primeira
-  execução real.
+  pelo usuário (abre normal e mostra v1.4.8 no Sobre). CI do release
+  validado (tag v1.4.8, run 43637168717, verde; 4 assets anexados).
+  Auto-update validado em teste local end-to-end (2026-11-14) —
+  feed local fake; o caminho pela release pública ainda não foi
+  exercido. Deltas não provados. Guarda de WebView2 em PC sem o
+  runtime ainda não validada; a v1.4.8 não inclui o hardening de
+  empty-string (vai na v1.4.9).
 
 Novidades (v1.4.7 - 2026-11-14)
 -------------------------------

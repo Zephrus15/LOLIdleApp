@@ -130,6 +130,261 @@
                    Foreground="{StaticResource TextSecondary}"
                    TextWrapping="Wrap"
                    Text="Quando mais de uma conta está marcada, o balão mostra o nome da conta que gerou o aviso (ex: Yasuo — Missão concluída!)." />
+
+        <!-- ===== Sons de notificação: volume geral + timbre por família ===== -->
+        <TextBlock Text="🔊 Sons de notificação"
+                   Foreground="#E8CF8F"
+                   FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
+                   FontSize="12"
+                   FontWeight="SemiBold"
+                   Margin="2,14,0,6" />
+        <Border Background="{StaticResource BgPanel2}"
+                BorderBrush="{StaticResource BorderSubtle}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="12,10">
+            <StackPanel>
+                <!-- Volume mestre (0–100) -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Volume"
+                               Foreground="{StaticResource TextPrimary}"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Margin="0,0,12,0" />
+                    <Slider x:Name="VolumeSlider"
+                            Grid.Column="1"
+                            Style="{StaticResource DarkSlider}"
+                            Minimum="0" Maximum="100"
+                            Value="100"
+                            VerticalAlignment="Center"
+                            ToolTip="Volume de todos os sons de notificação (0 = mudo)"
+                            ValueChanged="VolumeSlider_ValueChanged" />
+                    <TextBlock x:Name="VolumeValueText"
+                               Grid.Column="2"
+                               Text="100%"
+                               Foreground="{StaticResource TextSecondary}"
+                               FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
+                               FontSize="12"
+                               FontWeight="SemiBold"
+                               Width="44"
+                               TextAlignment="Right"
+                               VerticalAlignment="Center"
+                               Margin="10,0,0,0" />
+                </Grid>
+                <TextBlock Text="Vale para os sons de notificação; se a reprodução falhar, toca o aviso padrão do Windows."
+                           Foreground="{StaticResource TextSecondary}"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Margin="0,2,0,10" />
+
+                <Border Height="1" Background="{StaticResource BorderSubtle}" Margin="0,0,0,10" />
+
+                <!-- Timbre por família: cada uma toca um dos 6 sons embutidos (ou Mudo) -->
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="84" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Missão"
+                               Foreground="{StaticResource TextPrimary}"
+                               FontSize="12"
+                               VerticalAlignment="Center" />
+                    <ComboBox x:Name="Combo_mission"
+                              Grid.Column="1"
+                              Tag="mission"
+                              Style="{StaticResource DarkComboBox}"
+                              Margin="0,0,8,0"
+                              SelectionChanged="SoundTimbre_SelectionChanged">
+                        <ComboBoxItem Content="Missão" Tag="mission" />
+                        <ComboBoxItem Content="Poção" Tag="potion" />
+                        <ComboBoxItem Content="Lendário" Tag="legendary" />
+                        <ComboBoxItem Content="Épico" Tag="epic" />
+                        <ComboBoxItem Content="Inventário" Tag="inventory" />
+                        <ComboBoxItem Content="Nível" Tag="level" />
+                        <ComboBoxItem Content="Mudo" Tag="silent" />
+                    </ComboBox>
+                    <Button Grid.Column="2"
+                            Tag="mission"
+                            Content="▶ Tocar"
+                            Style="{StaticResource GhostIconButton}"
+                            FontSize="11"
+                            ToolTip="Tocar o timbre selecionado (mesmo antes de salvar)"
+                            Click="PreviewSound_Click" />
+                </Grid>
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="84" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Poção"
+                               Foreground="{StaticResource TextPrimary}"
+                               FontSize="12"
+                               VerticalAlignment="Center" />
+                    <ComboBox x:Name="Combo_potion"
+                              Grid.Column="1"
+                              Tag="potion"
+                              Style="{StaticResource DarkComboBox}"
+                              Margin="0,0,8,0"
+                              SelectionChanged="SoundTimbre_SelectionChanged">
+                        <ComboBoxItem Content="Missão" Tag="mission" />
+                        <ComboBoxItem Content="Poção" Tag="potion" />
+                        <ComboBoxItem Content="Lendário" Tag="legendary" />
+                        <ComboBoxItem Content="Épico" Tag="epic" />
+                        <ComboBoxItem Content="Inventário" Tag="inventory" />
+                        <ComboBoxItem Content="Nível" Tag="level" />
+                        <ComboBoxItem Content="Mudo" Tag="silent" />
+                    </ComboBox>
+                    <Button Grid.Column="2"
+                            Tag="potion"
+                            Content="▶ Tocar"
+                            Style="{StaticResource GhostIconButton}"
+                            FontSize="11"
+                            ToolTip="Tocar o timbre selecionado (mesmo antes de salvar)"
+                            Click="PreviewSound_Click" />
+                </Grid>
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="84" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Lendário"
+                               Foreground="{StaticResource TextPrimary}"
+                               FontSize="12"
+                               VerticalAlignment="Center" />
+                    <ComboBox x:Name="Combo_legendary"
+                              Grid.Column="1"
+                              Tag="legendary"
+                              Style="{StaticResource DarkComboBox}"
+                              Margin="0,0,8,0"
+                              SelectionChanged="SoundTimbre_SelectionChanged">
+                        <ComboBoxItem Content="Missão" Tag="mission" />
+                        <ComboBoxItem Content="Poção" Tag="potion" />
+                        <ComboBoxItem Content="Lendário" Tag="legendary" />
+                        <ComboBoxItem Content="Épico" Tag="epic" />
+                        <ComboBoxItem Content="Inventário" Tag="inventory" />
+                        <ComboBoxItem Content="Nível" Tag="level" />
+                        <ComboBoxItem Content="Mudo" Tag="silent" />
+                    </ComboBox>
+                    <Button Grid.Column="2"
+                            Tag="legendary"
+                            Content="▶ Tocar"
+                            Style="{StaticResource GhostIconButton}"
+                            FontSize="11"
+                            ToolTip="Tocar o timbre selecionado (mesmo antes de salvar)"
+                            Click="PreviewSound_Click" />
+                </Grid>
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="84" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Épico"
+                               Foreground="{StaticResource TextPrimary}"
+                               FontSize="12"
+                               VerticalAlignment="Center" />
+                    <ComboBox x:Name="Combo_epic"
+                              Grid.Column="1"
+                              Tag="epic"
+                              Style="{StaticResource DarkComboBox}"
+                              Margin="0,0,8,0"
+                              SelectionChanged="SoundTimbre_SelectionChanged">
+                        <ComboBoxItem Content="Missão" Tag="mission" />
+                        <ComboBoxItem Content="Poção" Tag="potion" />
+                        <ComboBoxItem Content="Lendário" Tag="legendary" />
+                        <ComboBoxItem Content="Épico" Tag="epic" />
+                        <ComboBoxItem Content="Inventário" Tag="inventory" />
+                        <ComboBoxItem Content="Nível" Tag="level" />
+                        <ComboBoxItem Content="Mudo" Tag="silent" />
+                    </ComboBox>
+                    <Button Grid.Column="2"
+                            Tag="epic"
+                            Content="▶ Tocar"
+                            Style="{StaticResource GhostIconButton}"
+                            FontSize="11"
+                            ToolTip="Tocar o timbre selecionado (mesmo antes de salvar)"
+                            Click="PreviewSound_Click" />
+                </Grid>
+                <Grid Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="84" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Inventário"
+                               Foreground="{StaticResource TextPrimary}"
+                               FontSize="12"
+                               VerticalAlignment="Center" />
+                    <ComboBox x:Name="Combo_inventory"
+                              Grid.Column="1"
+                              Tag="inventory"
+                              Style="{StaticResource DarkComboBox}"
+                              Margin="0,0,8,0"
+                              SelectionChanged="SoundTimbre_SelectionChanged">
+                        <ComboBoxItem Content="Missão" Tag="mission" />
+                        <ComboBoxItem Content="Poção" Tag="potion" />
+                        <ComboBoxItem Content="Lendário" Tag="legendary" />
+                        <ComboBoxItem Content="Épico" Tag="epic" />
+                        <ComboBoxItem Content="Inventário" Tag="inventory" />
+                        <ComboBoxItem Content="Nível" Tag="level" />
+                        <ComboBoxItem Content="Mudo" Tag="silent" />
+                    </ComboBox>
+                    <Button Grid.Column="2"
+                            Tag="inventory"
+                            Content="▶ Tocar"
+                            Style="{StaticResource GhostIconButton}"
+                            FontSize="11"
+                            ToolTip="Tocar o timbre selecionado (mesmo antes de salvar)"
+                            Click="PreviewSound_Click" />
+                </Grid>
+                <Grid Margin="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="84" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Nível"
+                               Foreground="{StaticResource TextPrimary}"
+                               FontSize="12"
+                               VerticalAlignment="Center" />
+                    <ComboBox x:Name="Combo_level"
+                              Grid.Column="1"
+                              Tag="level"
+                              Style="{StaticResource DarkComboBox}"
+                              Margin="0,0,8,0"
+                              SelectionChanged="SoundTimbre_SelectionChanged">
+                        <ComboBoxItem Content="Missão" Tag="mission" />
+                        <ComboBoxItem Content="Poção" Tag="potion" />
+                        <ComboBoxItem Content="Lendário" Tag="legendary" />
+                        <ComboBoxItem Content="Épico" Tag="epic" />
+                        <ComboBoxItem Content="Inventário" Tag="inventory" />
+                        <ComboBoxItem Content="Nível" Tag="level" />
+                        <ComboBoxItem Content="Mudo" Tag="silent" />
+                    </ComboBox>
+                    <Button Grid.Column="2"
+                            Tag="level"
+                            Content="▶ Tocar"
+                            Style="{StaticResource GhostIconButton}"
+                            FontSize="11"
+                            ToolTip="Tocar o timbre selecionado (mesmo antes de salvar)"
+                            Click="PreviewSound_Click" />
+                </Grid>
+                <TextBlock Text="Padrão = som original de cada família. “Mudo” silencia só aquele tipo de aviso."
+                           Foreground="{StaticResource TextSecondary}"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           Margin="0,10,0,0" />
+            </StackPanel>
+        </Border>
     </StackPanel>
     </ScrollViewer>
 </UserControl>
