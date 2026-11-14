@@ -9,7 +9,8 @@
         Background="Transparent"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
-        WindowStartupLocation="CenterOwner">
+        WindowStartupLocation="CenterScreen"
+        Topmost="True">
     <Window.Resources>
         <!-- Faixa de abas no estilo do tema (pílulas/linha cobre na aba ativa) -->
         <Style x:Key="AjustesTabControl" TargetType="TabControl">

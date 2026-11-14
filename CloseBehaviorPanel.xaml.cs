@@ -42,6 +42,7 @@ namespace LoLIdleDesktop
                 UpdateAskVisibility();
 
                 StartWithWindowsCheck.IsChecked = _settings.IniciarComWindows;
+                FullScreenTrayCheck.IsChecked = _settings.EsconderNaBandejaEmFullScreen;
                 StartTrayCheck.IsChecked = _settings.IniciarNaBandejaAoIniciar;
                 StartTrayRow.Visibility = _settings.IniciarComWindows
                     ? Visibility.Visible
@@ -100,6 +101,15 @@ namespace LoLIdleDesktop
             _settings.IniciarComWindows = on;
             SetRunValue(on);
             StartTrayRow.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+            _save();
+        }
+
+        // Esconder na bandeja em tela cheia: vale na hora (o poll de 500 ms lê o setting a cada tick).
+        private void FullScreenTray_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_syncing) return;
+
+            _settings.EsconderNaBandejaEmFullScreen = FullScreenTrayCheck.IsChecked == true;
             _save();
         }
 

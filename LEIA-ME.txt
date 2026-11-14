@@ -1,4 +1,4 @@
-﻿LoL Idle Desktop - versão 1.4.6
+﻿LoL Idle Desktop - versão 1.4.7
 Aplicativo desktop não oficial para Windows
 
 O que é
@@ -13,9 +13,10 @@ Recursos
   não por botão na principal. Ao abrir, a principal é oculta sem bandeja.
   Fechar a flutuante pelo × restaura a principal.
 - Arraste da janela flutuante pela área do jogo (exceto controles).
-- Controle de silenciamento geral do áudio (botões próprios do jogo:
-  bt-musica/bt-efeitos); a antiga tela separada de áudio foi removida
-  do código.
+- Controle de áudio com aba 🎵 Áudio no Ajustes (desde a v1.4.7):
+  toggles de Música e Efeitos (MusicMuted/EffectsMuted), sincronizados
+  automaticamente com os botões bt-musica/bt-efeitos do jogo via
+  CDP trusted input.
 - Janela de Missões separada (somente leitura), visível só com a flutuante aberta,
   arrastável e redimensionável (largura e altura), com borda amarela.
 - Minimizar (－) envia a janela para a barra de tarefas do Windows.
@@ -61,6 +62,38 @@ Gerar instalador
 
 O instalador verifica o Microsoft Edge WebView2 Runtime e o instala
 automaticamente quando necessário.
+
+Novidades (v1.4.7 - 2026-11-14)
+-------------------------------
+- Notificações novamente funcionando — a v1.4.6 apareceu com o
+  SoundPlayer+WAV retroativo resolvido; notificações tocam som
+  novamente.
+- Áudio: nova aba no Ajustes com toggles de Música e Efeitos
+  sincronizados diretamente com os botões naturais do jogo
+  (btn-musica/btn-efeitos) via trusted input CDP. Sem precisar mais
+  abrir a aba de configurações do jogo.
+- Não Perturbar do app: um toggle no Ajustes > Notificações silencia
+  tudo (popup, balão, som). Histórico e bolinha de não lida continuam
+  funcionando. Toast silencioso do Windows permanece na Central de
+  Ações.
+- Batch de supressão de notificação: normal = tudo; tela cheia
+  (borderless fullscreen) = só o som; foco/apresentação = silêncio
+  total.
+- Auto-ocultar ao entrar em tela cheia: opção no Ajustes >
+  Inicialização ("Esconder na bandeja em tela cheia", default ON).
+  App vai pra bandeja quando o jogo ocupa o monitor; restaura pelo
+  ícone da bandeja.
+- Ajustes não-modal: janela não bloqueia mais o jogo; click fora
+  fecha a janela sem minimizar.
+- ScrollBars do tema: vertical/horizontal em 2px, hover laranja.
+- Notificação: scroll areas com fundo seta (não mão) quando não
+  clicáveis.
+- Popup: ícone de livro (📖) para missões que só trocam de
+  personagem.
+- Notas de honestidade: Popup já foi validado ao vivo em sessão
+  pequena (notifications com popup, fullscreen); DND do Windows 11
+  manual não foi implementável (informação oculta — app tem toggle
+  próprio).
 
 Novidades (v1.4.6 - 2026-11-14)
 -------------------------------
@@ -318,8 +351,10 @@ Limitações desta versão
 -----------------------
 - Missões incluído (somente leitura). Barra lateral interativa e Personagem
   não incluídos (o jogo bloqueia a segunda sessão).
-- O controle de áudio disponível silencia todo o áudio do jogo; música e
-  efeitos são ajustados pelos botões próprios do jogo (bt-musica/bt-efeitos).
+- O controle de áudio disponível silencia todo o áudio do jogo. Desde a
+  v1.4.7, a aba 🎵 Áudio no Ajustes permite alternar Música e Efeitos
+  (MusicMuted/EffectsMuted), sincronizados automaticamente com os botões
+  bt-musica/bt-efeitos do jogo via CDP trusted input.
 - Voto e login OAuth abrem no navegador real.
 
 Observações importantes

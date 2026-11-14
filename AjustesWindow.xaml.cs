@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using Button = System.Windows.Controls.Button;
 
 namespace LoLIdleDesktop
 {
@@ -10,26 +10,24 @@ namespace LoLIdleDesktop
     {
         private readonly NotifySettingsPanel _notifyPanel;
         private readonly CloseBehaviorPanel _closePanel;
+        private readonly AudioSettingsPanel _audioPanel;
+        private readonly Window? _owner;
 
         public AjustesWindow(MainWindow.WindowSettings settings,
                              IEnumerable<string> accountKeys,
                              Func<string, string> displayNameSelector,
                              Action saveAction,
-                             Window? owner)
+                             Window? owner,
+                             Func<Task>? onAudioChanged = null)
         {
-            Owner = owner;
+            _owner = owner;
 
             _notifyPanel = new NotifySettingsPanel(settings, accountKeys, displayNameSelector, saveAction);
             _closePanel = new CloseBehaviorPanel(settings, saveAction);
+            _audioPanel = new AudioSettingsPanel(settings, saveAction, onAudioChanged);
 
             InitializeComponent();
-            MouseLeftButtonDown += (_, e) =>
-            {
-                if (e.LeftButton == System.Windows.Input.MouseButtonState.Pressed &&
-                    e.OriginalSource is not Button &&
-                    e.OriginalSource is not System.Windows.Controls.Primitives.ButtonBase)
-                    DragMove();
-            };
+            Deactivated += (_, _) => { try { Close(); } catch { } };
 
             AjustesTabs.Items.Add(new TabItem
             {
@@ -43,18 +41,22 @@ namespace LoLIdleDesktop
                 Style = (Style)FindResource("AjustesTabItem"),
                 Content = _closePanel
             });
+            AjustesTabs.Items.Add(new TabItem
+            {
+                Header = "🎵 Áudio",
+                Style = (Style)FindResource("AjustesTabItem"),
+                Content = _audioPanel
+            });
             AjustesTabs.SelectedIndex = 0;
         }
 
         private void CloseHeader_Click(object sender, RoutedEventArgs e)
         {
-            DialogResult = true;
             Close();
         }
 
         private void Done_Click(object sender, RoutedEventArgs e)
         {
-            DialogResult = true;
             Close();
         }
     }

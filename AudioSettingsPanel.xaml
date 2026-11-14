@@ -1,0 +1,100 @@
+<UserControl x:Class="LoLIdleDesktop.AudioSettingsPanel"
+             x:Name="AudioSettingsPanelRoot"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0" Cursor="Arrow">
+    <StackPanel Margin="18,16,18,10">
+        <!-- ===== Título da aba ===== -->
+        <TextBlock Text="🎵 Áudio"
+                   Foreground="#E8CF8F"
+                   FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
+                   FontSize="15"
+                   FontWeight="SemiBold"
+                   Margin="2,0,0,8" />
+
+        <!-- ===== O que faz / o que sincroniza ===== -->
+        <TextBlock Text="Este app e o jogo têm botões de som independentes por canal (Música / Efeitos). Mudar aqui reflete nos controles do jogo na próxima aplicação das preferências. O app é a fonte da verdade: mudanças feitas direto no jogo não voltam para cá e podem ser revertidas quando o app reaplica a preferência dele."
+                   Foreground="{StaticResource TextSecondary}"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Margin="2,0,0,12" />
+
+        <!-- ===== Canais independentes ===== -->
+        <TextBlock Text="Canais de som"
+                   Foreground="#E8CF8F"
+                   FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
+                   FontSize="12"
+                   FontWeight="SemiBold"
+                   Margin="2,0,0,6" />
+
+        <Border Background="{StaticResource BgPanel2}"
+                BorderBrush="{StaticResource BorderSubtle}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="12,10"
+                Margin="0,0,0,10">
+            <CheckBox x:Name="MusicMutedCheck"
+                      Style="{StaticResource SwitchStyle}"
+                      VerticalContentAlignment="Center"
+                      Checked="MusicMuted_Changed"
+                      Unchecked="MusicMuted_Changed"
+                      ToolTip="Sincroniza com o botão bt-musica do jogo: ligado = música tocando. Ao mudar aqui, o app espelha o estado no botão do jogo e aplica na WebView na hora. Desmarque para silenciar só a música. O app é a fonte da verdade — mudanças feitas só no jogo não são lidas de volta.">
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Música"
+                               Foreground="{StaticResource TextPrimary}"
+                               FontSize="13"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="Toca a trilha sonora do jogo (canal de música). Desmarque para silenciar só a música."
+                               Foreground="{StaticResource TextSecondary}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Margin="0,3,0,0" />
+                </StackPanel>
+            </CheckBox>
+        </Border>
+
+        <Border Background="{StaticResource BgPanel2}"
+                BorderBrush="{StaticResource BorderSubtle}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="12,10"
+                Margin="0,0,0,10">
+            <CheckBox x:Name="EffectsMutedCheck"
+                      Style="{StaticResource SwitchStyle}"
+                      VerticalContentAlignment="Center"
+                      Checked="EffectsMuted_Changed"
+                      Unchecked="EffectsMuted_Changed"
+                      ToolTip="Sincroniza com o botão bt-efeitos do jogo: ligado = efeitos tocando. Ao mudar aqui, o app espelha o estado no botão do jogo e aplica na WebView na hora. Desmarque para silenciar só os efeitos. O app é a fonte da verdade — mudanças feitas só no jogo não são lidas de volta.">
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Efeitos"
+                               Foreground="{StaticResource TextPrimary}"
+                               FontSize="13"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="Toca os efeitos sonoros do jogo. Desmarque para silenciar só os efeitos."
+                               Foreground="{StaticResource TextSecondary}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Margin="0,3,0,0" />
+                </StackPanel>
+            </CheckBox>
+        </Border>
+
+        <!-- ===== Gatilho: restaurar padrão ===== -->
+        <Button x:Name="RestoreDefaultButton"
+                Content="Restaurar padrão (som ligado)"
+                Style="{StaticResource TestActionButton}"
+                Height="32"
+                Padding="16,0,16,0"
+                HorizontalAlignment="Left"
+                ToolTip="Coloca os dois canais em &quot;som ligado&quot; (MusicMuted e EffectsMuted = false), salva e reaplica na WebView do jogo. Não altera o mute master da bandeja nem nenhuma outra preferência."
+                Click="RestoreDefault_Click" />
+
+        <!-- ===== Linha de realismo: bandeja / mute master ===== -->
+        <TextBlock Text="Bandeja: ao esconder, o jogo já fica completamente mudo (mute master). Esses toggles controlam só música/efeitos."
+                   Foreground="{StaticResource TextSecondary}"
+                   FontSize="11"
+                   TextWrapping="Wrap"
+                   Margin="2,10,0,0" />
+    </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -52,6 +52,7 @@ namespace LoLIdleDesktop
             RebuildPotionList();
             NotifyEnabledCheck.IsChecked = _settings.NotifyEnabled;
             ApplyNotifyEnabledState(_settings.NotifyEnabled);
+            NaoPerturbarCheck.IsChecked = _settings.NaoPerturbar;
         }
 
         // Sub-chaves de poção (na ordem do XAML).
@@ -163,6 +164,12 @@ namespace LoLIdleDesktop
             if (string.Equals(kind, "potion", StringComparison.OrdinalIgnoreCase))
                 SyncPotionSubState();
 
+            _save();
+        }
+
+        private void NaoPerturbarCheck_Changed(object sender, RoutedEventArgs e)
+        {
+            _settings.NaoPerturbar = NaoPerturbarCheck.IsChecked == true;
             _save();
         }
 

@@ -84,12 +84,9 @@ public partial class NotificationPopupWindow : Window
             RootTranslate.X = initialX;
             var entry = TimeSpan.FromMilliseconds(450);
             var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
-            // Opacidade espelhada da saída: segura 0 até ~50% do deslize e só revela no final,
-            // quando o card já está praticamente na posição.
-            var fade = new DoubleAnimationUsingKeyFrames { Duration = entry };
-            fade.KeyFrames.Add(new LinearDoubleKeyFrame(Root.Opacity, KeyTime.FromPercent(0.0)));
-            fade.KeyFrames.Add(new LinearDoubleKeyFrame(0.0, KeyTime.FromPercent(0.5)));
-            fade.KeyFrames.Add(new LinearDoubleKeyFrame(1.0, KeyTime.FromPercent(1.0)));
+            // Entrada: fade linear sobe desde o começo, em paralelo com o slide
+            // (mesmo 450 ms) — nada de segurar 0 até a metade do deslize.
+            var fade = new DoubleAnimation(0.0, 1.0, entry);
             Root.BeginAnimation(UIElement.OpacityProperty, fade);
             var slide = new DoubleAnimation(initialX, 0, entry) { EasingFunction = ease };
             RootTranslate.BeginAnimation(TranslateTransform.XProperty, slide);

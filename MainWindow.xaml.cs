@@ -40,6 +40,7 @@ public partial class MainWindow : Window
         if (window.__lolIdleAudioControlInstalled) return;
         window.__lolIdleAudioControlInstalled = true;
         const contexts = new Set();
+        window.__lolIdleContexts = contexts;
         const pausedByUs = new WeakSet();
         const NativeAudioContext = window.AudioContext || window.webkitAudioContext;
         if (NativeAudioContext) {
@@ -47,6 +48,21 @@ public partial class MainWindow : Window
                 construct(target, args, newTarget) {
                     const context = Reflect.construct(target, args, newTarget);
                     contexts.add(context);
+                    try {
+                        context.__lolIdleGains = [];
+                        if (context && typeof context.createGain === 'function') {
+                            const origCreateGain = context.createGain.bind(context);
+                            Object.defineProperty(context, 'createGain', {
+                                value: (...gainArgs) => {
+                                    const g = origCreateGain(...gainArgs);
+                                    try { context.__lolIdleGains.push(g); } catch (_) {}
+                                    return g;
+                                },
+                                writable: true,
+                                configurable: true
+                            });
+                        }
+                    } catch (_) {}
                     return context;
                 }
             });
@@ -55,21 +71,8 @@ public partial class MainWindow : Window
                 if (window.webkitAudioContext) window.webkitAudioContext = WrappedAudioContext;
             } catch (_) {}
         }
-        const syncGameButtons = (prefs) => {
-            const sync = (id, muted) => {
-                try {
-                    const b = document.getElementById(id);
-                    if (!b) return;
-                    const curMuted = b.getAttribute('aria-pressed') === 'false';
-                    if (curMuted !== !!muted) b.click();
-                } catch (_) {}
-            };
-            sync('bt-musica', prefs.musicMuted);
-            sync('bt-efeitos', prefs.effectsMuted);
-        };
         window.__lolIdleSetAudioPrefs = async (prefs) => {
             window.__lolIdleAudioPrefs = prefs;
-            syncGameButtons(prefs);
             document.querySelectorAll('audio,video').forEach(el => {
                 if (!el.__lolIdleOriginalMutedSaved) {
                     el.__lolIdleOriginalMuted = el.muted;
@@ -473,6 +476,8 @@ public partial class MainWindow : Window
 
     // Painel "Consumo total": RAM/CPU totais + barra/pill (via WMI + WorkingSet64), RAM/CPU por conta e limpeza de cache.
     private System.Windows.Threading.DispatcherTimer? _usoTimer;
+    // Poll de tela cheia (500 ms): esconde a janela na bandeja quando o jogo ocupa o monitor inteiro.
+    private System.Windows.Threading.DispatcherTimer? _autoHideTimer;
     private readonly Dictionary<int, TimeSpan> _ultimoCpu = new();
     private DateTime _ultimoCpuSample = DateTime.MinValue;
     private bool _usoColetando;
@@ -546,6 +551,26 @@ public partial class MainWindow : Window
     [DllImport("dwmapi.dll", PreserveSig = true)]
     private static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, ref uint pvAttribute, int cbAttribute);
 
+    // ---- Interop para detecção manual de tela cheia borderless ----
+    // SHQueryUserNotificationState não retorna RUNNING_D3D_FULL_SCREEN para o LoL Idle
+    // (borderless), então detectamos manualmente: janela em primeiro plano cobrindo
+    // o monitor inteiro conta como "tela cheia" para fins de notificação.
+    [StructLayout(LayoutKind.Sequential)]
+    private struct RECT { public int Left, Top, Right, Bottom; }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+    private struct MONITORINFO { public int cbSize; public RECT rcMonitor; public RECT rcWork; public uint dwFlags; }
+
+    [DllImport("user32.dll")] private static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+    [DllImport("user32.dll")] private static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint dwFlags);
+    private const uint MONITOR_DEFAULTTONNEAREST = 2;
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+    [DllImport("kernel32.dll")] private static extern uint GetCurrentProcessId();
+
     private double _normalWidth = 1280;
     private double _normalHeight = 800;
 
@@ -588,6 +613,9 @@ public partial class MainWindow : Window
         public bool IniciarComWindows { get; set; } = false;
         // Quando inicia com o Windows, abre escondido na bandeja (sem mostrar a janela)
         public bool IniciarNaBandejaAoIniciar { get; set; } = false;
+        // Fullscreen borderless do jogo (janela em primeiro plano cobrindo o monitor inteiro):
+        // o app esconde sozinho na bandeja, como se o usuário tivesse clicado no ×.
+        public bool EsconderNaBandejaEmFullScreen { get; set; } = true;
         // Pré-carrega TODAS as contas na inicialização (alternância instantânea; custa mais no startup)
         public bool PrecarregarContas { get; set; } = true;
         public List<string> ContasAdicionadas { get; set; } = new();
@@ -605,6 +633,8 @@ public partial class MainWindow : Window
         public double ContasAvatarImageScale { get; set; } = 1.0;
         // Notificações: master switch e filtros por conta e por tipo (vazio = todas ativas)
         public bool NotifyEnabled { get; set; } = true;
+        // Não Perturbar: silencia popup e som dos avisos (histórico e bolinha de não lida continuam)
+        public bool NaoPerturbar { get; set; } = false;
         // Chaves de contas DESATIVADAS para notificações
         public List<string> NotifyAccountsDisabled { get; set; } = new();
         // Tipos de notificação desativados (legendary / epic / mission / inventory / level)
@@ -617,7 +647,7 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         ToastNotificationManagerCompat.OnActivated += ToastActivated;
-        Closed += (_, _) => _mainWindowClosed = true;
+        Closed += (_, _) => { _mainWindowClosed = true; try { _autoHideTimer?.Stop(); } catch { } };
         InitializeComponent();
         _settingsSaveTimer = new System.Windows.Threading.DispatcherTimer
         {
@@ -1425,6 +1455,8 @@ public partial class MainWindow : Window
         _usoEncerrando = true;
         try { _usoTimer?.Stop(); } catch { }
         _usoTimer = null;
+        try { _autoHideTimer?.Stop(); } catch { }
+        _autoHideTimer = null;
         try { _consumoRevertTimer?.Stop(); } catch { }
         try { _usoCts?.Cancel(); } catch { }
         _usoCts = null;
@@ -1487,6 +1519,7 @@ public partial class MainWindow : Window
     {
         RestoreWindowSettings();
         IniciarUsoRecursosTimer();
+        IniciarAutoHideFullScreenTimer();
         ClearWindowsNotificationHistory();
 
         try
@@ -2130,6 +2163,44 @@ public partial class MainWindow : Window
     }
 
     // ===== Consumo total + RAM/CPU por conta + limpeza de cache =====
+
+    // Poll de 500 ms: se o setting estiver ligado, o app estiver visível e a janela em
+    // primeiro plano (de outro processo) cobrir o monitor inteiro (fullscreen borderless),
+    // esconde o app na bandeja — mesmo efeito de clicar no ×. Nunca derruba o app.
+    private void IniciarAutoHideFullScreenTimer()
+    {
+        try
+        {
+            if (_autoHideTimer != null) return;
+            _autoHideTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(500)
+            };
+            _autoHideTimer.Tick += AutoHideFullScreenTimer_Tick;
+            _autoHideTimer.Start();
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"AutoHide: falha ao iniciar timer: {ex.Message}");
+        }
+    }
+
+    private void AutoHideFullScreenTimer_Tick(object? sender, EventArgs e)
+    {
+        try
+        {
+            if (_allowExit || _mainWindowClosed) return;
+            if (!_settings.EsconderNaBandejaEmFullScreen) return;
+            if (_isHiddenToTray) return;
+            if (!IsForegroundFullScreen()) return;
+            LogFloatingWindowEvent("AutoHide: escondido na bandeja via fullscreen");
+            HideToTray();
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"AutoHide: falha no tick: {ex.Message}");
+        }
+    }
 
     private void IniciarUsoRecursosTimer()
     {
@@ -3837,6 +3908,7 @@ public partial class MainWindow : Window
         PlayTrayNotification(kind, accountLabel, key, context: context);
     }
 
+
     // true quando o app está visível e o usuário consegue ver o jogo:
     // janela principal visível e não minimizada (mesmo sem foco) ou janela flutuante visível.
     private bool AppEmPrimeiroPlano()
@@ -3919,8 +3991,33 @@ public partial class MainWindow : Window
 
     private void PlayTrayNotification(string kind, string? accountLabel = null, string? accountKey = null, string? context = null)
     {
+        // Não Perturbar: supressão SELETIVA (não é early return). Popup próprio, balloon
+        // clássico e som ficam de fora; o toast silencioso (registro na Central de Ações)
+        // é montado normalmente. Histórico in-app e bolinha de não lida já foram marcados
+        // em HandleNotification antes deste ponto — continuam valendo.
+        if (_settings.NaoPerturbar)
+        {
+            LogFloatingWindowEvent("Não Perturbar: suprimindo popup/balloon/som (histórico mantido)");
+        }
+
         if (!_settings.TrayNotify && !_settings.TrayBalloon)
             return;
+
+        // Matriz de supressão por estado do Windows (SHQueryUserNotificationState + detecção
+        // manual de tela cheia borderless — o SHQuery nunca retorna RunningD3DFullScreen p/ borderless):
+        //   qns == 5 e SEM fullscreen manual → normal: popup, balloon fallback e som valem
+        //   qns == 3 OU fullscreen manual    → tela cheia: SÓ som; sem popup nem balloon
+        //   demais estados / falha (-1)      → foco/apresentação/etc.: nada visível, SEM som
+        //   Não Perturbar (setting do app)   → vence tudo: sem popup, sem balloon, sem som
+        // Toast silencioso (Central de Ações) e histórico in-app/bolinha NÃO entram nesta matriz.
+        int qns = QueryNotificationState();
+        bool fs = IsForegroundFullScreen();
+        bool normal = qns == 5 && !fs;
+        bool fullScreen = qns == 3 || fs;
+        bool popupAllowed = normal && !_settings.NaoPerturbar;
+        bool soundAllowed = (normal || fullScreen) && !_settings.NaoPerturbar;
+        bool balloonAllowed = popupAllowed;
+        LogFloatingWindowEvent($"PlayTrayNotification: qns={qns} fullscreen={fs} normal={normal} np={_settings.NaoPerturbar}");
 
         var title = accountLabel ?? "LoL Idle";
         var (message, sound) = ObterTextoNotificacao(kind, context);
@@ -3934,9 +4031,15 @@ public partial class MainWindow : Window
             _lastBalloonAccount = accountKey;
             _lastBalloonKind = kind;
             _lastBalloonContext = context;
-            // true enquanto o popup próprio puder aparecer (não suprimido por foco/tela cheia/apresentação).
-            // Calculado só aqui (TrayBalloon ligado): com o balão desligado nada seria exibido/logado.
-            bool popupAllowed = IsNotificationAppropriate();
+            // true enquanto o popup próprio puder aparecer (qns==5, sem fullscreen borderless,
+            // sem Não Perturbar). Calculado só aqui (TrayBalloon ligado): com o balão desligado
+            // nada seria exibido/logado.
+            // Não Perturbar vence tudo: popup próprio nunca é montado/exibido neste modo.
+            if (_settings.NaoPerturbar)
+            {
+                popupAllowed = false;
+                balloonAllowed = false;
+            }
             try
             {
                 var toastContent = new ToastContentBuilder()
@@ -3962,6 +4065,15 @@ public partial class MainWindow : Window
             }
             catch (Exception ex)
             {
+                if (!balloonAllowed)
+                {
+                    // Sem balloon fallback neste modo: o usuário não quer NENHUM popup visível
+                    // (Não Perturbar, foco/apresentação ou tela cheia). O toast silencioso acima
+                    // já registrou (ou tentou registrar) na Central de Ações; o som segue no bloco TrayNotify.
+                    LogFloatingWindowEvent($"Toast falhou ({kind}): {ex.Message} — balloon fallback suprimido (foco/fullscreen/NP)");
+                }
+                else
+                {
                 LogFloatingWindowEvent($"Toast falhou ({kind}): {ex.Message} — caindo no balloon");
                 // Mesma semântica da regra A: app visível na janela principal OU flutuante suprime
                 // notificação da conta ativa — o HandleNotification já faz esse cedo retorno,
@@ -3987,33 +4099,36 @@ public partial class MainWindow : Window
                     };
                     _balloonRestoreTimer.Start();
                 }
+                }
             }
 
-            // Popup próprio: mostrado só quando o Windows aceita notificações agora.
+            // Popup próprio: mostrado só no estado normal (qns==5, sem fullscreen borderless)
+            // e sem Não Perturbar.
             // O toast silencioso acima vai para a Central de Ações de qualquer forma,
             // e o som (bloco TrayNotify) independe deste bloco.
             if (popupAllowed)
             {
                 ShowNotificationPopup(accountKey, accountLabel, kind, message, context);
             }
-            else
+            else if (!_settings.NaoPerturbar)
             {
-                LogFloatingWindowEvent("Popup suprimido (foco/tela cheia/apresentação) — só som e histórico");
+                if (fullScreen)
+                    LogFloatingWindowEvent($"Popup suprimido (tela cheia) — qns={qns} fullscreen={fs}");
+                else
+                    LogFloatingWindowEvent($"Popup suprimido (foco/apresentação) — qns={qns}");
             }
         }
 
-        if (_settings.TrayNotify)
+        // Som: só no estado normal (5) ou tela cheia (3), e nunca em Não Perturbar.
+        if (_settings.TrayNotify && soundAllowed)
         {
             try
             {
+                // Toca direto de um MemoryStream (SND_ASYNC): o MemoryStream PRECISA permanecer
+                // aberto até o playback terminar — o GC recolhe depois; sem Dispose imediato.
                 var resource = System.Windows.Application.GetResourceStream(new Uri("pack://application:,,," + "/" + sound));
                 if (resource != null)
                 {
-                    // Toca direto de um MemoryStream (SND_ASYNC): o BCL lê o buffer antes do
-                    // playback, então não vaza arquivo temporário. O MemoryStream NÃO é
-                    // disposed aqui — deve permanecer aberto até o playback terminar; o GC
-                    // recolhe player e stream depois. Sem Dispose imediato do player pelo
-                    // mesmo motivo (playback roda em thread separada).
                     var ms = new System.IO.MemoryStream();
                     using (var rs = resource.Stream)
                         rs.CopyTo(ms);
@@ -4022,13 +4137,21 @@ public partial class MainWindow : Window
                     player.Play();
                     LogFloatingWindowEvent($"TrayNotify: som tocado ({kind}) com {sound}");
                 }
-                else System.Media.SystemSounds.Asterisk.Play();
+                else
+                {
+                    System.Media.SystemSounds.Asterisk.Play();
+                }
             }
             catch (Exception ex)
             {
                 LogFloatingWindowEvent($"TrayNotify: falha no som ({kind}): {ex.Message}");
                 try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
             }
+        }
+        else if (_settings.TrayNotify && !soundAllowed && !_settings.NaoPerturbar)
+        {
+            // Tela cheia (qns=3 ou borderless manual) toca som normalmente; cair aqui significa foco/apresentação/estado desconhecido.
+            LogFloatingWindowEvent($"Som suprimido (foco/apresentação) — qns={qns}");
         }
 
         if (!_isHiddenToTray)
@@ -4055,41 +4178,98 @@ public partial class MainWindow : Window
         App = 7
     }
 
-    // true apenas quando o Windows aceita notificações neste momento (SHQueryUserNotificationState
-    // retorna S_OK E state == AcceptsNotifications). Qualquer HR != 0, falha da chamada ou
-    // exceção → false (suprimir o popup; nunca derrubar o app).
-    // Limitação conhecida: o Não Perturbar manual do Win11 (central de notificações) pode não
-    // ser refletido pelo estado retornado — nesse caso o popup ainda aparece. É a API que há.
-    private bool IsNotificationAppropriate()
+    // Consulta o estado de notificação do Windows (SHQueryUserNotificationState) e devolve
+    // o state como int. HR != 0, falha da chamada ou exceção → -1 (tratado como "não normal":
+    // nada visível, sem som; histórico e Central de Ações seguem valendo). Nunca derruba o app.
+    private int QueryNotificationState()
     {
         try
         {
             int hr = SHQueryUserNotificationState(out var state);
             if (hr != 0)
             {
-                LogFloatingWindowEvent($"IsNotificationAppropriate: SHQueryUserNotificationState retornou hr=0x{hr:x8} — suprimindo popup");
-                return false;
+                LogFloatingWindowEvent($"QueryNotificationState: hr=0x{hr:x8} — tratando como -1 (suprimido)");
+                return -1;
             }
-            if (state != QueryUserNotificationState.AcceptsNotifications)
-            {
-                LogFloatingWindowEvent($"Popup suprimido (estado={(int)state} {state}) — só som e histórico");
-                return false;
-            }
-            LogFloatingWindowEvent($"IsNotificationAppropriate: notificações aceitas (estado={(int)state} {state})");
-            // Checagem opcional: sessão de foco do Windows (Não Perturbar / Focus).
-            // Falha aqui NUNCA derruba a notificação — apenas é registrada e ignorada.
-            if (IsFocusSessionActive())
-            {
-                LogFloatingWindowEvent("IsNotificationAppropriate: sessão de foco ativa — popup suprimido");
-                return false;
-            }
-            return true;
+            return (int)state;
         }
         catch (Exception ex)
         {
-            LogFloatingWindowEvent($"IsNotificationAppropriate: falhou (exceção): {ex.Message} — suprimindo popup");
+            LogFloatingWindowEvent($"QueryNotificationState: falhou (exceção): {ex.Message} — tratando como -1 (suprimido)");
+            return -1;
+        }
+    }
+
+    // Detecção manual de tela cheia borderless: janela em primeiro plano cujo retângulo
+    // cobre o monitor inteiro (rcMonitor) conta como tela cheia. Janelas do próprio
+    // processo (MainWindow, Ajustes, Missões...) nunca contam. Nunca derruba o app.
+    private static bool IsForegroundFullScreen()
+    {
+        try
+        {
+            var fg = GetForegroundWindow();
+            if (fg == IntPtr.Zero)
+                return false;
+
+            // Ignora janelas do próprio processo.
+            GetWindowThreadProcessId(fg, out uint pid);
+            if (pid == GetCurrentProcessId())
+                return false;
+
+            if (!GetWindowRect(fg, out var wr))
+                return false;
+
+            var mon = MonitorFromWindow(fg, MONITOR_DEFAULTTONNEAREST);
+            if (mon == IntPtr.Zero)
+                return false;
+
+            var mi = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
+            if (!GetMonitorInfo(mon, ref mi))
+                return false;
+
+            return wr.Left <= mi.rcMonitor.Left
+                && wr.Top <= mi.rcMonitor.Top
+                && wr.Right >= mi.rcMonitor.Right
+                && wr.Bottom >= mi.rcMonitor.Bottom;
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"IsForegroundFullScreen: falhou (exceção): {ex.Message} — tratando como false");
             return false;
         }
+    }
+
+    // Exposição pública da detecção manual de tela cheia (borderless incluso).
+    // true = a janela em primeiro plano cobre o monitor inteiro e não é do próprio app.
+    public bool IsGameForegroundFullScreen() => IsForegroundFullScreen();
+
+    // true apenas quando o Windows aceita notificações neste momento (QueryNotificationState
+    // retorna 5 = AcceptsNotifications). Qualquer outro estado, falha da chamada ou exceção →
+    // false (suprimir o popup; nunca derrubar o app).
+    // Limitação conhecida: o Não Perturbar manual do Win11 (central de notificações) pode não
+    // ser refletido pelo estado retornado — nesse caso o popup ainda aparece. É a API que há.
+    private bool IsNotificationAppropriate()
+    {
+        int qns = QueryNotificationState();
+        if (qns != (int)QueryUserNotificationState.AcceptsNotifications)
+        {
+            LogFloatingWindowEvent($"Popup suprimido (estado={qns}) — só som e histórico");
+            return false;
+        }
+        if (IsForegroundFullScreen())
+        {
+            LogFloatingWindowEvent("IsNotificationAppropriate: janela em primeiro plano cobrindo o monitor (tela cheia borderless) — popup suprimido");
+            return false;
+        }
+        LogFloatingWindowEvent($"IsNotificationAppropriate: notificações aceitas (estado={qns})");
+        // Checagem opcional: sessão de foco do Windows (Não Perturbar / Focus).
+        // Falha aqui NUNCA derruba a notificação — apenas é registrada e ignorada.
+        if (IsFocusSessionActive())
+        {
+            LogFloatingWindowEvent("IsNotificationAppropriate: sessão de foco ativa — popup suprimido");
+            return false;
+        }
+        return true;
     }
 
     // Checagem complementar via Windows.UI.Shell.FocusSessionManager — NÃO disponível na
@@ -4121,7 +4301,17 @@ public partial class MainWindow : Window
             // senão deriva do accountKey (fallback de uma conta só).
             string title = accountLabel ?? (accountKey != null ? GetAccountDisplayName(accountKey) : "LoL Idle");
 
-            var popup = new NotificationPopupWindow(_settings, accountKey, kind, title, message, ExecuteNotificationActionSafe, context);
+            // Só no popup próprio: missões que "só trocam de conta" (diária auto-claim,
+            // semanal e comum) ganham um 📖 no fim da linha 2. mission_tarefa (Fosso/Capitão)
+            // fica de fora. Toast, Central de Ações, histórico/sidebar e Mensagem do jogo
+            // ficam com a mensagem original — a concatenação é apenas visual aqui.
+            string popupMessage = (string.Equals(kind, "mission_diaria", StringComparison.OrdinalIgnoreCase)
+                                   || string.Equals(kind, "mission_semanal", StringComparison.OrdinalIgnoreCase)
+                                   || string.Equals(kind, "mission", StringComparison.OrdinalIgnoreCase))
+                ? message + " 📖"
+                : message;
+
+            var popup = new NotificationPopupWindow(_settings, accountKey, kind, title, popupMessage, ExecuteNotificationActionSafe, context);
             popup.Closed += (_, _) =>
             {
                 _activePopups.Remove(popup);
@@ -4290,6 +4480,53 @@ public partial class MainWindow : Window
         }
     }
 
+    // Clica em um elemento do jogo (por id) via CDP Input.dispatchMouseEvent (trusted).
+    // Cliques sintéticos via DOM têm isTrusted:false e o jogo ignora em partes do áudio.
+    // Nunca derruba o fluxo: qualquer falha é logada e engolida.
+    private async Task ClickGameElementByIdAsync(Microsoft.Web.WebView2.Wpf.WebView2? view, string elementId)
+    {
+        if (view?.CoreWebView2 == null)
+        {
+            LogFloatingWindowEvent($"Audio: clique CDP em '{elementId}' — view indisponível");
+            return;
+        }
+
+        try
+        {
+            var posJs = @"(() => { const b = document.getElementById('" + elementId + @"'); if (!b) return 'null'; try { b.scrollIntoViewIfNeeded ? b.scrollIntoViewIfNeeded() : b.scrollIntoView({block:'nearest'}); } catch (_) {} const r = b.getBoundingClientRect(); if (r.width <= 0 || r.height <= 0) return 'rect-error'; return JSON.stringify({ x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2) }); })()";
+            var posJson = await view.CoreWebView2.ExecuteScriptAsync(posJs);
+
+            // ExecuteScriptAsync devolve o valor JS como string JSON-encoded; desembrulha um nível
+            var s = JsonSerializer.Deserialize<string>(posJson ?? "null");
+            if (string.IsNullOrWhiteSpace(s) || s == "null" || s == "rect-error")
+            {
+                LogFloatingWindowEvent($"Audio: clique CDP em '{elementId}' não enviado ({s ?? "null"})");
+                return;
+            }
+
+            var pos = JsonSerializer.Deserialize<JsonElement>(s);
+            if (!pos.TryGetProperty("x", out var xEl) || !pos.TryGetProperty("y", out var yEl)
+                || !xEl.TryGetDouble(out var xd) || !yEl.TryGetDouble(out var yd))
+            {
+                LogFloatingWindowEvent($"Audio: clique CDP em '{elementId}' — payload de posição inválido ({s})");
+                return;
+            }
+            int x = (int)Math.Round(xd);
+            int y = (int)Math.Round(yd);
+
+            var pressJson = $"{{\"type\":\"mousePressed\",\"x\":{x},\"y\":{y},\"button\":\"left\",\"clickCount\":1}}";
+            var releaseJson = $"{{\"type\":\"mouseReleased\",\"x\":{x},\"y\":{y},\"button\":\"left\",\"clickCount\":1}}";
+            await view.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.dispatchMouseEvent", pressJson);
+            await view.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.dispatchMouseEvent", releaseJson);
+
+            LogFloatingWindowEvent($"Audio: clique CDP em {elementId} aplicado");
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"Audio: clique CDP em '{elementId}' falhou: {ex.Message}");
+        }
+    }
+
     private async Task ApplyAudioSettingsAsync()
     {
         // Só muta de fato na bandeja (não na janela flutuante)
@@ -4348,21 +4585,104 @@ public partial class MainWindow : Window
         var scriptForActive = scriptTemplate.Replace("PREFERENCES_MARKER", activePrefs);
         var scriptForInactive = scriptTemplate.Replace("PREFERENCES_MARKER", inactivePrefs);
 
+        // Alvos de sincronização: contas + flutuante (segue a conta ativa).
+        var targets = new List<(string Name, Microsoft.Web.WebView2.Wpf.WebView2 View, bool MusicMuted, bool EffectsMuted, string Script, bool Active)>();
         foreach (var kvp in _accountViews)
         {
-            var core = kvp.Value.CoreWebView2;
-            if (core == null) continue;
-            var script = string.Equals(kvp.Key, _settings.ContaAtiva, StringComparison.OrdinalIgnoreCase)
-                ? scriptForActive : scriptForInactive;
-            try { await core.ExecuteScriptAsync(script); }
-            catch (Exception ex) { LogFloatingWindowEvent($"Audio: não foi possível aplicar preferências na {kvp.Key}: {ex.Message}"); }
+            if (kvp.Value?.CoreWebView2 == null) continue;
+            bool isActive = string.Equals(kvp.Key, _settings.ContaAtiva, StringComparison.OrdinalIgnoreCase);
+            targets.Add((kvp.Key, kvp.Value,
+                isActive ? _settings.MusicMuted : true,
+                isActive ? _settings.EffectsMuted : true,
+                isActive ? scriptForActive : scriptForInactive,
+                isActive));
+        }
+        if (_floatingView?.CoreWebView2 != null)
+            targets.Add(("Flutuante", _floatingView, _settings.MusicMuted, _settings.EffectsMuted, scriptForActive, true));
+
+        foreach (var t in targets)
+        {
+            try { await t.View.CoreWebView2.ExecuteScriptAsync(t.Script); }
+            catch (Exception ex) { LogFloatingWindowEvent($"Audio: não foi possível aplicar preferências na {t.Name}: {ex.Message}"); }
         }
 
-        // A flutuante segue a conta ativa (mesmo áudio)
-        if (_floatingView?.CoreWebView2 != null)
+        // Segunda fase: alinhar os botões do jogo via CDP trusted input (clique DOM não cola no áudio).
+        const string stateJs = @"(function(){ const r = (id) => { const b=document.getElementById(id); return b?{pressed:b.getAttribute('aria-pressed')}:{pressed:null}; }; return JSON.stringify({m:r('bt-musica').pressed, e:r('bt-efeitos').pressed}); })();";
+
+        static bool? ParsePressed(JsonElement el) =>
+            el.ValueKind == JsonValueKind.String
+                ? el.GetString() switch { "true" => true, "false" => false, _ => (bool?)null }
+                : (bool?)null;
+        static string Fmt(bool? v) => v.HasValue ? (v.Value ? "true" : "false") : "null";
+        static string FmtBool(bool v) => v ? "true" : "false";
+
+        foreach (var t in targets)
         {
-            try { await _floatingView.CoreWebView2.ExecuteScriptAsync(scriptForActive); }
-            catch (Exception ex) { LogFloatingWindowEvent($"Audio: não foi possível aplicar preferências na flutuante: {ex.Message}"); }
+            try
+            {
+                var raw = await t.View.CoreWebView2.ExecuteScriptAsync(stateJs);
+                // ExecuteScriptAsync devolve string JSON-encoded; desembrulha um nível
+                var s = JsonSerializer.Deserialize<string>(raw ?? "null");
+
+                bool? m = null, e = null;
+                bool stateParsed = false;
+                if (!string.IsNullOrWhiteSpace(s) && s != "null")
+                {
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(s);
+                        if (doc.RootElement.TryGetProperty("m", out var mEl)) m = ParsePressed(mEl);
+                        if (doc.RootElement.TryGetProperty("e", out var eEl)) e = ParsePressed(eEl);
+                        stateParsed = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        LogFloatingWindowEvent($"Audio: estado dos botões de '{t.Name}' não parseável ({ex.Message}) — cliques NÃO enviados");
+                    }
+                }
+                if (!stateParsed)
+                {
+                    if (string.IsNullOrWhiteSpace(s) || s == "null")
+                        LogFloatingWindowEvent($"Audio: estado dos botões de '{t.Name}' indisponível — cliques NÃO enviados");
+                    continue;
+                }
+
+                LogFloatingWindowEvent($"Audio: sincronizar '{t.Name}' music={FmtBool(t.MusicMuted)} effects={FmtBool(t.EffectsMuted)} statem={Fmt(m)} statee={Fmt(e)}");
+
+                bool clickedAny = false;
+                if (m == null)
+                    LogFloatingWindowEvent($"Audio: '{t.Name}' bt-musica não encontrado ou estado desconhecido — clique NÃO enviado");
+                else
+                {
+                    // O jogo usa `aria-pressed="true"` para som LIGADO no botão-toggle (bem óbvio,
+                    // e confirmável via DevTools): `curren = pressed == true` ⇒ unmuted. Nosso
+                    // setting `MusicMuted=true` significa MUTE desejado. Então precisamos clicar
+                    // sempre que (unmuted atual) != (unmuted desejado = !MusicMuted).
+                    bool unmutedNowM = m.Value;
+                    bool wantUnmutedM = !t.MusicMuted;
+                    if (unmutedNowM != wantUnmutedM)
+                        await ClickGameElementByIdAsync(t.View, "bt-musica");
+                    if (unmutedNowM != wantUnmutedM) clickedAny = true;
+                }
+
+                if (e == null)
+                    LogFloatingWindowEvent($"Audio: '{t.Name}' bt-efeitos não encontrado ou estado desconhecido — clique NÃO enviado");
+                else
+                {
+                    bool unmutedNowE = e.Value;
+                    bool wantUnmutedE = !t.EffectsMuted;
+                    if (unmutedNowE != wantUnmutedE)
+                        await ClickGameElementByIdAsync(t.View, "bt-efeitos");
+                    if (unmutedNowE != wantUnmutedE) clickedAny = true;
+                }
+
+                if (!clickedAny && m != null && e != null)
+                    LogFloatingWindowEvent($"Audio: '{t.Name}' já alinhado — nenhum clique aplicado");
+            }
+            catch (Exception ex)
+            {
+                LogFloatingWindowEvent($"Audio: sincronização de botões em '{t.Name}' falhou: {ex.Message}");
+            }
         }
     }
 
@@ -4530,14 +4850,28 @@ public partial class MainWindow : Window
         ((TranslateTransform)SidebarPanel.RenderTransform).BeginAnimation(TranslateTransform.XProperty, animShowX);
     }
 
-    // Abre a janela "Ajustes" (Notificações + Inicialização em abas)
+    // Abre a janela "Ajustes" (Notificações + Inicialização + Áudio em abas)
     private void Ajustes_Click(object sender, RoutedEventArgs e)
     {
-        var accountKeys = new List<string> { DefaultAccountName };
-        accountKeys.AddRange(_settings.ContasAdicionadas);
+        LogFloatingWindowEvent("Ajustes_Click: INICIADO");
+        try
+        {
+            var accountKeys = new List<string> { DefaultAccountName };
+            accountKeys.AddRange(_settings.ContasAdicionadas);
+            LogFloatingWindowEvent($"Ajustes_Click: accountKeys ok ({accountKeys.Count})");
 
-        var window = new AjustesWindow(_settings, accountKeys, GetAccountDisplayName, SaveWindowSettings, this);
-        window.ShowDialog();
+            // Aplica as preferências de áudio na WebView do jogo (chamada pelo painel de Áudio dos Ajustes).
+            var window = new AjustesWindow(_settings, accountKeys, GetAccountDisplayName, SaveWindowSettings, this,
+                                           async () => await ApplyAudioSettingsAsync());
+            LogFloatingWindowEvent("Ajustes_Click: ctor AjustesWindow ok");
+
+            window.Show();
+            LogFloatingWindowEvent("Ajustes_Click: Show retornou");
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"Ajustes_Click: EXCECAO {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     // Limite total de contas (incluindo a principal): 4 = principal + 3 extras
@@ -4736,6 +5070,16 @@ public partial class MainWindow : Window
         {
             string display = GetAccountDisplayName(item.Conta);
             var (message, _) = ObterTextoNotificacao(item.Kind, item.Contexto);
+            // Missões que "só trocam de conta" (diária auto-claim, semanal e comum) ganham
+            // um 📖 no fim da linha 2, como no popup próprio. mission_tarefa (Fosso/Capitão)
+            // fica de fora. Só display — o registro _ultimasNotificacoes não é alterado;
+            // toast/Central de Ações intocados.
+            if (string.Equals(item.Kind, "mission_diaria", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(item.Kind, "mission_semanal", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(item.Kind, "mission", StringComparison.OrdinalIgnoreCase))
+            {
+                message += " 📖";
+            }
             bool naoLida = ContaNaoLida(item.Conta);
 
             var avatar = CriarAvatarVisual(_settings, item.Conta, display, 30, 8, 18);

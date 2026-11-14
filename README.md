@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.4.6](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.6)**
+**[Baixar LoL Idle Desktop v1.4.7](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.7)**
 
 ### Instalador (quando disponível na Release)
 
@@ -77,12 +77,12 @@ O projeto é gratuito e feito por um desenvolvedor independente — contribuiç�
 - Restauração das dimensões e da posição da janela principal, da janela flutuante e da janela de Missões.
 - Preferência "sempre no topo" salva separadamente para a janela flutuante e para a janela de Missões.
 - Gerenciamento da sessão do WebView2.
-- Botão ⚙ "Ajustes" na sidebar — a central única de configurações (abre a janela **Ajustes**); desde a v1.4.6, as abas são 🔔 **Notificações** e ⚙ **Inicialização** (antes "Opções de fechamento" — ver a seção v1.4.6).
+- Botão ⚙ "Ajustes" na sidebar — a central única de configurações (abre a janela **Ajustes**); desde a v1.4.6, as abas são 🔔 **Notificações**, ⚙ **Inicialização** e, desde a v1.4.7, 🎵 **Áudio** (antes "Opções de fechamento" — ver a seção v1.4.6).
 - Arquivos em `%LOCALAPPDATA%\LoLIdleDesktop`: `window-settings.json` (preferências/geometria), `WebView2\` (sessão/cookies), `Extensions\HuntForLoLIdle\` (extensão Hunt, instalada sob demanda) e `floating-window.log` (log técnico).
 
 ### Limitações desta versão
 - Painéis disponíveis: **Missões** (somente leitura) incluído. **Barra lateral interativa** e **Personagem** não incluídos (o jogo bloqueia a segunda sessão).
-- O controle de áudio disponível silencia todo o áudio do jogo. Não há uma tela acessível pela interface para ajustar música e efeitos separadamente (a antiga tela de configurações de áudio foi removida do código; o ajuste de música/efeitos continua pelos botões do jogo).
+- O controle de áudio disponível silencia todo o áudio do jogo. Desde a v1.4.7, a aba 🎵 **Áudio** no Ajustes permite alternar Música e Efeitos (`MusicMuted`/`EffectsMuted`), sincronizados automaticamente com os botões `bt-musica`/`bt-efeitos` do jogo via CDP trusted input.
 - O voto e o login OAuth abrem no navegador real (a antiga janela separada de voto foi removida do código).
 - O botão fechar (×) e o Alt+F4/fechar pelo sistema abrem o diálogo "Fechar o LoL Idle?" (a menos que a preferência `CloseBehavior` esteja definida — ajuste pelo botão ⚙ "Ajustes" na sidebar, aba ⚙ "Inicialização"). Para encerrar direto, use **Sair** no menu da bandeja ou a opção "Sair e desligar as contas".
 
@@ -138,6 +138,19 @@ artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.4.7 — 2026-11-14
+
+- **Notificações novamente funcionando** — a v1.4.6 apareceu com o SoundPlayer+WAV retroativo resolvido; notificações tocam som novamente.
+- **🎵 Áudio** — nova aba no Ajustes com toggles de Música e Efeitos sincronizados diretamente com os botões naturais do jogo (btn-musica/btn-efeitos) via trusted input CDP. Sem precisar mais abrir a aba de configurações do jogo.
+- **Não Perturbar do app** — um toggle no Ajustes › Notificações silencia tudo (popup, balão, som). Histórico e bolinha de não lida continuam funcionando. Toast silencioso do Windows permanece na Central de Ações.
+- **Batch de supressão de notificação**: normal = tudo; tela cheia (borderless fullscreen) = só o som; foco/apresentação = silêncio total.
+- **Auto-ocultar ao entrar em tela cheia** — opção no Ajustes › Inicialização ("Esconder na bandeja em tela cheia", default ON). App vai pra bandeja quando o jogo ocupa o monitor; restaura pelo ícone da bandeja.
+- **Ajustes não-modal** — janela não bloqueia mais o jogo; click fora fecha a janela sem minimizar.
+- **ScrollBars do tema** — vertical/horizontal em 2px, hover laranja.
+- **Notificação: scroll areas com fundo seta (não mão) quando não clicáveis**.
+- **Popup: ícone de livro (📖) para missões que só trocam de personagem.**
+- **Notas de honestidade**: Popup já foi validado ao vivo em sessão pequena (notifications com popup, fullscreen); DND do Windows 11 manual não foi implementável (informação oculta — app tem toggle próprio).
 
 ### v1.4.6 — 2026-11-14
 

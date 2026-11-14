@@ -2,6 +2,7 @@
              x:Name="CloseBehaviorPanelRoot"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0" Cursor="Arrow">
     <StackPanel Margin="18,16,18,10">
         <!-- ===== Chave no início do conteúdo: pré-carregar contas no startup ===== -->
         <Border Background="{StaticResource BgPanel2}"
@@ -154,10 +155,37 @@
             </CheckBox>
         </Border>
 
+        <!-- Esconder na bandeja quando o jogo está em tela cheia (borderless cobrindo o monitor) -->
+        <Border Background="{StaticResource BgPanel2}"
+                BorderBrush="{StaticResource BorderSubtle}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Padding="12,10"
+                Margin="0,0,0,10">
+            <CheckBox x:Name="FullScreenTrayCheck"
+                      Style="{StaticResource SwitchStyle}"
+                      VerticalContentAlignment="Center"
+                      Checked="FullScreenTray_Changed"
+                      Unchecked="FullScreenTray_Changed">
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Esconder na bandeja em tela cheia"
+                               Foreground="{StaticResource TextPrimary}"
+                               FontSize="13"
+                               FontWeight="SemiBold" />
+                    <TextBlock Text="Quando o jogo ocupa o monitor inteiro, o app vai pra bandeja — notificações voltam a soar e o ícone fica no canto da tela."
+                               Foreground="{StaticResource TextSecondary}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Margin="0,3,0,0" />
+                </StackPanel>
+            </CheckBox>
+        </Border>
+
         <TextBlock Text="A mudança vale na hora e fica salva para as próximas vezes."
                    Foreground="{StaticResource TextSecondary}"
                    FontSize="11"
                    TextWrapping="Wrap"
                    Margin="2,6,0,0" />
     </StackPanel>
+    </ScrollViewer>
 </UserControl>
