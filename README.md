@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.4.5](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.5)**
+**[Baixar LoL Idle Desktop v1.4.6](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.6)**
 
 ### Instalador (quando disponível na Release)
 
@@ -77,14 +77,14 @@ O projeto é gratuito e feito por um desenvolvedor independente — contribuiç�
 - Restauração das dimensões e da posição da janela principal, da janela flutuante e da janela de Missões.
 - Preferência "sempre no topo" salva separadamente para a janela flutuante e para a janela de Missões.
 - Gerenciamento da sessão do WebView2.
-- Botão ⚙ "Opções de fechamento" na sidebar para trocar a preferência do botão Fechar (perguntar / continuar na bandeja / sair e desligar as contas) — desde a v1.4.4, dentro da janela **Ajustes**, na aba ⚙ "Opções de fechamento" (a aba 🔔 "Notificações" fica ao lado).
+- Botão ⚙ "Ajustes" na sidebar — a central única de configurações (abre a janela **Ajustes**); desde a v1.4.6, as abas são 🔔 **Notificações** e ⚙ **Inicialização** (antes "Opções de fechamento" — ver a seção v1.4.6).
 - Arquivos em `%LOCALAPPDATA%\LoLIdleDesktop`: `window-settings.json` (preferências/geometria), `WebView2\` (sessão/cookies), `Extensions\HuntForLoLIdle\` (extensão Hunt, instalada sob demanda) e `floating-window.log` (log técnico).
 
 ### Limitações desta versão
 - Painéis disponíveis: **Missões** (somente leitura) incluído. **Barra lateral interativa** e **Personagem** não incluídos (o jogo bloqueia a segunda sessão).
 - O controle de áudio disponível silencia todo o áudio do jogo. Não há uma tela acessível pela interface para ajustar música e efeitos separadamente (a antiga tela de configurações de áudio foi removida do código; o ajuste de música/efeitos continua pelos botões do jogo).
 - O voto e o login OAuth abrem no navegador real (a antiga janela separada de voto foi removida do código).
-- O botão fechar (×) e o Alt+F4/fechar pelo sistema abrem o diálogo "Fechar o LoL Idle?" (a menos que a preferência `CloseBehavior` esteja definida — ajuste pelo botão ⚙ "Opções de fechamento" na sidebar). Para encerrar direto, use **Sair** no menu da bandeja ou a opção "Sair e desligar as contas".
+- O botão fechar (×) e o Alt+F4/fechar pelo sistema abrem o diálogo "Fechar o LoL Idle?" (a menos que a preferência `CloseBehavior` esteja definida — ajuste pelo botão ⚙ "Ajustes" na sidebar, aba ⚙ "Inicialização"). Para encerrar direto, use **Sair** no menu da bandeja ou a opção "Sair e desligar as contas".
 
 ## 🖥️ Requisitos
 
@@ -138,6 +138,29 @@ artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
 O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
 
 ## 📋 Histórico de versões
+
+### v1.4.6 — 2026-11-14
+
+**Release de notificações reformuladas, Ajustes › Inicialização e troca de conta instantânea.**
+
+- **Popup próprio de notificação** — as notificações visíveis agora são um **popup próprio do app** (janela sem moldura, tema ardósia+cobre): card com barra de acento cobre à esquerda, **avatar da conta** à esquerda, **nome da conta** na linha 1 e a **mensagem** na linha 2, com botão **✕** no canto (fecha só o popup, sem executar a ação). Fica no **canto inferior direito** da tela (área de trabalho) e **empilha até 3** — ao abrir o 4º, o mais antigo fecha. Some sozinho em **6 s** (passar o mouse pausa o auto-hide; ao sair, o tempo recomeça) e entra/sai com **fade + deslize** (450 ms na entrada, 350 ms na saída). **Clique no card = mesma ação da notificação de sempre** (restaura o app, troca para a conta da notificação; para poções ou missão do Fosso do Dragão, devolve o personagem à Fonte; para diária concluída, coleta a recompensa — ver abaixo).
+- **Toast do Windows virou registro silencioso** na Central de Ações (`SuppressPopup`, sem banner visível) — o **histórico continua clicável** (mesmo AUMID `Zephrus15.LoLIdle.Desktop`); o balão clássico continua como fallback caso o toast falhe.
+- **Respeito à Assistência de Foco / tela cheia / apresentação** — se o Windows indicar que não é hora de notificar (`SHQueryUserNotificationState`), **o popup não aparece** (o som toca e o registro silencioso vai para a Central de Ações). **Limitação honesta:** o "Não Perturbar" **manual** do Windows 11 (Sessão de Foco) não é detectado de forma confiável — **o popup pode aparecer numa Sessão de Foco manual**.
+- **Diárias com recompensa automática** — ao clicar na notificação de uma **missão diária** concluída, o app simula um clique **confiável** no botão de recompensa do próprio jogo (`#rastreio-diaria-rift`, classe `pronta`) via CDP `Input.dispatchMouseEvent` — a recompensa é creditada pelo jogo, **sem clique manual**. **Testado ao vivo no jogo (recompensa coletada/creditada pelo app).**
+- **Missões separadas em tipos** (todas sob o toggle **"Missão"** dos Ajustes):
+  - **"Tarefa concluída!"** — tarefas de batalha/entrega (contexto contendo "Tarefa pronta", "Fosso do Dragão" ou "Capitão da Legião"): o clique na notificação **devolve o personagem à Fonte** (tecla B), como as poções.
+  - **"Diária concluída: \<nome\>!"** — clique faz o **auto-claim** do banner (ver item acima).
+  - **"Semanal concluída: \<nome\>!"** — semanal concluída (código presente; o comportamento do clique segue o da notificação comum — semanais dependem de como o rastreador do jogo aparece).
+  - **"Missão concluída: \<nome\>!"** — missões comuns (restaurar o app/trocar de conta).
+- **Troca de conta instantânea** — a visibilidade dos WebViews (conta na frente) é aplicada **primeiro**; a animação do histórico, o rebuild da sidebar/faixas e as preferências acontecem em **segundo plano**; avatares ficam em **cache** (`BitmapImage`), evitando decodificar de novo a cada troca.
+- **Ajustes › Inicialização** (aba nova no lugar da antiga "Opções de fechamento"): **pré-carregar contas no startup** (**padrão ligado**), **iniciar com o Windows** (chave Run + exe), **abrir na bandeja somente quando iniciado pelo Windows no boot** (o atalho Run grava a flag `--iniciar-na-bandeja`; abrir o app **manualmente** abre a janela normalmente), **continuar farmando em segundo plano** e **perguntar ao fechar** (com "Lembrar minha escolha" persistente). Tudo vale na hora.
+- **Notificações de poção separadas por tipo** — **5 toggles individuais** (Vida, Vida Forte, Vida Suprema, Mana, Mana Forte) + **interruptor geral** no 🔔 Notificações (desmarcar o geral silencia todas; desmarcar uma sub-chave silencia só aquele tipo; configs antigas com `potion` continuam valendo). Detecção testada ao vivo no jogo (o aviso chegou na transição de vida da poção).
+- **WebViews em segundo plano e na bandeja com uso mínimo** — contas fora de foco rodam em nível de uso **Low** e voltam ao normal quando a conta fica na frente.
+- **"Limpar" notificações** — a lista agora apaga **uma linha por vez, de cima para baixo** (cascata), mantendo a preservação de notificações recém-chegadas.
+- **Diálogo "Fechar o LoL Idle?"** recriado no tema ardósia+cobre (cards com ícones play/power), com **"Lembrar minha escolha"** persistente.
+- **Instalador** — novo utilitário `installer/prune-installers.ps1` mantém só os **2 instaladores mais recentes** em `artifacts/installer` (política "atual + uma anterior").
+- **Diagnóstico** — novo log detalhado `Missao classificada:` para as notificações de missão.
+- **Honestidade** — o auto-claim da diária e a detecção de poção foram **testados ao vivo**; o popup em si (empilhamento/multi-monitor/DPI) e o Não Perturbar manual do Win11 **seguem sem validação completa**; semanais dependem de como o rastreador aparece no jogo.
 
 ### v1.4.5 — 2026-11-13
 

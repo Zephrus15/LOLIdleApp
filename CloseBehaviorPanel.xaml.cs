@@ -75,8 +75,10 @@ namespace LoLIdleDesktop
                 {
                     string exe = Environment.ProcessPath
                         ?? System.Windows.Forms.Application.ExecutablePath;
-                    // Caminho entre aspas (o nome do executável contém espaço: "LoL Idle.exe").
-                    key.SetValue(RunValueName, $"\"{exe}\"");
+                    // Caminho entre aspas (o nome do executável contém espaço: "LoL Idle.exe"),
+                    // seguido da flag --iniciar-na-bandeja: só o boot do Windows passa essa flag,
+                    // então a ocultação na bandeja nunca acontece na abertura manual.
+                    key.SetValue(RunValueName, $"\"{exe}\" --iniciar-na-bandeja");
                 }
                 else
                 {

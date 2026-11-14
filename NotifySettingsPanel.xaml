@@ -39,6 +39,64 @@
             <!-- Checkboxes por tipo gerados no code-behind -->
         </StackPanel>
 
+        <!-- Poções: master switch + sub-chaves indentadas (uma por tipo de poção) -->
+        <CheckBox x:Name="PotionMasterCheck"
+                  Tag="potion"
+                  Style="{StaticResource DarkCheckBox}"
+                  FontSize="12"
+                  Margin="0,0,0,6"
+                  VerticalContentAlignment="Center"
+                  Checked="TypeCheck_Changed"
+                  Unchecked="TypeCheck_Changed"
+                  Content="Poções de HP ou MP acabaram" />
+        <StackPanel x:Name="PotionSubPanel" Margin="22,0,0,0">
+            <CheckBox x:Name="PotionVidaCheck"
+                      Tag="potion_vida"
+                      Style="{StaticResource DarkCheckBox}"
+                      FontSize="12"
+                      Margin="0,0,0,6"
+                      VerticalContentAlignment="Center"
+                      Checked="TypeCheck_Changed"
+                      Unchecked="TypeCheck_Changed"
+                      Content="Poções de Vida" />
+            <CheckBox x:Name="PotionVidaForteCheck"
+                      Tag="potion_vidaF"
+                      Style="{StaticResource DarkCheckBox}"
+                      FontSize="12"
+                      Margin="0,0,0,6"
+                      VerticalContentAlignment="Center"
+                      Checked="TypeCheck_Changed"
+                      Unchecked="TypeCheck_Changed"
+                      Content="Poções de Vida Forte" />
+            <CheckBox x:Name="PotionVidaSupremaCheck"
+                      Tag="potion_vidaS"
+                      Style="{StaticResource DarkCheckBox}"
+                      FontSize="12"
+                      Margin="0,0,0,6"
+                      VerticalContentAlignment="Center"
+                      Checked="TypeCheck_Changed"
+                      Unchecked="TypeCheck_Changed"
+                      Content="Poções de Vida Suprema" />
+            <CheckBox x:Name="PotionManaCheck"
+                      Tag="potion_mana"
+                      Style="{StaticResource DarkCheckBox}"
+                      FontSize="12"
+                      Margin="0,0,0,6"
+                      VerticalContentAlignment="Center"
+                      Checked="TypeCheck_Changed"
+                      Unchecked="TypeCheck_Changed"
+                      Content="Poções de Mana" />
+            <CheckBox x:Name="PotionManaForteCheck"
+                      Tag="potion_manaF"
+                      Style="{StaticResource DarkCheckBox}"
+                      FontSize="12"
+                      Margin="0,0,0,6"
+                      VerticalContentAlignment="Center"
+                      Checked="TypeCheck_Changed"
+                      Unchecked="TypeCheck_Changed"
+                      Content="Poções de Mana Forte" />
+        </StackPanel>
+
         <TextBlock x:Name="MultiAccountHint"
                    Margin="2,10,0,0"
                    FontSize="11"

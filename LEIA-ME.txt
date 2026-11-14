@@ -1,4 +1,4 @@
-﻿LoL Idle Desktop - versão 1.4.5
+﻿LoL Idle Desktop - versão 1.4.6
 Aplicativo desktop não oficial para Windows
 
 O que é
@@ -56,11 +56,56 @@ Gerar instalador
 2. Execute GERAR-INSTALADOR.bat na pasta do projeto.
 3. O instalador será criado em:
    artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
+   Dica: installer/prune-installers.ps1 mantém só os 2 instaladores mais
+   recentes em artifacts\installer (dry-run por padrão; -Execute apaga).
 
 O instalador verifica o Microsoft Edge WebView2 Runtime e o instala
 automaticamente quando necessário.
 
-Novidades (v1.4.5 — hotfix de 2026-11-13)
+Novidades (v1.4.6 - 2026-11-14)
+-------------------------------
+- Popup próprio de notificação: card no canto inferior direito (ardósia +
+  cobre), avatar da conta, nome na linha 1, mensagem na linha 2; botão X
+  fecha só o popup; até 3 empilhados (o 4º fecha o mais antigo); some em
+  6 s (hover pausa); clique no card = mesma ação da notificação.
+- Toast do Windows virou registro silencioso na Central de Ações (sem
+  banner); histórico continua clicável. Balão clássico só se o toast falhar.
+- Assistência de Foco / tela cheia / apresentação suprimem o popup
+  (som e histórico continuam). Limitação: o Não Perturbar manual do
+  Windows 11 (Sessão de Foco) pode não suprimir o popup.
+- Diárias com recompensa automática: clicar na notificação da diária
+  clica sozinho no banner (#rastreio-diaria-rift, via CDP
+  Input.dispatchMouseEvent). Recompensa creditada pelo jogo. Testado ao
+  vivo (recompensa creditada).
+- Missões separadas por tipo (toggle "Missão" nos Ajustes):
+  "Tarefa concluída!" — clique devolve o personagem à Fonte;
+  "Diária concluída: <nome>!" — clique coleta a recompensa;
+  "Semanal concluída: <nome>!" — semanal (depende de como o rastreador
+  aparece no jogo); "Missão concluída: <nome>!" — comum.
+- Troca de conta instantânea: visibilidade na frente; resto
+  (histórico/sidebar/salvar) em segundo plano; avatares em cache.
+- Ajustes com nova aba "Inicialização" (no lugar de "Opções de
+  fechamento"): pré-carregar contas no startup (padrão ligado), iniciar
+  com o Windows, abrir na bandeja só quando iniciado pelo boot (flag
+  --iniciar-na-bandeja; abrir manualmente abre a janela), continuar
+  farmando em segundo plano e perguntar ao fechar ("Lembrar minha
+  escolha" persistente). Tudo vale na hora.
+- Notificações de poção por tipo: 5 toggles individuais (Vida, Vida
+  Forte, Vida Suprema, Mana, Mana Forte) + interruptor geral; detecção
+  testada ao vivo (transição de vida da poção).
+- WebViews em segundo plano/bandeja com uso mínimo (Low); voltam ao
+  normal quando a conta fica na frente.
+- "Limpar" em "Últimas notificações": apaga uma linha por vez, de cima
+  para baixo (cascata).
+- Diálogo "Fechar o LoL Idle?" recriado no tema (cards play/power) com
+  "Lembrar minha escolha" persistente.
+- Instalador: installer/prune-installers.ps1 mantém os 2 mais recentes.
+- Diagnóstico: log "Missao classificada:" para missões.
+- Honestidade: auto-claim da diária e detecção de poção testados ao
+  vivo; popup em si (empilhamento, multi-monitor, DPI) e Não Perturbar
+  manual do Win11 seguem sem validação completa.
+
+Novidades (v1.4.5 - hotfix de 2026-11-13)
 -----------------------------------------
 - **Correção crítica: nenhuma notificação restaurava o app**.
   Clicar num toast, na linha de histórico ou no balão não faria o app voltar.

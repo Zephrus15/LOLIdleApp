@@ -85,7 +85,7 @@
                                Foreground="{StaticResource TextPrimary}"
                                FontSize="13"
                                FontWeight="SemiBold" />
-                    <TextBlock Text="Ao iniciar, o app não abre a janela: ícone só na bandeja do sistema; quando você clica no ícone, a janela abre"
+                    <TextBlock Text="Só na inicialização do Windows — abrir o app manualmente mostra a janela. No boot, o app não abre a janela: ícone só na bandeja do sistema; quando você clica no ícone, a janela abre"
                                Foreground="{StaticResource TextSecondary}"
                                FontSize="11"
                                TextWrapping="Wrap"

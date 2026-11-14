@@ -199,21 +199,14 @@ public partial class MainWindow : Window
         window.__lolIdleTrayNotifyInstalled = true;
         const missionRe = /(miss[aã]o.*(conclu|complet)|mission.*(complete|conclu)|quest.*(complete|conclu)|conclu.*miss[aã]o|tarefa.*(conclu|complet))/i;
         const inventoryRe = /(mochila.*chei|invent[áa]rio.*(cheio|lotado|cheia)|inventory.*(full|lotado)|bolsa.*(cheia|lotada)|sem espa[cç]o|no space|not enough space|bag.*full)/i;
-        const last = { legendary: 0, epic: 0, mission: 0, inventory: 0, level: 0, potion_hp: 0, potion_mana: 0 };
+        const last = { legendary: 0, epic: 0, mission: 0, inventory: 0, level: 0, potion_vida: 0, potion_vidaF: 0, potion_vidaS: 0, potion_mana: 0, potion_manaF: 0 };
         let prevLevel = null;
-        const POCOES_FAM = {
-            potion_hp: ['vida', 'vidaF', 'vidaS'],
-            potion_mana: ['mana', 'manaF']
+        const POCOES = ['vida', 'vidaF', 'vidaS', 'mana', 'manaF'];
+        const somaPocao = (id) => {
+            const b = document.querySelector('#hud-pocoes .hud-pocao[data-pocao=' + id + '] b');
+            return b ? (parseInt(b.textContent, 10) || 0) : 0;
         };
-        const somaPocao = (ids) => {
-            let s = 0;
-            for (const id of ids) {
-                const b = document.querySelector('#hud-pocoes .hud-pocao[data-pocao=' + id + '] b');
-                s += b ? (parseInt(b.textContent, 10) || 0) : 0;
-            }
-            return s;
-        };
-        let prevFamilias = { potion_hp: null, potion_mana: null };
+        let prevPocoes = { potion_vida: null, potion_vidaF: null, potion_vidaS: null, potion_mana: null, potion_manaF: null };
         let _ultimaPocoes = 0;
         let _pocoesTimer = null;
         const checkPocoes = () => {
@@ -226,19 +219,20 @@ public partial class MainWindow : Window
                     return;
                 }
                 _ultimaPocoes = now;
-                for (const kind of Object.keys(POCOES_FAM)) {
-                    const cur = somaPocao(POCOES_FAM[kind]);
-                    if (prevFamilias[kind] === null) { prevFamilias[kind] = cur; continue; }
-                    if (prevFamilias[kind] > 0 && cur === 0) send(kind);
-                    prevFamilias[kind] = cur;
+                for (const id of POCOES) {
+                    const kind = 'potion_' + id;
+                    const cur = somaPocao(id);
+                    if (prevPocoes[kind] === null) { prevPocoes[kind] = cur; continue; }
+                    if (prevPocoes[kind] > 0 && cur === 0) send(kind);
+                    prevPocoes[kind] = cur;
                 }
             } catch (_) {}
         };
-        const send = (kind) => {
+        const send = (kind, ctx) => {
             const now = Date.now();
             if (now - last[kind] < 3000) return;
             last[kind] = now;
-            try { window.chrome.webview.postMessage('lol-idle-notify:' + kind); } catch (_) {}
+            try { window.chrome.webview.postMessage('lol-idle-notify:' + kind + (ctx ? '|' + encodeURIComponent(ctx.substring(0, 500)) : '')); } catch (_) {}
         };
         const checkSaqueNode = (n) => {
             const isSaque = (el) => el && el.matches && el.matches('.saque');
@@ -267,7 +261,16 @@ public partial class MainWindow : Window
             const s = (t || '').toLowerCase();
             if (!s.trim()) return;
             if (inventoryRe.test(s)) { send('inventory'); return; }
-            if (missionRe.test(s)) send('mission');
+            if (missionRe.test(s)) send('mission', collectMissionContext());
+        };
+        // Mesmo rastreador de missões usado pelo MissionsScript: o texto bruto captado aqui
+        // segue SEM normalização — quem normaliza (acento/caixa) é o C#.
+        const collectMissionContext = () => {
+            try {
+                const rast = document.getElementById('rastreador');
+                const t = (rast?.innerText || rast?.textContent || '').trim();
+                return t ? t.substring(0, 500) : '';
+            } catch (_) { return ''; }
         };
         let lastBolsa = '';
         const checkBolsa = () => {
@@ -339,6 +342,8 @@ public partial class MainWindow : Window
     private Forms.NotifyIcon? _trayIcon;
     private string? _lastBalloonAccount;
     private string? _lastBalloonKind;
+    private string? _lastBalloonContext;
+    private readonly List<NotificationPopupWindow> _activePopups = new();
     private System.Windows.Threading.DispatcherTimer? _balloonRestoreTimer;
     private Forms.ToolStripMenuItem? _trayTrayMuteItem;
     private bool _floatingOpened;
@@ -355,6 +360,7 @@ public partial class MainWindow : Window
         public string Conta = "";
         public string Kind = "";
         public DateTime Quando;
+        public string? Contexto;
     }
     private readonly List<NotificacaoItem> _ultimasNotificacoes = new();
     private readonly HashSet<string> _contasNaoLidas = new(StringComparer.OrdinalIgnoreCase);
@@ -389,6 +395,9 @@ public partial class MainWindow : Window
     private Window? _preparedFloatingWindow;
     private Microsoft.Web.WebView2.Wpf.WebView2? _preparedFloatingView;
     private bool _isPreparingFloatingView;
+    // true somente ao FIM da preparação bem-sucedida do host flutuante.
+    // Enquanto false, HandleNewWindowRequested não entrega o host ao jogo.
+    private bool _preparedFloatingReady;
     // Coalesced one-shot: pedido de recriação do host feito enquanto uma
     // preparação estava em andamento. Aplicado ao final da preparação atual.
     private bool _prepareRestartRequested;
@@ -690,6 +699,11 @@ public partial class MainWindow : Window
                 closeBehaviorMigrated = true; // valor corrompido também cai no padrão 1
             }
 
+            // Migração: instalações existentes gravaram na chave Run só o caminho do
+            // executável; adiciona a flag --iniciar-na-bandeja para a ocultação valer
+            // apenas no boot do Windows, nunca na abertura manual.
+            MigrateRunKeyWithFlag();
+
             if (settings.NormalWidth >= 480 && settings.NormalWidth <= 10000)
                 _normalWidth = settings.NormalWidth;
 
@@ -728,6 +742,49 @@ public partial class MainWindow : Window
         UpdateMaximizeButton();
         SyncTrayMenuChecks();
         _ = AtualizarContaConectadaUIAsync(); // fire-and-forget
+    }
+
+    // Migração única: se "Iniciar com o Windows" está ativo, garante que a chave Run
+    // HKCU\Software\Microsoft\Windows\CurrentVersion\Run\LoLIdleDesktop aponte para o
+    // executável atual COM a flag --iniciar-na-bandeja. Chave personalizada (não bate
+    // com nosso executável) não é tocada.
+    private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
+    private const string RunValueName = "LoLIdleDesktop";
+    private const string RunTrayFlag = "--iniciar-na-bandeja";
+
+    private void MigrateRunKeyWithFlag()
+    {
+        if (!_settings.IniciarComWindows)
+            return;
+        try
+        {
+            using Microsoft.Win32.RegistryKey? key =
+                Microsoft.Win32.Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true);
+            string? current = key?.GetValue(RunValueName) as string;
+            if (string.IsNullOrWhiteSpace(current))
+                return; // sem chave (ou vazia): nada a migrar; SetRunValue cuida do estado atual
+
+            if (current.Contains(RunTrayFlag, StringComparison.OrdinalIgnoreCase))
+                return; // já migrada / gravada pelo SetRunValue novo
+
+            string exe = Environment.ProcessPath
+                ?? System.Windows.Forms.Application.ExecutablePath;
+            bool matchesOurExe =
+                current.Contains(exe, StringComparison.OrdinalIgnoreCase)
+                || current.Contains("LoL Idle.exe", StringComparison.OrdinalIgnoreCase);
+            if (!matchesOurExe)
+            {
+                LogFloatingWindowEvent("Run key personalizada, não tocada");
+                return;
+            }
+
+            key!.SetValue(RunValueName, $"\"{exe}\" {RunTrayFlag}");
+            LogFloatingWindowEvent("Run key migrada com flag --iniciar-na-bandeja");
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"Run key: migração para --iniciar-na-bandeja falhou: {ex.Message}");
+        }
     }
 
     // Salva as preferências no perfil local do Windows.
@@ -878,28 +935,63 @@ public partial class MainWindow : Window
         {
             var conta = _lastBalloonAccount;
             var kind = _lastBalloonKind;
+            var context = _lastBalloonContext;
             // NULA o estado sempre: um clique fora de hora nunca reutiliza dados de outra notificação.
             _lastBalloonAccount = null;
             _lastBalloonKind = null;
+            _lastBalloonContext = null;
             // Estado já consumido/limpo: ignora silenciosamente (balão antigo não sequestra a ação).
-            if (conta == null && kind == null)
+            if (conta == null && kind == null && context == null)
                 return;
-            RestoreFromTray();
-            if (conta != null && !ContaExiste(conta))
-            {
-                LogFloatingWindowEvent($"BalloonTipClicked: conta '{conta}' não existe mais — ignorado");
-                // Conta removida: descarta a linha órfã do histórico (nada de restaurar/trocar).
-                RemoverUltimaNotificacao(conta, kind);
-                conta = null;
-            }
-            if (conta != null)
-                _ = SwitchAccountAsync(conta);
-            // Clique no balão de poção manda o personagem de volta para a fonte
-            if (conta != null && kind != null
-                && kind.StartsWith("potion", StringComparison.OrdinalIgnoreCase))
-                _ = VoltarParaFonteAsync(conta);
-            RemoverUltimaNotificacao(conta, kind);
+            // Mesma ação do clique no toast/popup (restaura, troca conta, limpa histórico, poção→fonte, mission Fosso→fonte).
+            ExecuteNotificationAction(conta, kind, context);
         };
+    }
+
+    // Ação compartilhada entre o clique no toast (Central de Ações), no balão de fallback
+    // e no popup próprio do app: restaura o app, troca para a conta, limpa o histórico da
+    // notificação e — para poção, e para a missão do Fosso do Dragão — manda o personagem
+    // de volta para a fonte.
+    // IMPORTANTE: deve rodar na UI thread (ToastActivated despacha antes de chamar).
+    private async void ExecuteNotificationAction(string? conta, string? kind, string? context = null)
+    {
+        try
+        {
+        // Consumir/limpar também o estado do fallback balloon:
+        // uma interação por toast/popup nunca deixa um balão antigo vivo.
+        _lastBalloonAccount = null;
+        _lastBalloonKind = null;
+        _lastBalloonContext = null;
+        if (!ContaExiste(conta))
+        {
+            LogFloatingWindowEvent($"NotificationAction: conta '{conta}' não existe mais — ignorado");
+            // Conta removida: descarta a linha órfã do histórico.
+            RemoverUltimaNotificacao(conta, kind);
+            return;
+        }
+        RestoreFromTray();
+        if (conta != null) _ = SwitchAccountAsync(conta);
+        RemoverUltimaNotificacao(conta, kind);
+        if (conta != null && kind != null
+            && kind.StartsWith("potion", StringComparison.OrdinalIgnoreCase))
+            _ = VoltarParaFonteAsync(conta);
+        // Missão do Fosso do Dragão no clique da notificação: devolve o personagem à Fonte (igual poção).
+        if (conta != null && context != null && IsMissaoDoFossoDoDragao(context))
+        {
+            LogFloatingWindowEvent($"Missão do Fosso do Dragão no clique da notificação — devolvendo '{conta}' para a Fonte");
+            await VoltarParaFonteAsync(conta, "missão Fosso do Dragão");
+        }
+        // Auto-claim da diária: somente mission_diaria clica no banner azul do jogo
+        // ("Missão diária completa! Clique aqui..."). Depois da Fonte.
+        if (string.Equals(kind, "mission_diaria", StringComparison.OrdinalIgnoreCase))
+        {
+            await TryClickDailyBannerAsync(conta, kind);
+        }
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"NotificationAction: erro: {ex.Message}");
+        }
     }
 
     private void ToastActivated(ToastNotificationActivatedEventArgsCompat e)
@@ -907,31 +999,14 @@ public partial class MainWindow : Window
         try
         {
             var toastArgs = ToastArguments.Parse(e.Argument);
-            string? conta = null, kind = null;
+            string? conta = null, kind = null, ctx = null;
             if (toastArgs.Contains("conta")) conta = toastArgs["conta"];
             if (toastArgs.Contains("kind"))  kind  = toastArgs["kind"];
+            try { if (toastArgs.Contains("ctx")) ctx = toastArgs["ctx"]; }
+            catch (Exception ex) { LogFloatingWindowEvent($"ToastActivated: ctx ilegível ({ex.GetType().Name}) — prosseguindo sem contexto"); }
+            if (string.IsNullOrWhiteSpace(ctx)) ctx = null;
             // O evento roda numa thread COM fora da UI — despachar para a UI thread
-            Dispatcher.Invoke(() =>
-            {
-                // Clique no toast consome/limpa também o estado do fallback balloon:
-                // um balão antigo nunca sobrevive a uma interação por toast.
-                // (Notificações novas re-setam o estado ao exibir.)
-                _lastBalloonAccount = null;
-                _lastBalloonKind = null;
-                if (!ContaExiste(conta))
-                {
-                    LogFloatingWindowEvent($"ToastActivated: conta '{conta}' não existe mais — ignorado");
-                    // Conta removida: descarta a linha órfã do histórico.
-                    RemoverUltimaNotificacao(conta, kind);
-                    return;
-                }
-                RestoreFromTray();
-                if (conta != null) _ = SwitchAccountAsync(conta);
-                RemoverUltimaNotificacao(conta, kind);
-                if (conta != null && kind != null
-                    && kind.StartsWith("potion", StringComparison.OrdinalIgnoreCase))
-                    _ = VoltarParaFonteAsync(conta);
-            });
+            Dispatcher.Invoke(() => ExecuteNotificationAction(conta, kind, ctx));
         }
         catch (Exception ex)
         {
@@ -1369,6 +1444,7 @@ public partial class MainWindow : Window
             var prepared = _preparedFloatingWindow;
             _preparedFloatingWindow = null;
             _preparedFloatingView = null;
+            _preparedFloatingReady = false;
             prepared.Close();
         }
         // Fecha a janela Hunt junto com o processo quando o usuário escolhe Sair.
@@ -1384,6 +1460,15 @@ public partial class MainWindow : Window
             try { accountView.Dispose(); } catch { }
         }
         _accountViews.Clear();
+
+        // Fecha os popups de notificação abertos (janelas top-level próprias):
+        // sem isso o processo sobreviveria até o(s) popup(s) fecharem,
+        // mesmo com a bandeja dispensada e as WebViews liberadas.
+        foreach (var popup in _activePopups.ToList())
+        {
+            try { popup.Close(); } catch { }
+        }
+        _activePopups.Clear();
 
         if (_trayIcon != null)
         {
@@ -1469,8 +1554,15 @@ public partial class MainWindow : Window
 
         // Abertura via inicialização do Windows com "Abrir na bandeja":
         // começa escondido na bandeja, sem mostrar a janela principal.
-        if (_settings.IniciarComWindows && _settings.IniciarNaBandejaAoIniciar)
+        // Só vale no boot (chave Run grava a flag --iniciar-na-bandeja);
+        // abertura manual nunca esconde a janela.
+        var startupArgs = Environment.GetCommandLineArgs();
+        bool autoStart = startupArgs.Contains(RunTrayFlag, StringComparer.OrdinalIgnoreCase);
+        if (autoStart && _settings.IniciarComWindows && _settings.IniciarNaBandejaAoIniciar)
+        {
+            LogFloatingWindowEvent("Startup: abertura via Run key com --iniciar-na-bandeja — ocultando na bandeja");
             HideToTray();
+        }
 
         // Pré-carregamento das contas extras (Ajustes > Inicialização).
         // Executado AQUI, no fim do Loaded, para não atrasar a exibição da janela principal:
@@ -1578,10 +1670,10 @@ public partial class MainWindow : Window
                 return;
             }
 
-            LogFloatingWindowEvent($"Popup: estado do host — preparedWindowNull={_preparedFloatingWindow == null}, preparedViewNull={_preparedFloatingView == null}, coreWebView2Null={_preparedFloatingView?.CoreWebView2 == null}");
-            if (_preparedFloatingWindow == null || _preparedFloatingView?.CoreWebView2 == null)
+            LogFloatingWindowEvent($"Popup: estado do host — preparedWindowNull={_preparedFloatingWindow == null}, preparedViewNull={_preparedFloatingView == null}, coreWebView2Null={_preparedFloatingView?.CoreWebView2 == null}, ready={_preparedFloatingReady}");
+            if (!_preparedFloatingReady || _preparedFloatingWindow == null || _preparedFloatingView?.CoreWebView2 == null)
             {
-                LogFloatingWindowEvent("Popup: WebView pré-inicializado indisponível; mantendo comportamento padrão do WebView2.");
+                LogFloatingWindowEvent("Popup: WebView pré-inicializado indisponível ou ainda não preparado por completo; mantendo comportamento padrão do WebView2.");
                 return;
             }
 
@@ -1591,6 +1683,7 @@ public partial class MainWindow : Window
 
             _preparedFloatingWindow = null;
             _preparedFloatingView = null;
+            _preparedFloatingReady = false;
             _floatingWindow = window;
             _floatingView = view;
             LogFloatingWindowEvent("Prepare: host preparado consumido nesta navegação.");
@@ -1857,7 +1950,10 @@ public partial class MainWindow : Window
                     _ = core.ExecuteScriptAsync($"document.querySelector('#lol-idle-missions')?.classList.toggle('active', {_settings.ShowMissions.ToString().ToLower()});");
                 }
                 else if (msg != null && msg.StartsWith("lol-idle-notify:"))
-                    HandleNotification(key, msg["lol-idle-notify:".Length..]);
+                {
+                    if (TryParseNotifyPayload(msg["lol-idle-notify:".Length..], out var kind, out var ctx))
+                        HandleNotification(key, kind, context: ctx);
+                }
                 else if (msg == "lol-idle-control:hunt")
                     ToggleHuntFromControl();
             }
@@ -1974,9 +2070,14 @@ public partial class MainWindow : Window
                 .Where(n => string.Equals(n.Conta, key, StringComparison.OrdinalIgnoreCase))
                 .ToList();
             if (itensConta.Count > 0)
-                await RemoverNotificacoesComAnimacaoAsync(itensConta);
+                // Fire-and-forget: a animação do histórico roda em paralelo com o swap;
+                // o jogo aparece imediatamente. A remoção é por referência, então
+                // notificações que chegarem durante a animação são preservadas.
+                _ = RemoverNotificacoesComAnimacaoAsync(itensConta);
+            // Passo síncrono cedo: o jogo da nova conta já fica visível antes
+            // de tudo que é lento (floating/hunt close, restart, rebuilds de UI).
             ApplyAccountVisibility();
-            SaveWindowSettings();
+            QueueWindowSettingsSave();
 
             // Nunca queremos flutuante com dados da conta anterior: fecha e descarta/recria
             if (_floatingWindow != null)
@@ -1994,7 +2095,13 @@ public partial class MainWindow : Window
             _ = ApplyAudioSettingsAsync();
             RestartPreparedFloating();
             _lastMissionsJson = null;
-            await AtualizarContaConectadaUIAsync();
+            // Rebuilds de sidebar/faixas/histórico em Background: não disputam layout com o swap.
+            _ = Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try { _ = AtualizarContaConectadaUIAsync(); }
+                catch (Exception ex) { LogFloatingWindowEvent($"SwitchAccountAsync: erro ao atualizar UI da conta - {ex.Message}"); }
+            }),
+                System.Windows.Threading.DispatcherPriority.Background);
             if (_accountViews.TryGetValue(key, out var view))
                 view.Focus();
         }
@@ -3111,15 +3218,25 @@ public partial class MainWindow : Window
     private void ApplyPreparedFloatingRestart()
     {
         _prepareRestartRequested = false;
+        _preparedFloatingReady = false;
 
         if (_preparedFloatingWindow != null)
         {
             var w = _preparedFloatingWindow;
+            var view = _preparedFloatingView;
             _preparedFloatingWindow = null;
             _preparedFloatingView = null;
             LogFloatingWindowEvent("RestartPreparedFloating: host preparado descartado; recriando com a conta ativa.");
-            try { w.Close(); }
-            catch (Exception ex) { LogFloatingWindowEvent($"RestartPreparedFloating: erro ao fechar host preparado — {ex.Message}"); }
+            // w.Close() pode levar ao teardown síncrono do WebView2 no clique;
+            // tira o fechamento (e o Dispose do host, que hoje era descartado sem ele)
+            // do caminho crítico, em Background. Coalescing de _prepareRestartRequested intacto.
+            _ = Dispatcher.InvokeAsync(() =>
+            {
+                try { w.Close(); }
+                catch (Exception ex) { LogFloatingWindowEvent($"RestartPreparedFloating: erro ao fechar host preparado - {ex.Message}"); }
+                try { view?.Dispose(); }
+                catch (Exception ex) { LogFloatingWindowEvent($"RestartPreparedFloating: erro ao liberar WebView2 preparado - {ex.Message}"); }
+            }, System.Windows.Threading.DispatcherPriority.Background);
         }
 
         _ = PrepareFloatingWebViewAsync(this, "RestartPreparedFloating");
@@ -3144,6 +3261,9 @@ public partial class MainWindow : Window
             LogFloatingWindowEvent("Prepare: ignorado — host já preparado.");
             return;
         }
+
+        // Preparação vai começar: o host (se houver) não está pronto até o fim dela.
+        _preparedFloatingReady = false;
 
         // Captura a conta ativa no momento da preparação (dona da flutuante/popup no jogo)
         _floatingAccountKey = _settings.ContaAtiva ?? DefaultAccountName;
@@ -3249,6 +3369,7 @@ public partial class MainWindow : Window
                 {
                     _preparedFloatingWindow = null;
                     _preparedFloatingView = null;
+                    _preparedFloatingReady = false;
                     LogFloatingWindowEvent("Prepare: host preparado fechado; referências liberadas.");
                 }
 
@@ -3282,6 +3403,10 @@ public partial class MainWindow : Window
                 else if (wasPreparedWindow)
                 {
                     LogFloatingWindowEvent("FloatingWindow: host preparado encerrado sem entrega ao jogo.");
+                }
+                else if (!wasActiveFloatingWindow)
+                {
+                    LogFloatingWindowEvent("HandleNewWindowRequested: host descartado fechou (substituído por swap)");
                 }
             };
 
@@ -3410,7 +3535,8 @@ public partial class MainWindow : Window
                     }
                     else if (message != null && message.StartsWith("lol-idle-notify:"))
                     {
-                        HandleNotification(_floatingAccountKey, message["lol-idle-notify:".Length..]);
+                        if (TryParseNotifyPayload(message["lol-idle-notify:".Length..], out var kind, out var ctx))
+                            HandleNotification(_floatingAccountKey, kind, context: ctx);
                     }
                     else if (message != null && message.StartsWith("lol-idle-missions:"))
                     {
@@ -3476,11 +3602,14 @@ public partial class MainWindow : Window
                 ? WindowStartupLocation.CenterScreen
                 : WindowStartupLocation.CenterOwner;
 
+            // Preparação concluída com sucesso: só agora o host pode ser entregue ao jogo.
+            _preparedFloatingReady = true;
             LogFloatingWindowEvent("Prepare: janela flutuante pronta e oculta.");
         }
         catch (Exception ex)
         {
             LogFloatingWindowEvent($"Prepare: falha ao inicializar WebView flutuante: {ex}");
+            _preparedFloatingReady = false;
             if (ReferenceEquals(_preparedFloatingWindow, popupWindow))
             {
                 _preparedFloatingWindow = null;
@@ -3527,14 +3656,134 @@ public partial class MainWindow : Window
         return false;
     }
 
+    // Separa "kind|ctxCodificado" do payload de "lol-idle-notify:". Nunca lança: um payload
+    // malformado só resulta em ctx nulo (kind preservado quando possível).
+    private static bool TryParseNotifyPayload(string payload, out string kind, out string? ctx)
+    {
+        var sep = payload.IndexOf('|');
+        kind = sep >= 0 ? payload[..sep] : payload;
+        ctx = null;
+        if (sep >= 0)
+        {
+            try { ctx = Uri.UnescapeDataString(payload[(sep + 1)..]); }
+            catch (Exception ex) { LogFloatingWindowEvent($"Notificar: ctx da notificação ilegível ({ex.GetType().Name}) — ignorado"); }
+        }
+        return !string.IsNullOrWhiteSpace(kind);
+    }
+
+    // Normaliza texto para comparação insensível a acento/caixa (FormD + remove NonSpacingMark + lower).
+    // Compartilhado por IsMissaoDoFossoDoDragao e ClassificarMissao.
+    private static string NormalizarTexto(string? texto)
+    {
+        if (string.IsNullOrWhiteSpace(texto)) return "";
+        // NBSP e demais espaços unicode contam como espaço antes de comparar/strip.
+        texto = texto.Replace('\u00A0', ' '); // NBSP (U+00A0)
+        var normalized = texto.Normalize(System.Text.NormalizationForm.FormD);
+        var sb = new System.Text.StringBuilder(normalized.Length);
+        foreach (var ch in normalized)
+        {
+            if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(ch) != System.Globalization.UnicodeCategory.NonSpacingMark)
+                sb.Append(ch);
+        }
+        // Colapsa \s+ em um espaço único e apara as pontas (NBSP já virou espaço no início).
+        return System.Text.RegularExpressions.Regex.Replace(sb.ToString().ToLowerInvariant(), @"\s+", " ").Trim();
+    }
+
+    // true quando o texto de contexto (capturado no HUD do jogo) menciona a missão do
+    // Fosso do Dragão (ou a "Capitão da Legião", da mesma família), ou o gatilho natural
+    // do jogo para tarefa pronta ("Tarefa pronta! Volte à Fonte..."). Comparação por
+    // substring, insensível a acentos e maiúsculas/minúsculas (FormD + remove marks + lower).
+    private static bool IsMissaoDoFossoDoDragao(string context)
+    {
+        if (string.IsNullOrWhiteSpace(context)) return false;
+        var s = NormalizarTexto(context);
+        return s.Contains("fosso do dragao") || s.Contains("capitao da legiao") || s.Contains("capita da legiao") || s.Contains("tarefa pronta");
+    }
+
+    // Monta o nome curto da missão a partir do contexto ORIGINAL (não normalizado), para exibição:
+    // Percorre as linhas não-vazias NA ORDEM (split por \n/\r) e pula as "contador-puras" —
+    // linhas que, ignorando espaços, só têm dígitos e separadores de progresso
+    // (. , / · % ( ) — ex.: "460/1.000", "460 / 1.000 ·"), ou seja, nenhuma letra.
+    // O nome curto é a primeira linha NÃO-contador-pura: remove o prefixo "Tarefa:" (case-insensitive) ->
+    // se a linha COMEÇA com dígito, corta no primeiro dígito (contador seguido de texto na MESMA linha) ->
+    // senão mantém a linha inteira (dígitos no meio do nome NÃO cortam) -> colapso de espaços internos ->
+    // cap de 48 chars, com reticências no fim quando truncou -> vazio vira "".
+    // Se TODAS as linhas forem contador-puro (o rastreador pôs o contador numa linha e o nome em outra,
+    // mas só veio contador), devolve "" — o fallback existente ("… concluída!") assume.
+    // Honestidade: linhas mistas tipo "460/1.000 · só conta..." NÃO são contador-puro (têm letras);
+    // elas continuam caindo na regra antiga de "começa com dígito → corta no primeiro dígito".
+    private static string MontarNomeCurtoMissao(string? context)
+    {
+        if (string.IsNullOrWhiteSpace(context)) return "";
+        // Regex de linha contador-pura: só dígitos/separadores/espaços, nenhuma letra.
+        var counterOnly = new System.Text.RegularExpressions.Regex(@"^[\d.,/·%()\s]+$");
+        var lines = context.Split('\n', '\r');
+        string? first = null;
+        foreach (var raw in lines)
+        {
+            var t = raw.Trim();
+            if (t.Length == 0) continue;
+            // Pula contadores isolados (ex.: "460/1.000") para chegar ao nome real na linha seguinte.
+            if (counterOnly.IsMatch(t)) continue;
+            first = t;
+            break;
+        }
+        if (first == null) return ""; // Todas as linhas eram contador-puras.
+        var s = first;
+        if (s.StartsWith("Tarefa:", StringComparison.OrdinalIgnoreCase))
+            s = s["Tarefa:".Length..].Trim();
+        // Só corta quando a linha começa com dígito (contador de progresso);
+        // dígitos no meio do nome (ex.: "Vencedor 3 partidas") são mantidos.
+        if (s.Length > 0 && char.IsDigit(s[0]))
+        {
+            for (int i = 0; i < s.Length; i++)
+            {
+                if (char.IsDigit(s[i])) { s = s[..i]; break; }
+            }
+            s = s.Trim();
+        }
+        // Colapso de espaços internos.
+        s = System.Text.RegularExpressions.Regex.Replace(s, @"\s+", " ").Trim();
+        if (s.Length == 0) return "";
+        if (s.Length > 48) s = s[..47].TrimEnd() + "…";
+        return s;
+    }
+
+    // Ponto único de classificação da família "mission": devolve
+    // mission_tarefa (Fosso do Dragão/Capitão da Legião/"tarefa pronta"), mission_diaria,
+    // mission_semanal ou mission (qualquer outra, inclusive contexto vazio/erro).
+    // `shortName` = nome curto sanitizado para exibição (ver MontarNomeCurtoMissao).
+    private static string ClassificarMissao(string? context, out string shortName)
+    {
+        shortName = MontarNomeCurtoMissao(context);
+        var norm = NormalizarTexto(context);
+        if (norm.Contains("fosso do dragao") || norm.Contains("capitao da legiao") || norm.Contains("capita da legiao") || norm.Contains("tarefa pronta"))
+            return "mission_tarefa";
+        if (norm.Contains("diaria"))
+            return "mission_diaria";
+        if (norm.Contains("semanal"))
+            return "mission_semanal";
+        return "mission";
+    }
+
     // Tratamento central de notificação: aplica os filtros das preferências.
     // `key` = chave da conta que gerou o evento; `kind` = tipo do evento.
-    private void HandleNotification(string? key, string kind)
+    // `context` = texto bruto capturado no HUD do jogo no momento do evento (só a família `mission` carrega);
+    //   usado para classificar o subtipo (mission_tarefa/mission_diaria/mission_semanal/mission) e para devolver à Fonte quando o contexto cita o Fosso do Dragão/Capitão da Legião.
+    // Todos os demais filtros (NotifyEnabled, tipos, contas, histórico, som, popup) seguem idênticos.
+    private void HandleNotification(string? key, string kind, string? context = null)
     {
         if (!_settings.NotifyEnabled) return;
-        // kind é string não-anulável aqui; "potion_hp"/"potion_mana" caem no toggle único "potion".
-        string disabledKey = kind.StartsWith("potion", StringComparison.OrdinalIgnoreCase) ? "potion" : kind;
-        if (_settings.NotifyTypesDisabled.Contains(disabledKey, StringComparer.OrdinalIgnoreCase)) return;
+        // Match direto pela chave do kind (ex.: "potion_vida").
+        if (_settings.NotifyTypesDisabled.Contains(kind, StringComparer.OrdinalIgnoreCase)) return;
+        // Família "mission": o toggle "mission" (único no painel) silencia TODOS os subtipos
+        // (mission_tarefa / mission_diaria / mission_semanal). Os subtipos específicos também
+        // são checados acima por compatibilidade futura; nada de novas chaves no painel.
+        if (kind.StartsWith("mission", StringComparison.OrdinalIgnoreCase)
+            && _settings.NotifyTypesDisabled.Contains("mission", StringComparer.OrdinalIgnoreCase)) return;
+        // Master switch "potion": desmarcado silencia TODAS as notificações de poção.
+        if (kind.StartsWith("potion_", StringComparison.OrdinalIgnoreCase)
+            && _settings.NotifyTypesDisabled.Contains("potion", StringComparer.OrdinalIgnoreCase)) return;
         if (key != null && _settings.NotifyAccountsDisabled.Contains(key, StringComparer.OrdinalIgnoreCase)) return;
 
         // App em 1º plano + conta ativa em uso → não registra nem nada: nem som, nem histórico.
@@ -3546,6 +3795,23 @@ public partial class MainWindow : Window
             return;
         }
 
+        // Ponto único de classificação da família "mission": reclassifica DEPOIS dos filtros
+        // e ANTES de qualquer roteamento — popup, histórico, som, balão e bolinha usam o kind
+        // retornado. O ctx original segue junto (não é alterado).
+        if (string.Equals(kind, "mission", StringComparison.OrdinalIgnoreCase))
+        {
+            kind = ClassificarMissao(context, out var shortName);
+            var ctxLog = context == null ? "" : (context.Length > 120 ? context[..120] : context);
+            LogFloatingWindowEvent($"Missao classificada: {kind} | nome='{shortName}' | ctx='{ctxLog}'");
+        }
+
+        if (context != null
+            && kind.StartsWith("mission", StringComparison.OrdinalIgnoreCase)
+            && IsMissaoDoFossoDoDragao(context))
+        {
+            LogFloatingWindowEvent($"Missão concluída com contexto do Fosso do Dragão (conta='{key}') — clique na notificação devolverá o personagem à Fonte");
+        }
+
         // Registra nas "Últimas notificações" e marca a conta como não lida quando o
         // usuário não está vendo (outra conta na frente, ou app oculto na bandeja).
         if (key != null)
@@ -3553,7 +3819,7 @@ public partial class MainWindow : Window
             // Marca como não lida ANTES do rebuild disparado por RegistrarNotificacao,
             // para que chips/faixas/bolinha do histórico já nasçam com o estado final.
             _contasNaoLidas.Add(key);
-            RegistrarNotificacao(key, kind);
+            RegistrarNotificacao(key, kind, context);
         }
 
         // Se mais de uma conta estiver habilitada, mostra o nome da conta no balão
@@ -3568,7 +3834,7 @@ public partial class MainWindow : Window
                 accountLabel = GetAccountDisplayName(key);
         }
 
-        PlayTrayNotification(kind, accountLabel, key);
+        PlayTrayNotification(kind, accountLabel, key, context: context);
     }
 
     // true quando o app está visível e o usuário consegue ver o jogo:
@@ -3589,7 +3855,7 @@ public partial class MainWindow : Window
     }
 
     // Registra o evento em "Últimas notificações" (até 4, mais recente embaixo), sem marcar bolinha e sem tocar som/balão.
-    private void RegistrarNotificacao(string? key, string kind)
+    private void RegistrarNotificacao(string? key, string kind, string? context = null)
     {
         if (key == null) return;
 
@@ -3598,33 +3864,66 @@ public partial class MainWindow : Window
         _ultimasNotificacoes.RemoveAll(n =>
             string.Equals(n.Conta, key, StringComparison.OrdinalIgnoreCase) &&
             string.Equals(n.Kind, kind, StringComparison.OrdinalIgnoreCase));
-        _ultimasNotificacoes.Add(new NotificacaoItem { Conta = key, Kind = kind, Quando = DateTime.Now });
+        _ultimasNotificacoes.Add(new NotificacaoItem { Conta = key, Kind = kind, Quando = DateTime.Now, Contexto = context });
         if (_ultimasNotificacoes.Count > 4)
             _ultimasNotificacoes.RemoveRange(0, _ultimasNotificacoes.Count - 4);
 
         _ = AtualizarContaConectadaUIAsync();
     }
 
+    // Monta "Tipo concluída[: Nome curto]!" — o nome curto só aparece quando há contexto com nome.
+    // Usado pela família "mission"; o som é sempre o notify_mission.wav.
+    // `ignorarNome` = true para mission_tarefa: a tarefa é a de voltar à Fonte, então o nome
+    // do contexto é descartado e a mensagem sai exatamente "{rotulo} concluída!".
+    private static (string message, string sound) TextoMissao(string rotulo, string? context, bool ignorarNome = false)
+    {
+        ClassificarMissao(context, out var shortName);
+        string message;
+        if (ignorarNome || shortName.Length == 0)
+        {
+            message = $"{rotulo} concluída!";
+        }
+        else
+        {
+            // Rotulo redundante: shortName normalizado ja comeca com o rotulo
+            // ("diaria", "semanal", "tarefa", "missao") - nao repete o tipo na frente.
+            var shortNorm = NormalizarTexto(shortName);
+            var rotuloNorm = NormalizarTexto(rotulo);
+            message = shortNorm.StartsWith(rotuloNorm, StringComparison.Ordinal)
+                ? $"{shortName} concluída!"
+                : $"{rotulo} concluída: {shortName}!";
+        }
+        return (message, "Assets/notify_mission.wav");
+    }
+
     // Texto/som compartilhados por tipo de notificação (balão, som e lista "Últimas notificações").
-    private static (string message, string sound) ObterTextoNotificacao(string kind) => kind switch
+    // `context` é opcional e retrocompatível: sem ele, a família "mission" sai sem o nome
+    // (igual ao comportamento de antes). Os demais kinds ignoram o contexto.
+    private static (string message, string sound) ObterTextoNotificacao(string kind, string? context = null) => kind switch
     {
         "legendary" => ("Item lendário obtido!", "Assets/notify_legendary.wav"),
         "epic" => ("Item épico obtido!", "Assets/notify_epic.wav"),
-        "mission" => ("Missão concluída!", "Assets/notify_mission.wav"),
+        "mission_tarefa" => TextoMissao("Tarefa", context, ignorarNome: true),
+        "mission_diaria" => TextoMissao("Diária", context),
+        "mission_semanal" => TextoMissao("Semanal", context),
+        "mission" => TextoMissao("Missão", context),
         "inventory" => ("Inventário cheio!", "Assets/notify_inventory.wav"),
         "level" => ("Subiu de nível!", "Assets/notify_level.wav"),
-        "potion_hp" => ("Poções de HP acabaram! Compre mais com o Lojista.", "Assets/notify_potion.wav"),
+        "potion_vida" => ("Poções de HP acabaram! Compre mais com o Lojista.", "Assets/notify_potion.wav"),
+        "potion_vidaF" => ("Poções de Vida Forte acabaram! Compre mais com o Lojista.", "Assets/notify_potion.wav"),
+        "potion_vidaS" => ("Poções de Vida Suprema acabaram! Compre mais com o Lojista.", "Assets/notify_potion.wav"),
         "potion_mana" => ("Poções de MP acabaram! Compre mais com o Lojista.", "Assets/notify_potion.wav"),
+        "potion_manaF" => ("Poções de Mana Forte acabaram! Compre mais com o Lojista.", "Assets/notify_potion.wav"),
         _ => ("Evento importante no jogo!", "Assets/notify_mission.wav")
     };
 
-    private void PlayTrayNotification(string kind, string? accountLabel = null, string? accountKey = null)
+    private void PlayTrayNotification(string kind, string? accountLabel = null, string? accountKey = null, string? context = null)
     {
         if (!_settings.TrayNotify && !_settings.TrayBalloon)
             return;
 
         var title = accountLabel ?? "LoL Idle";
-        var (message, sound) = ObterTextoNotificacao(kind);
+        var (message, sound) = ObterTextoNotificacao(kind, context);
         var titleFinal = title;
 
         // O toast é montado/exibido ANTES do bloco de áudio: o SoundPlayer (SND_ASYNC)
@@ -3634,6 +3933,10 @@ public partial class MainWindow : Window
         {
             _lastBalloonAccount = accountKey;
             _lastBalloonKind = kind;
+            _lastBalloonContext = context;
+            // true enquanto o popup próprio puder aparecer (não suprimido por foco/tela cheia/apresentação).
+            // Calculado só aqui (TrayBalloon ligado): com o balão desligado nada seria exibido/logado.
+            bool popupAllowed = IsNotificationAppropriate();
             try
             {
                 var toastContent = new ToastContentBuilder()
@@ -3641,11 +3944,21 @@ public partial class MainWindow : Window
                     .AddText(message)
                     .AddArgument("conta", accountKey ?? string.Empty)
                     .AddArgument("kind", kind)
+                    .AddArgument("ctx", context ?? string.Empty)
                     .SetToastScenario(ToastScenario.Default)
                     // Silent: suprime o "ding" padrão do Windows — o app toca o .wav próprio no bloco TrayNotify.
-                    .AddAudio(new ToastAudio { Silent = true });
-                toastContent.Show();
-                LogFloatingWindowEvent($"Toast: {kind}");
+                    .AddAudio(new ToastAudio { Silent = true })
+                    .GetToastContent();
+                // Toast apenas como REGISTRO na Central de Ações: sem banner visível, sem som.
+                // (GetToastContent() da toolkit 7.1.3 já devolve o XmlDocument WinRT do toast.)
+                var toast = new Windows.UI.Notifications.ToastNotification(toastContent.GetXml())
+                {
+                    SuppressPopup = true
+                };
+                Windows.UI.Notifications.ToastNotificationManager
+                    .CreateToastNotifier(App.AppAumid)
+                    .Show(toast);
+                LogFloatingWindowEvent($"Toast (silencioso/Central de Ações): {kind}");
             }
             catch (Exception ex)
             {
@@ -3674,6 +3987,18 @@ public partial class MainWindow : Window
                     };
                     _balloonRestoreTimer.Start();
                 }
+            }
+
+            // Popup próprio: mostrado só quando o Windows aceita notificações agora.
+            // O toast silencioso acima vai para a Central de Ações de qualquer forma,
+            // e o som (bloco TrayNotify) independe deste bloco.
+            if (popupAllowed)
+            {
+                ShowNotificationPopup(accountKey, accountLabel, kind, message, context);
+            }
+            else
+            {
+                LogFloatingWindowEvent("Popup suprimido (foco/tela cheia/apresentação) — só som e histórico");
             }
         }
 
@@ -3711,10 +4036,170 @@ public partial class MainWindow : Window
         LogFloatingWindowEvent($"TrayNotify: {kind}");
     }
 
+    // ---- Suprimir o popup próprio quando o Windows diz que NÃO é hora de interromper ----
+
+    // SHQueryUserNotificationState retorna HRESULT (S_OK = 0), não BOOL. Declarar como
+    // int é essencial: com bool, S_OK (0) seria lido como false e o popup seria suprimido
+    // sempre. state traz o QueryUserNotificationState resultante.
+    [System.Runtime.InteropServices.DllImport("shell32.dll", SetLastError = false)]
+    private static extern int SHQueryUserNotificationState(out QueryUserNotificationState state);
+
+    private enum QueryUserNotificationState
+    {
+        NotPresent = 1,
+        Busy = 2,
+        RunningD3DFullScreen = 3,
+        PresentationMode = 4,
+        AcceptsNotifications = 5,
+        QuietTime = 6,
+        App = 7
+    }
+
+    // true apenas quando o Windows aceita notificações neste momento (SHQueryUserNotificationState
+    // retorna S_OK E state == AcceptsNotifications). Qualquer HR != 0, falha da chamada ou
+    // exceção → false (suprimir o popup; nunca derrubar o app).
+    // Limitação conhecida: o Não Perturbar manual do Win11 (central de notificações) pode não
+    // ser refletido pelo estado retornado — nesse caso o popup ainda aparece. É a API que há.
+    private bool IsNotificationAppropriate()
+    {
+        try
+        {
+            int hr = SHQueryUserNotificationState(out var state);
+            if (hr != 0)
+            {
+                LogFloatingWindowEvent($"IsNotificationAppropriate: SHQueryUserNotificationState retornou hr=0x{hr:x8} — suprimindo popup");
+                return false;
+            }
+            if (state != QueryUserNotificationState.AcceptsNotifications)
+            {
+                LogFloatingWindowEvent($"Popup suprimido (estado={(int)state} {state}) — só som e histórico");
+                return false;
+            }
+            LogFloatingWindowEvent($"IsNotificationAppropriate: notificações aceitas (estado={(int)state} {state})");
+            // Checagem opcional: sessão de foco do Windows (Não Perturbar / Focus).
+            // Falha aqui NUNCA derruba a notificação — apenas é registrada e ignorada.
+            if (IsFocusSessionActive())
+            {
+                LogFloatingWindowEvent("IsNotificationAppropriate: sessão de foco ativa — popup suprimido");
+                return false;
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"IsNotificationAppropriate: falhou (exceção): {ex.Message} — suprimindo popup");
+            return false;
+        }
+    }
+
+    // Checagem complementar via Windows.UI.Shell.FocusSessionManager — NÃO disponível na
+    // projeção WinRT do TFM net8.0-windows10.0.17763.0 (o tipo só entra no Windows SDK 18362+),
+    // e adicionar pacotes está fora do escopo. Checagem pulada de propósito; a decisão de
+    // suprimir fica por conta do SHQueryUserNotificationState, que já cobre Não Perturbar,
+    // apresentações e tela cheia na prática.
+    private bool _focusCheckSkipLogged;
+
+    private bool IsFocusSessionActive()
+    {
+        // Loga só na primeira vez para não poluir o log a cada notificação.
+        if (!_focusCheckSkipLogged)
+        {
+            _focusCheckSkipLogged = true;
+            LogFloatingWindowEvent("IsFocusSessionActive: FocusSessionManager indisponível na projeção WinRT do TFM 17763 — checagem pulada (SHQueryUserNotificationState segue como critério)");
+        }
+        return false;
+    }
+
+    // Exibe o popup próprio no canto inferior direito, empilhando acima de popups anteriores
+    // (máx. 3 visíveis; o 4º fecha o mais antigo). Chamado só quando TrayBalloon está ligado
+    // e IsNotificationAppropriate() retornou true.
+    private void ShowNotificationPopup(string? accountKey, string? accountLabel, string kind, string message, string? context = null)
+    {
+        try
+        {
+            // Se o label de exibição já veio pronto (multi-conta), usa ele direto;
+            // senão deriva do accountKey (fallback de uma conta só).
+            string title = accountLabel ?? (accountKey != null ? GetAccountDisplayName(accountKey) : "LoL Idle");
+
+            var popup = new NotificationPopupWindow(_settings, accountKey, kind, title, message, ExecuteNotificationActionSafe, context);
+            popup.Closed += (_, _) =>
+            {
+                _activePopups.Remove(popup);
+                ReorganizarPopups();
+            };
+            _activePopups.Add(popup);
+
+            // Limite de 3 popups visíveis: fecha o(s) mais antigo(s).
+            while (_activePopups.Count > 3)
+            {
+                var oldest = _activePopups[0];
+                _activePopups.RemoveAt(0);
+                try { oldest.CloseWithAnimation(); } catch { }
+            }
+
+            popup.Show();
+
+            // Posiciona no canto inferior direito da área de trabalho primária,
+            // acumulando a altura real de cada popup já aberto (+ 12px de gap).
+            var workArea = SystemParameters.WorkArea;
+            double bottom = workArea.Bottom - 16;
+            foreach (var open in _activePopups)
+            {
+                if (ReferenceEquals(open, popup)) continue;
+                double openH = open.ActualHeight > 0 ? open.ActualHeight : 88;
+                bottom -= openH + 12;
+            }
+            double h = popup.ActualHeight > 0 ? popup.ActualHeight : 88;
+            popup.Left = workArea.Right - popup.Width - 16;
+            popup.Top = bottom - h;
+
+            LogFloatingWindowEvent($"NotificationPopup: exibido (kind={kind}, conta='{accountKey}', pilha={_activePopups.Count})");
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"NotificationPopup: falha ao exibir ({kind}): {ex.Message}");
+        }
+    }
+
+    // Reposiciona a pilha de popups (na ordem de abertura) ancorada no canto
+    // inferior direito. Chamado no Closed de cada popup — simples e atômico
+    // na UI thread.
+    private void ReorganizarPopups()
+    {
+        try
+        {
+            var workArea = SystemParameters.WorkArea;
+            double bottom = workArea.Bottom - 16;
+            foreach (var open in _activePopups)
+            {
+                double openH = open.ActualHeight > 0 ? open.ActualHeight : 88;
+                open.Left = workArea.Right - open.Width - 16;
+                open.Top = bottom - openH;
+                bottom -= openH + 12;
+            }
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"NotificationPopup: falha ao reorganizar pilha: {ex.Message}");
+        }
+    }
+
+    private void ExecuteNotificationActionSafe(string? conta, string? kind, string? context = null)
+    {
+        try
+        {
+            ExecuteNotificationAction(conta, kind, context);
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"NotificationAction falhou: {ex.Message}");
+        }
+    }
+
     // Simula a tecla B ("Voltar para a Fonte") no WebView2 da conta informada.
     // O handler do jogo não checa isTrusted, então o keydown sintético funciona,
     // inclusive para contas em segundo plano; o próprio jogo valida se o recall é permitido.
-    private async Task VoltarParaFonteAsync(string? contaKey)
+    private async Task VoltarParaFonteAsync(string? contaKey, string? motivo = null)
     {
         if (string.IsNullOrWhiteSpace(contaKey))
         {
@@ -3728,10 +4213,81 @@ public partial class MainWindow : Window
             {
                 await view.CoreWebView2.ExecuteScriptAsync(
                     "window.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }))");
-                LogFloatingWindowEvent($"VoltarParaFonte: B enviado para a conta '{contaKey}'");
+                LogFloatingWindowEvent(motivo != null
+                    ? $"VoltarParaFonte ({motivo}): enviado B para '{contaKey}'"
+                    : $"VoltarParaFonte: B enviado para a conta '{contaKey}'");
+            }
+            else
+            {
+                LogFloatingWindowEvent($"VoltarParaFonte: view da conta '{contaKey}' não encontrada — B NÃO enviado{(motivo != null ? $" ({motivo})" : "")}");
             }
         }
         catch (Exception ex) { LogFloatingWindowEvent($"VoltarParaFonte falhou ({contaKey}): {ex.Message}"); }
+    }
+
+    // Clica no banner azul do jogo ("Missão diária completa! Clique aqui para receber o prêmio.")
+    // no WebView2 da conta informada, para auto-coletar a recompensa da diária.
+    // Usado apenas para o kind mission_diaria (ver ExecuteNotificationAction).
+    // O clique é feito via CDP Input.dispatchMouseEvent (isTrusted: true) —
+    // PointerEvent/MouseEvent sintéticos via dispatchEvent têm isTrusted:false e o jogo ignora.
+    // Nunca derruba o fluxo: qualquer falha é logada e engolida.
+    private async Task TryClickDailyBannerAsync(string? contaKey, string? kind = null)
+    {
+        if (string.IsNullOrWhiteSpace(contaKey))
+        {
+            LogFloatingWindowEvent("Banner diaria: conta vazia — ignorado");
+            return;
+        }
+
+        static string Trunc200(string? t)
+        {
+            if (string.IsNullOrEmpty(t)) return "null";
+            t = t.Replace('\r', ' ').Replace('\n', ' ').Trim();
+            return t.Length > 200 ? t.Substring(0, 200) + "…" : t;
+        }
+
+        try
+        {
+            if (!_accountViews.TryGetValue(contaKey, out var view) || view?.CoreWebView2 == null)
+            {
+                LogFloatingWindowEvent($"Banner diaria ({kind}): view da conta '{contaKey}' não encontrada — clique NÃO enviado");
+                return;
+            }
+
+            const string posJs = @"(() => { const b = document.getElementById('rastreio-diaria-rift'); if (!b) return 'null'; if (!b.classList || !b.classList.contains('pronta')) return 'not-ready'; try { b.scrollIntoViewIfNeeded ? b.scrollIntoViewIfNeeded() : b.scrollIntoView({block:'nearest'}); } catch (_) {} const r = b.getBoundingClientRect(); if (r.width <= 0 || r.height <= 0) return 'rect-error'; return JSON.stringify({ x: Math.round(r.left + r.width/2), y: Math.round(r.top + r.height/2) }); })()";
+            var posJson = await view.CoreWebView2.ExecuteScriptAsync(posJs);
+
+            // ExecuteScriptAsync devolve o valor JS como string JSON-encoded; desembrulha um nível
+            var s = JsonSerializer.Deserialize<string>(posJson ?? "null");
+            if (string.IsNullOrWhiteSpace(s) || s == "null" || s == "not-ready" || s == "rect-error")
+            {
+                LogFloatingWindowEvent($"Banner diaria ({kind}): banner não clicado ({Trunc200(s)})");
+                return;
+            }
+
+            var pos = JsonSerializer.Deserialize<JsonElement>(s);
+            if (!pos.TryGetProperty("x", out var xEl) || !pos.TryGetProperty("y", out var yEl)
+                || !xEl.TryGetDouble(out var xd) || !yEl.TryGetDouble(out var yd))
+            {
+                LogFloatingWindowEvent($"Banner diaria ({kind}): payload de posição inválido ({Trunc200(s)})");
+                return;
+            }
+            int x = (int)Math.Round(xd);
+            int y = (int)Math.Round(yd);
+
+            var pressJson = $"{{\"type\":\"mousePressed\",\"x\":{x},\"y\":{y},\"button\":\"left\",\"clickCount\":1}}";
+            var releaseJson = $"{{\"type\":\"mouseReleased\",\"x\":{x},\"y\":{y},\"button\":\"left\",\"clickCount\":1}}";
+            var pressResult = await view.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.dispatchMouseEvent", pressJson);
+            var releaseResult = await view.CoreWebView2.CallDevToolsProtocolMethodAsync("Input.dispatchMouseEvent", releaseJson);
+
+            var msg = $"{{\"result\":\"clicked\",\"x\":{x},\"y\":{y}}} | press: {Trunc200(pressResult)} | release: {Trunc200(releaseResult)}";
+            if (msg.Length > 200) msg = msg.Substring(0, 200) + "…";
+            LogFloatingWindowEvent($"Banner diaria ({kind}): {msg}");
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"Banner diaria ({kind}) falhou ({contaKey}): {ex.Message}");
+        }
     }
 
     private async Task ApplyAudioSettingsAsync()
@@ -4179,7 +4735,7 @@ public partial class MainWindow : Window
         foreach (var item in _ultimasNotificacoes.Take(4))
         {
             string display = GetAccountDisplayName(item.Conta);
-            var (message, _) = ObterTextoNotificacao(item.Kind);
+            var (message, _) = ObterTextoNotificacao(item.Kind, item.Contexto);
             bool naoLida = ContaNaoLida(item.Conta);
 
             var avatar = CriarAvatarVisual(_settings, item.Conta, display, 30, 8, 18);
@@ -4370,10 +4926,11 @@ public partial class MainWindow : Window
         }
     }
 
-    // Botão "Limpar" das Últimas notificações: anima o desaparecimento das linhas (fade + deslize para a direita, escalonado)
-    // e só então esvazia a lista. Também marca como lidas (_contasNaoLidas) apenas as contas cujas notificações
+    // Botão "Limpar" das Últimas notificações: anima o desaparecimento das linhas em CASCATA
+    // (uma linha de cada vez: fade + deslize para a direita, ~250ms por linha) e só então esvazia
+    // a lista. Também marca como lidas (_contasNaoLidas) apenas as contas cujas notificações
     // foram removidas e ficaram sem nenhuma restante; contas com notificação recém-chegada mantêm a bolinha.
-    private void LimparNotificacoes_Click(object sender, RoutedEventArgs e)
+    private async void LimparNotificacoes_Click(object sender, RoutedEventArgs e)
     {
         if (_ultimasNotificacoes.Count == 0 && _contasNaoLidas.Count == 0)
             return;
@@ -4397,61 +4954,77 @@ public partial class MainWindow : Window
                 return;
             }
 
-            int ultima = linhas.Count - 1;
-            for (int i = 0; i < linhas.Count; i++)
+            // CASCATA: anima uma linha por vez, na ordem visual (cima → baixo),
+            // conforme a ordem das linhas em Children (topo → base).
+            // Cada linha sai
+            // (X 0 → +320, Opacity 1 → 0, ~250ms, QuadraticEase.EaseIn) e SÓ DEPOIS a próxima começa.
+            // Ao completar, a linha vira Collapsed (sai da pilha e as de baixo sobem na hora — sem animar layout).
+            foreach (var linha in linhas)
             {
-                var linha = linhas[i];
-                var translate = new TranslateTransform();
-                linha.RenderTransform = translate;
-
-                var beginTime = TimeSpan.FromMilliseconds(i * 45);
-                var animX = new DoubleAnimation
+                try
                 {
-                    From = 0,
-                    To = 320,
-                    Duration = TimeSpan.FromMilliseconds(240),
-                    BeginTime = beginTime,
-                    FillBehavior = FillBehavior.Stop
-                };
-                var animOpacity = new DoubleAnimation
-                {
-                    From = 1,
-                    To = 0,
-                    Duration = TimeSpan.FromMilliseconds(240),
-                    BeginTime = beginTime,
-                    FillBehavior = FillBehavior.Stop
-                };
-
-                if (i == ultima)
-                {
-                    animOpacity.Completed += (_, _) =>
-                    {
-                        // Remove só os itens que estavam nas linhas animadas (por referência);
-                        // notificações que chegaram durante a animação são preservadas.
-                        foreach (var it in itensAnimados)
-                            _ultimasNotificacoes.Remove(it);
-                        RebuildUltimasNotificacoes();
-                        // Zera bolinha só das contas que ficaram sem nenhuma notificação restante.
-                        MarcarContasSemNotificacaoComoLidas(itensAnimados);
-                        _ = AtualizarContaConectadaUIAsync(); // fire-and-forget: recria chips/faixas sem as bolinhas
-                    };
+                    await AnimarSaidaLinhaNotificacaoAsync(linha).ConfigureAwait(true);
                 }
-
-                translate.BeginAnimation(TranslateTransform.XProperty, animX);
-                linha.BeginAnimation(UIElement.OpacityProperty, animOpacity);
+                catch
+                {
+                    // Linha que falhar ao animar é colapsada direto e a cascata segue para a próxima.
+                }
+                linha.Visibility = Visibility.Collapsed;
             }
         }
         catch
         {
-            // Fallback: se a animação falhar, remove direto — mas SÓ os itens capturados
-            // antes da animação. Notificações que chegaram durante a tentativa são preservadas.
-            foreach (var it in itensAnimados)
-                _ultimasNotificacoes.Remove(it);
-            RebuildUltimasNotificacoes();
-            // Zera bolinha só das contas que ficaram sem nenhuma notificação restante.
-            MarcarContasSemNotificacaoComoLidas(itensAnimados);
-            _ = AtualizarContaConectadaUIAsync(); // fire-and-forget: recria chips/faixas sem as bolinhas
+            // Fallback: se algo falhar antes/durante a cascata, cai para a remoção direta abaixo —
+            // mas SÓ os itens capturados antes da animação. Notificações que chegaram durante a tentativa são preservadas.
         }
+
+        // Remove só os itens que estavam nas linhas animadas (por referência);
+        // notificações que chegaram durante a animação são preservadas.
+        foreach (var it in itensAnimados)
+            _ultimasNotificacoes.Remove(it);
+        RebuildUltimasNotificacoes();
+        // Zera bolinha só das contas que ficaram sem nenhuma notificação restante.
+        MarcarContasSemNotificacaoComoLidas(itensAnimados);
+        _ = AtualizarContaConectadaUIAsync(); // fire-and-forget: recria chips/faixas sem as bolinhas
+    }
+
+    // Anima a saída de UMA linha de "Últimas notificações" (fade + deslize para a direita, ~250ms,
+    // QuadraticEase.EaseIn — condizente com a saída do popup) e aguarda a animação completar antes de retornar.
+    // Conclusão detectada via TCS no evento Completed da animação de Opacity; há uma rede de segurança
+    // (Task.Delay) para não travar a cascata se a animação nunca completar (ex.: janela sem render).
+    private async Task AnimarSaidaLinhaNotificacaoAsync(Border linha)
+    {
+        const int duracaoMs = 250;
+
+        var tcs = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var translate = new TranslateTransform();
+        linha.RenderTransform = translate;
+
+        var animX = new DoubleAnimation
+        {
+            From = 0,
+            To = 320,
+            Duration = TimeSpan.FromMilliseconds(duracaoMs),
+            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn },
+            FillBehavior = FillBehavior.Stop
+        };
+        var animOpacity = new DoubleAnimation
+        {
+            From = 1,
+            To = 0,
+            Duration = TimeSpan.FromMilliseconds(duracaoMs),
+            EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn },
+            FillBehavior = FillBehavior.Stop
+        };
+        animOpacity.Completed += (_, _) => tcs.TrySetResult(null);
+
+        translate.BeginAnimation(TranslateTransform.XProperty, animX);
+        linha.BeginAnimation(UIElement.OpacityProperty, animOpacity);
+
+        // Rede de segurança: se a animação não completar (ex.: janela sem render), segue mesmo assim
+        // após um limite generoso — a linha é colapsada pelo chamador e a cascata não trava.
+        await Task.WhenAny(tcs.Task, Task.Delay(duracaoMs + 750)).ConfigureAwait(true);
     }
 
     // Clique numa linha de "Últimas notificações": pulso rápido no fundo da linha, anima a saída
@@ -4500,6 +5073,15 @@ public partial class MainWindow : Window
                 await SwitchAccountAsync(item.Conta);
                 if (item.Kind.StartsWith("potion", StringComparison.OrdinalIgnoreCase))
                     _ = VoltarParaFonteAsync(item.Conta);
+                if (item.Contexto != null && IsMissaoDoFossoDoDragao(item.Contexto))
+                {
+                    LogFloatingWindowEvent($"Missão do Fosso do Dragão no clique da linha — devolvendo '{item.Conta}' para a Fonte");
+                    await VoltarParaFonteAsync(item.Conta, "missão Fosso do Dragão");
+                }
+                if (string.Equals(item.Kind, "mission_diaria", StringComparison.OrdinalIgnoreCase))
+                {
+                    await TryClickDailyBannerAsync(item.Conta, item.Kind);
+                }
             }
             catch
             {
@@ -4528,6 +5110,15 @@ public partial class MainWindow : Window
         await SwitchAccountAsync(item.Conta);
         if (item.Kind.StartsWith("potion", StringComparison.OrdinalIgnoreCase))
             _ = VoltarParaFonteAsync(item.Conta);
+        if (item.Contexto != null && IsMissaoDoFossoDoDragao(item.Contexto))
+        {
+            LogFloatingWindowEvent($"Missão do Fosso do Dragão no clique da linha — devolvendo '{item.Conta}' para a Fonte");
+            await VoltarParaFonteAsync(item.Conta, "missão Fosso do Dragão");
+        }
+        if (string.Equals(item.Kind, "mission_diaria", StringComparison.OrdinalIgnoreCase))
+        {
+            await TryClickDailyBannerAsync(item.Conta, item.Kind);
+        }
     }
 
     // Tempo relativo curto: "agora", "há X min", "há X h" ou "HH:mm" se mais velho que 24h.
@@ -4563,6 +5154,37 @@ public partial class MainWindow : Window
         double left = -sobraX * (offsetX + 1) / 2;
         double top = -sobraY * (offsetY + 1) / 2;
         return (left, top, w, h);
+    }
+
+    // Cache de decodificação de avatar: evita reler/decodificar o arquivo do disco a cada
+    // chamada (troca de conta, rebuilds de chips/faixas/histórico). Chave = path do arquivo;
+    // invalida quando o mtime (UTC) do arquivo muda. Paths inválidos/inexistentes não entram.
+    private static readonly Dictionary<string, (DateTime MtimeUtc, BitmapImage Bmp)> _avatarBitmapCache = new();
+
+    private static BitmapImage CarregarAvatarBitmapCached(string imagePath)
+    {
+        DateTime mtimeUtc;
+        try { mtimeUtc = File.GetLastWriteTimeUtc(imagePath); }
+        catch { mtimeUtc = DateTime.MinValue; }
+
+        lock (_avatarBitmapCache)
+        {
+            if (_avatarBitmapCache.TryGetValue(imagePath, out var entry) && entry.MtimeUtc == mtimeUtc)
+                return entry.Bmp;
+        }
+
+        var bmp = new BitmapImage();
+        bmp.BeginInit();
+        bmp.CacheOption = BitmapCacheOption.OnLoad;
+        bmp.UriSource = new Uri(imagePath, UriKind.Absolute);
+        bmp.EndInit();
+        bmp.Freeze();
+
+        lock (_avatarBitmapCache)
+        {
+            _avatarBitmapCache[imagePath] = (mtimeUtc, bmp);
+        }
+        return bmp;
     }
 
     // Cria o visual do avatar de uma conta (usado no chip e no diálogo de avatar).
@@ -4626,12 +5248,7 @@ public partial class MainWindow : Window
         {
             try
             {
-                var bmp = new BitmapImage();
-                bmp.BeginInit();
-                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.UriSource = new Uri(imagePath, UriKind.Absolute);
-                bmp.EndInit();
-                bmp.Freeze();
+                var bmp = CarregarAvatarBitmapCached(imagePath);
 
                 var (offsetX, offsetY) = LerAvatarImageOffset(settings, conta);
 
@@ -5251,7 +5868,8 @@ public partial class MainWindow : Window
     private enum MessageKind { Info, Warning, Error, Success }
 
     // Diálogo simples de mensagem (estilo do app): ícone + texto + botão único.
-    private void MostrarMensagemSimples(string titulo, string mensagem, string textoBotao, MessageKind kind)
+    // `owner`: quando fornecido, o diálogo nasce acima dele; caso contrário, acima do MainWindow.
+    private void MostrarMensagemSimples(string titulo, string mensagem, string textoBotao, MessageKind kind, Window? owner = null)
     {
         var janela = new Window
         {
@@ -5264,7 +5882,7 @@ public partial class MainWindow : Window
             AllowsTransparency = true,
             Background = new SolidColorBrush(Colors.Transparent),
             ShowInTaskbar = false,
-            Owner = System.Windows.Application.Current.MainWindow
+            Owner = owner ?? System.Windows.Application.Current.MainWindow
         };
 
         var moldura = new Border
