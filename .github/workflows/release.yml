@@ -1,11 +1,18 @@
 name: Build Windows release
 
+# Empacotamento: Velopack (Setup.exe + nupkg full/delta + releases.win.json + Portable.zip).
+# O instalador Inno Setup (installer/*.iss) fica no repo apenas como fallback histórico;
+# este workflow não o usa mais. Gatilho: push de tag v* (e disparo manual via workflow_dispatch).
+#
+# Fluxo de delta: `vpk pack` só gera delta a partir de pacotes numa release anterior que
+# estejam na PRÓPRIA --outputDir. Por isso: download em prev-release/, cópia do full anterior
+# para release-assets/ antes do pack (vira base do delta + entra no releases.win.json),
+# e remoção desses arquivos antes do upload — o upload sobe só os assets da versão atual.
+
 on:
   push:
-    branches: [main, 'feature/compact-mode-v1.1.0']
+    tags: ['v*']
   workflow_dispatch:
-  release:
-    types: [published]
 
 permissions:
   contents: write
@@ -78,82 +85,163 @@ jobs:
           $source.Dispose()
           $icon.Dispose()
           Write-Host "Ícone reconstruído com tamanhos: $($sizes -join ', ')"
-          
+
+      - name: Definir versão do pacote
+        id: ver
+        shell: pwsh
+        run: |
+          if ("${{ github.ref_type }}" -eq "tag") {
+            # Versão do pacote = tag sem o prefixo "v" (ex.: v1.4.8 -> 1.4.8).
+            $version = "${{ github.ref_name }}" -replace '^v', ''
+          } else {
+            # Disparo manual sem tag: usa a versão do csproj (só para teste, não publica).
+            $version = @(([xml](Get-Content LoLIdleDesktop.csproj)).Project.PropertyGroup.Version) |
+              Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+              Select-Object -First 1
+            if (-not $version) { throw "Versão não encontrada no csproj." }
+          }
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "tag=v$version" >> $env:GITHUB_OUTPUT
+
       - name: Restaurar dependências
         run: dotnet restore LoLIdleDesktop.csproj
 
       - name: Publicar para Windows 64 bits
-        run: dotnet publish LoLIdleDesktop.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true
+        # Self-contained single-file: o usuário não precisa instalar o .NET 8 Runtime.
+        # IncludeNativeLibrariesForSelfExtract garante que as DLLs nativas (ex.: WebView2Loader)
+        # sejam extraídas no primeiro run em vez de ficarem ao lado do .exe.
+        run: dotnet publish LoLIdleDesktop.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish
 
-      - name: Instalar Inno Setup
-        if: hashFiles('installer/LoLIdleDesktop.iss') != ''
-        run: choco install innosetup --no-progress -y
+      - name: Instalar vpk (mesma versão do pacote Velopack do app)
+        run: dotnet tool install -g vpk --version 1.2.161
 
-      - name: Baixar WebView2 Bootstrapper
-        if: hashFiles('installer/LoLIdleDesktop.iss') != ''
+      - name: Baixar release anterior (base do delta)
+        # Vai para prev-release/ (não para release-assets/). A decisão de abortar ou
+        # prosseguir full-only fica no step "Verificar pré-requisitos de delta".
+        continue-on-error: true
         shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path installer/redist | Out-Null
-          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile "installer/redist/MicrosoftEdgeWebView2Setup.exe"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: vpk download github --repoUrl https://github.com/Zephrus15/LOLIdleApp --outputDir prev-release --token $env:GH_TOKEN
 
-      - name: Compilar instalador
-        if: hashFiles('installer/LoLIdleDesktop.iss') != ''
+      - name: Verificar pré-requisitos de delta
+        # Aborta SÓ quando a release anterior tem pacotes Velopack mas o download falhou —
+        # nesse caso o delta seria impossível e não queremos publicar silenciosamente sem.
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          $version = @(([xml](Get-Content LoLIdleDesktop.csproj)).Project.PropertyGroup.Version) |
-            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-            Select-Object -First 1
-          if (-not $version) { throw "Versão não encontrada no csproj." }
-          $version4 = if ($version -match '^\d+\.\d+\.\d+$') { "$version.0" } else { $version }
-          $iscc = @(
-            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
-            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
-          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $iscc) { throw "ISCC.exe não encontrado." }
-          & $iscc "/DMyAppVersion=$version" "/DMyAppVersion4=$version4" "/DSourceDir=$PWD\bin\Release\net8.0-windows10.0.17763.0\win-x64\publish" "/O$PWD\artifacts\installer" "installer\LoLIdleDesktop.iss"
-          if ($LASTEXITCODE -ne 0) { throw "Falha ao compilar o instalador." }
-
-      - name: Criar pacote ZIP
-        shell: pwsh
-        run: |
-          $publish = "bin/Release/net8.0-windows10.0.17763.0/win-x64/publish"
-          if (!(Test-Path "$publish/LoL Idle.exe")) {
-            throw "Executável não encontrado em $publish"
+          $current = "${{ steps.ver.outputs.tag }}"
+          # Descobre a release anterior publicada: releases/latest excluindo a tag atual;
+          # se coincidir com a atual (ex.: re-run após publicar), usa a lista de releases.
+          $prev = gh api repos/Zephrus15/LOLIdleApp/releases/latest --jq '.tag_name'
+          if ($LASTEXITCODE -ne 0) { $prev = "" } # sem nenhuma release (404) => não há anterior
+          if ($prev -eq $current) {
+            $tags = gh release list --limit 20 --json tagName --jq '.[].tagName'
+            $prev = ($tags -split "`n" | ForEach-Object { $_.Trim() } |
+                     Where-Object { $_ -and $_ -ne $current } |
+                     Select-Object -First 1)
           }
-          # Cria uma pasta raiz dentro do ZIP para que "Extrair aqui" mantenha tudo organizado.
-          $packageRoot = "package/LoLIdleDesktop"
-          New-Item -ItemType Directory -Path $packageRoot -Force | Out-Null
-          Copy-Item -Path "$publish/*" -Destination $packageRoot -Recurse -Force
-          Compress-Archive -Path "package/LoLIdleDesktop" -DestinationPath "LoLIdleDesktop-win-x64.zip" -Force
+          if (-not $prev) {
+            Write-Host "::warning::Nenhuma release anterior encontrada — publicado full-only, sem delta."
+            exit 0
+          }
+          $assets = gh release view $prev --json assets --jq '.assets[].name'
+          $names = ($assets -split "`n") | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+          $prevHasFull = @($names | Where-Object { $_ -match '-full\.nupkg$' }).Count -gt 0
+          if (-not $prevHasFull) {
+            Write-Host "::warning::release anterior sem pacotes Velopack — publicado full-only, sem delta (release anterior: $prev)"
+            exit 0
+          }
+          $full = Get-ChildItem "prev-release/LoLIdle-*-full.nupkg" -ErrorAction SilentlyContinue
+          if (-not $full) {
+            Write-Host "::error::A release anterior ($prev) tem *-full.nupkg, mas o download não produziu LoLIdle-*-full.nupkg em prev-release/ — o delta não pode ser gerado. Abortando o release."
+            exit 1
+          }
+          Write-Host "Release anterior ($prev): pacote full encontrado — delta será gerado."
 
-      - name: Anexar ZIP à Release
-        if: github.event_name == 'release'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" "LoLIdleDesktop-win-x64.zip" --clobber
+      - name: Preparar base do delta em release-assets/
+        # vpk pack lê a release anterior da própria --outputDir: copia só os *-full.nupkg
+        # para release-assets/ (viram base do delta e entram no releases.win.json).
+        # Removemos essas cópias antes do upload; os assets antigos já estão na release anterior.
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release-assets | Out-Null
+          if (Test-Path "prev-release") {
+            Get-ChildItem "prev-release/LoLIdle-*-full.nupkg" -ErrorAction SilentlyContinue |
+              Copy-Item -Destination release-assets/ -Force
+          }
 
-      - name: Guardar ZIP de teste
-        if: github.event_name != 'release'
-        uses: actions/upload-artifact@v4
-        with:
-          name: LoLIdleDesktop-win-x64-test
-          path: LoLIdleDesktop-win-x64.zip
-          if-no-files-found: error
+      - name: Empacotar com Velopack
+        shell: pwsh
+        run: |
+          if (!(Test-Path "publish/LoL Idle.exe")) {
+            throw "Executável não encontrado em publish/"
+          }
+          vpk pack --packId LoLIdle --packVersion "${{ steps.ver.outputs.version }}" --packDir publish --mainExe "LoL Idle.exe" --outputDir release-assets --packTitle "LoL Idle" --packAuthors "Zephrus15" --aumid Zephrus15.LoLIdle.Desktop --icon Assets/lol-idle.ico --runtime win-x64
+          if ($LASTEXITCODE -ne 0) { throw "Falha no vpk pack." }
 
-      - name: Anexar instalador à Release
-        if: github.event_name == 'release' && hashFiles('installer/LoLIdleDesktop.iss') != ''
+      - name: Limpar base do delta de release-assets/
+        # Remove os *-full.nupkg da versão ANTERIOR (copiados só para gerar o delta);
+        # ficam apenas os assets da versão atual.
+        shell: pwsh
+        run: |
+          $version = "${{ steps.ver.outputs.version }}"
+          Get-ChildItem "release-assets/LoLIdle-*.nupkg" -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notlike "LoLIdle-$version-*" } |
+            Remove-Item -Force
+
+      - name: Publicar release em rascunho (se necessário)
+        if: github.ref_type == 'tag'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $setup = Get-ChildItem "artifacts/installer/LoLIdleDesktop-Setup-*-x64.exe" | Select-Object -First 1
-          if (-not $setup) { throw "Instalador não encontrado." }
-          gh release upload "${{ github.event.release.tag_name }}" $setup.FullName --clobber
+          $tag = "${{ steps.ver.outputs.tag }}"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) { exit 0 } # ainda não existe; o step de upload cria
+          $isDraft = gh release view $tag --json isDraft --jq '.isDraft'
+          if ($isDraft -eq "true") {
+            # Publica ANTES do upload para que /releases/latest e o Velopack a enxerguem.
+            # Título e notas existentes NÃO são tocados.
+            gh release edit $tag --draft=false
+            if ($LASTEXITCODE -ne 0) { throw "Falha ao publicar a release $tag (estava em rascunho)." }
+            Write-Host "Release $tag estava em rascunho e foi publicada."
+          }
 
-      - name: Guardar instalador de teste
-        if: github.event_name != 'release' && hashFiles('installer/LoLIdleDesktop.iss') != ''
+      - name: Anexar assets à Release
+        if: github.ref_type == 'tag'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ steps.ver.outputs.tag }}"
+          $version = "${{ steps.ver.outputs.version }}"
+          # Se a release da tag já existe (criada à mão, com notas), mantém título/notas e
+          # só anexa os assets; senão cria com o padrão "LoL Idle Desktop vX.Y.Z".
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --title "LoL Idle Desktop $tag" --generate-notes
+            if ($LASTEXITCODE -ne 0) { throw "Falha ao criar a release $tag." }
+          }
+          $files = @(
+            "release-assets/LoLIdle-win-Setup.exe",
+            "release-assets/releases.win.json",
+            "release-assets/LoLIdle-$version-full.nupkg"
+          )
+          $delta = Get-ChildItem "release-assets/LoLIdle-$version-delta.nupkg" -ErrorAction SilentlyContinue
+          if ($delta) { $files += $delta.FullName }
+          $portable = Get-ChildItem "release-assets/LoLIdle-win-Portable.zip" -ErrorAction SilentlyContinue
+          if ($portable) { $files += $portable.FullName }
+          foreach ($f in $files) {
+            if (!(Test-Path $f)) { throw "Asset esperado não encontrado: $f" }
+          }
+          gh release upload $tag $files --clobber
+
+      - name: Guardar assets de teste
+        if: github.ref_type != 'tag'
         uses: actions/upload-artifact@v4
         with:
-          name: LoLIdleDesktop-Setup
-          path: artifacts/installer/LoLIdleDesktop-Setup-*-x64.exe
+          name: LoLIdle-Velopack-assets
+          path: release-assets/*
           if-no-files-found: error

@@ -1,0 +1,221 @@
+<UserControl x:Class="LoLIdleDesktop.UpdateSettingsPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0" Cursor="Arrow">
+        <StackPanel Margin="18,16,18,10">
+            <!-- ===== Título da aba ===== -->
+            <TextBlock Text="ℹ️ Sobre"
+                       Foreground="#E8CF8F"
+                       FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
+                       FontSize="15"
+                       FontWeight="SemiBold"
+                       Margin="2,0,0,8" />
+
+            <!-- ===== Identidade do app ===== -->
+            <Border Background="{StaticResource BgPanel2}"
+                    BorderBrush="{StaticResource BorderSubtle}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="12,12"
+                    Margin="0,0,0,12">
+                <StackPanel>
+                    <TextBlock Text="LoL Idle Desktop"
+                               Foreground="{StaticResource TextPrimary}"
+                               FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,4" />
+                    <TextBlock Text="Aplicativo desktop não oficial para Windows que permite jogar o LoL Idle em uma janela própria, sem precisar manter o navegador aberto. Projeto gratuito, feito por um desenvolvedor independente."
+                               Foreground="{StaticResource TextSecondary}"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Margin="0,0,0,10" />
+                    <Grid Margin="0,0,0,8">
+                        <TextBlock Text="Versão instalada"
+                                   Foreground="{StaticResource TextSecondary}"
+                                   FontSize="12"
+                                   VerticalAlignment="Center" />
+                        <TextBlock x:Name="InstalledVersionText"
+                                   Text="—"
+                                   Foreground="{StaticResource TextPrimary}"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   HorizontalAlignment="Right"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                    <Grid>
+                        <TextBlock Text="Tecnologia"
+                                   Foreground="{StaticResource TextSecondary}"
+                                   FontSize="12"
+                                   VerticalAlignment="Center" />
+                        <TextBlock Text=".NET 8 · WPF · WebView2 · Windows 10/11"
+                                   Foreground="{StaticResource TextPrimary}"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   HorizontalAlignment="Right"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- ===== Seção Atualização ===== -->
+            <TextBlock Text="Atualização"
+                       Foreground="#E8CF8F"
+                       FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
+                       FontSize="12"
+                       FontWeight="SemiBold"
+                       Margin="2,0,0,6" />
+
+            <TextBlock Text="O app verifica uma vez por abertura (e quando você pede) se há uma versão mais nova publicada no GitHub Releases. Nada é baixado ou instalado automaticamente — a decisão é sua."
+                       Foreground="{StaticResource TextSecondary}"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Margin="2,0,0,12" />
+
+            <Border Background="{StaticResource BgPanel2}"
+                    BorderBrush="{StaticResource BorderSubtle}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    Padding="12,10"
+                    Margin="0,0,0,10">
+                <StackPanel>
+                    <Grid Margin="0,0,0,8">
+                        <TextBlock Text="Última release"
+                                   Foreground="{StaticResource TextSecondary}"
+                                   FontSize="12"
+                                   VerticalAlignment="Center" />
+                        <TextBlock x:Name="LatestReleaseText"
+                                   Text="—"
+                                   Foreground="{StaticResource TextPrimary}"
+                                   FontSize="12"
+                                   FontWeight="SemiBold"
+                                   HorizontalAlignment="Right"
+                                   VerticalAlignment="Center"
+                                   TextAlignment="Right"
+                                   TextWrapping="Wrap"
+                                   MaxWidth="330" />
+                    </Grid>
+                    <Grid x:Name="PublishedAtRow" Visibility="Collapsed">
+                        <TextBlock Text="Publicada em"
+                                   Foreground="{StaticResource TextSecondary}"
+                                   FontSize="12"
+                                   VerticalAlignment="Center" />
+                        <TextBlock x:Name="PublishedAtText"
+                                   Text="—"
+                                   Foreground="{StaticResource TextSecondary}"
+                                   FontSize="12"
+                                   HorizontalAlignment="Right"
+                                   VerticalAlignment="Center" />
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- ===== Status ===== -->
+            <TextBlock x:Name="LastCheckText"
+                       Text="Última verificação: nunca"
+                       Foreground="{StaticResource TextSecondary}"
+                       FontSize="11"
+                       Margin="2,0,0,4" />
+            <TextBlock x:Name="StatusText"
+                       Text="Verificação ainda não concluída."
+                       Foreground="{StaticResource TextPrimary}"
+                       FontSize="12"
+                       FontWeight="SemiBold"
+                       TextWrapping="Wrap"
+                       Margin="2,0,0,12" />
+
+            <!-- ===== Ações ===== -->
+            <Button x:Name="CheckNowButton"
+                    Content="Procurar atualização agora"
+                    Style="{StaticResource TestActionButton}"
+                    Height="32"
+                    MinWidth="230"
+                    Padding="16,0,16,0"
+                    HorizontalAlignment="Left"
+                    Click="CheckNow_Click"
+                    ToolTip="Consulta as releases no GitHub agora e atualiza esta tela." />
+
+            <!-- "Atualizar agora": só aparece em instalação Velopack com update disponível
+                 (o code-behind controla via VelopackMode + HasUpdate). Durante o download
+                 o próprio botão mostra a porcentagem e a barra abaixo enche. Ao concluir,
+                 o app aplica o update e reinicia. Em dev/portable fica sempre oculto. -->
+            <Button x:Name="UpdateNowButton"
+                    Content="Atualizar agora"
+                    Style="{StaticResource TestActionButton}"
+                    Height="32"
+                    MinWidth="230"
+                    Padding="16,0,16,0"
+                    HorizontalAlignment="Left"
+                    Visibility="Collapsed"
+                    Margin="0,10,0,0"
+                    Click="UpdateNow_Click"
+                    ToolTip="Baixa e instala a atualização pelo Velopack e reinicia o app." />
+            <ProgressBar x:Name="UpdateProgressBar"
+                         Height="6"
+                         MinWidth="230"
+                         Maximum="100"
+                         Minimum="0"
+                         HorizontalAlignment="Left"
+                         Visibility="Collapsed"
+                         Margin="0,8,0,0" />
+
+            <!-- "Abrir release no navegador": visível quando há release conhecida.
+                 "Ignorar esta versão": visível só quando há atualização (HasUpdate == true). -->
+            <StackPanel x:Name="UpdateActionsPanel"
+                        Orientation="Horizontal"
+                        Visibility="Collapsed"
+                        Margin="0,10,0,0">
+                <Button x:Name="OpenReleaseButton"
+                        Content="Abrir release no navegador"
+                        Style="{StaticResource TestActionButton}"
+                        Height="32"
+                        Padding="16,0,16,0"
+                        Margin="0,0,8,0"
+                        Click="OpenRelease_Click"
+                        ToolTip="Abre a página da release no navegador padrão." />
+                <Button x:Name="IgnoreButton"
+                        Content="Ignorar esta versão"
+                        Style="{StaticResource GhostIconButton}"
+                        Height="32"
+                        Padding="14,0,14,0"
+                        Foreground="{StaticResource TextSecondary}"
+                        FontSize="12"
+                        FontWeight="SemiBold"
+                        Click="Ignore_Click"
+                        ToolTip="Marca esta versão como ignorada: some o badge e a mensagem de atualização até sair uma release diferente." />
+            </StackPanel>
+
+            <TextBlock Text="Versões ignoradas são lembradas neste computador. Se sair uma release mais nova que a ignorada, o aviso volta."
+                       Foreground="{StaticResource TextSecondary}"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Margin="2,12,0,0" />
+
+            <!-- ===== Rodapé: links e créditos ===== -->
+            <TextBlock Text="Links e créditos"
+                       Foreground="#E8CF8F"
+                       FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
+                       FontSize="12"
+                       FontWeight="SemiBold"
+                       Margin="2,18,0,6" />
+
+            <Button x:Name="OpenRepoButton"
+                    Content="Ver no GitHub"
+                    Style="{StaticResource GhostIconButton}"
+                    Height="32"
+                    Padding="14,0,14,0"
+                    Foreground="{StaticResource TextPrimary}"
+                    FontSize="12"
+                    FontWeight="SemiBold"
+                    HorizontalAlignment="Left"
+                    Click="OpenRepo_Click"
+                    ToolTip="Abre o repositório (github.com/Zephrus15/LOLIdleApp) no navegador padrão." />
+
+            <TextBlock Text="Feito por Zephrus15 — desenvolvedor independente. Projeto gratuito e não oficial."
+                       Foreground="{StaticResource TextSecondary}"
+                       FontSize="11"
+                       TextWrapping="Wrap"
+                       Margin="2,10,0,0" />
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

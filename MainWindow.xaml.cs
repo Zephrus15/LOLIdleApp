@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Reflection;
 using System.Collections.Generic;
 using Microsoft.Web.WebView2.Core;
 using System;
@@ -529,6 +530,48 @@ public partial class MainWindow : Window
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "LoLIdleDesktop", "window-settings.json");
 
+    // ===== Atualização (Velopack quando instalado; fallback HTTP do GitHub Releases) =====
+    // HasUpdate é estado de sessão (não persistido): só fica true quando a última checagem
+    // viu uma tag maior que a versão instalada E diferente da versão ignorada.
+    public bool HasUpdate { get; private set; }
+    public string? LatestReleaseVersion { get; private set; }
+    public string? LatestReleaseName { get; private set; }
+    public string? LatestReleaseUrl { get; private set; }
+    public string? LatestReleasePublishedAt { get; private set; }
+    public DateTime? LastUpdateCheckAt { get; private set; }
+    // true quando a última release conhecida está marcada como ignorada pelo usuário.
+    internal bool LatestReleaseIgnored { get; private set; }
+    // true quando a ÚLTIMA checagem falhou (rede/parse). O painel usa para não mentir
+    // "está tudo atualizado" após um erro; limpo em qualquer checagem bem-sucedida.
+    internal bool LastUpdateCheckFailed => _lastUpdateCheckFailed;
+    // Permite ao painel saber que há checagem em andamento (startup ou manual).
+    internal bool IsUpdateCheckInFlight => _updateCheckInFlight;
+    // true quando a checagem rodou pelo Velopack (app instalado de verdade). Nesse caso
+    // o painel mostra o botão "Atualizar agora"; em dev/portable fica false e o fluxo
+    // é o antigo (GitHubReleaseChecker + "Abrir release no navegador").
+    internal bool VelopackMode { get; private set; }
+    internal bool VelopackDownloadInFlight => _velopackDownloadInFlight;
+    internal int VelopackDownloadProgress { get; private set; }
+    // true quando o último download/apply Velopack falhou (o painel mostra uma mensagem
+    // de falha enquanto HasUpdate continuar true; zerada no próximo retry/sucesso).
+    internal bool VelopackUpdateDownloadFailed => _velopackUpdateDownloadFailed;
+    internal event EventHandler? UpdateStateChanged;
+    private bool _updateCheckInFlight;
+    private bool _lastUpdateCheckFailed;
+    // Fachada sobre o UpdateManager do Velopack (fonte: GithubSource do repo público).
+    private readonly VelopackUpdateService _velopack = new();
+    // Update encontrado pelo Velopack na última checagem; null = nenhum/dev-fallback.
+    private Velopack.UpdateInfo? _pendingVelopackUpdate;
+    private bool _velopackDownloadInFlight;
+    private bool _velopackUpdateDownloadFailed;
+    // null quando não dá para determinar a versão instalada ("desconhecida" no painel,
+    // nunca acende badge). Aceita InformationalVersion com prefixo "v".
+    private static readonly string? CurrentAppVersion = GetCurrentAppVersion();
+    // "v1.4.7" — como exibir a versão instalada na aba Atualização (null = desconhecida).
+    internal string? InstalledVersionDisplay => CurrentAppVersion == null ? null : "v" + CurrentAppVersion;
+    // true quando não dá para ler o InformationalVersion: não comparar nada, não afirmar nada.
+    internal bool InstalledVersionUnknown => CurrentAppVersion == null;
+
     private const int WM_NCLBUTTONDOWN = 0x00A1;
     private const int HTCAPTION = 0x0002;
 
@@ -642,6 +685,9 @@ public partial class MainWindow : Window
         // Hunt for LoL Idle (extensão opcional, instalada só no clique do botão Hunt)
         public string? HuntExtensionId { get; set; }
         public bool HuntTopmost { get; set; } = true;
+        // Última versão de release IGNORADA pelo usuário na aba Atualização (ex.: "v1.4.8").
+        // Tag diferente desta que seja maior que a instalada volta a acender o badge.
+        public string? IgnoredVersion { get; set; }
     }
 
     public MainWindow()
@@ -772,6 +818,311 @@ public partial class MainWindow : Window
         UpdateMaximizeButton();
         SyncTrayMenuChecks();
         _ = AtualizarContaConectadaUIAsync(); // fire-and-forget
+    }
+
+    // ===== Atualização via GitHub Releases (silencioso; nunca derruba o app) =====
+
+    private static string? GetCurrentAppVersion()
+    {
+        try
+        {
+            var attribute = typeof(MainWindow).Assembly
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>();
+            string value = attribute?.InformationalVersion ?? string.Empty;
+            int plus = value.IndexOf('+'); // descarta metadado de build ("1.4.7+sha…")
+            if (plus >= 0)
+                value = value.Substring(0, plus);
+            value = value.Trim();
+            if (value.Length > 0 && (value[0] == 'v' || value[0] == 'V'))
+                value = value.Substring(1).Trim(); // InformationalVersion já com prefixo "v"
+            return value.Length == 0 ? null : value;
+        }
+        catch
+        {
+            return null; // sem versão instalada detectada: não comparar, nunca acender badge
+        }
+    }
+
+    // Checa a última release publicada. Chamada UMA vez no load (startup) e pelo botão
+    // "Procurar atualização agora" nos Ajustes. Falhas de rede/parse só são logadas.
+    internal async Task CheckForUpdatesAsync(string origin)
+    {
+        if (_updateCheckInFlight)
+        {
+            LogFloatingWindowEvent($"UpdateCheck ({origin}): ignorado — verificação em andamento");
+            return; // startup e clique manual nunca rodam em paralelo
+        }
+
+        _updateCheckInFlight = true;
+        try
+        {
+            LogFloatingWindowEvent($"UpdateCheck ({origin}): iniciando");
+
+            // Caminho 1: Velopack (instalação de verdade). NotInstalledException =>
+            // dev/portable: cai no fallback HTTP abaixo. Qualquer outra falha do
+            // Velopack marca a checagem como falha (nunca crash, nunca badge falso).
+            Velopack.UpdateInfo? vpkUpdate = null;
+            bool velopackChecked = false;
+            try
+            {
+                vpkUpdate = await _velopack.CheckAsync();
+                velopackChecked = true;
+            }
+            catch (Velopack.Exceptions.NotInstalledException)
+            {
+                LogFloatingWindowEvent($"UpdateCheck ({origin}): não é instalação Velopack (dev/portable) — fallback para checagem HTTP");
+            }
+            catch (Exception vpkEx)
+            {
+                _lastUpdateCheckFailed = true;
+                LastUpdateCheckAt = DateTime.Now;
+                LogFloatingWindowEvent($"UpdateCheck ({origin}): Velopack falhou (mantendo estado anterior): {vpkEx.GetType().Name}: {vpkEx.Message}");
+                RaiseUpdateStateChanged();
+                return;
+            }
+
+            if (velopackChecked)
+            {
+                VelopackMode = true;
+                LastUpdateCheckAt = DateTime.Now;
+                _pendingVelopackUpdate = vpkUpdate;
+                _lastUpdateCheckFailed = false;
+                if (vpkUpdate != null)
+                {
+                    string vpkTag = "v" + vpkUpdate.TargetFullRelease.Version;
+                    LatestReleaseVersion = vpkTag;
+                    LatestReleaseName = null;
+                    LatestReleaseUrl = $"{RepoConstants.ReleasesTagBaseUrl}{vpkTag}";
+                    LatestReleasePublishedAt = null;
+                    bool vpkIgnored = IsVersionIgnored(vpkTag);
+                    HasUpdate = !vpkIgnored;
+                    LatestReleaseIgnored = vpkIgnored;
+                    LogFloatingWindowEvent($"UpdateCheck ({origin}): Velopack — update disponível {vpkTag} ignored={vpkIgnored}");
+                }
+                else
+                {
+                    // Sem update: limpa o estado de release para o painel não mostrar
+                    // nada como "nova versão" e o botão "Atualizar agora" fica oculto.
+                    LatestReleaseVersion = null;
+                    LatestReleaseName = null;
+                    LatestReleaseUrl = null;
+                    LatestReleasePublishedAt = null;
+                    HasUpdate = false;
+                    LatestReleaseIgnored = false;
+                    LogFloatingWindowEvent($"UpdateCheck ({origin}): Velopack — app já está na versão mais recente");
+                }
+                RaiseUpdateStateChanged();
+                return;
+            }
+
+            // Caminho 2 (fallback dev/portable): checagem HTTP do GitHubReleaseChecker.
+            GitHubReleaseInfo? info = await GitHubReleaseChecker.GetLatestReleaseAsync();
+            LastUpdateCheckAt = DateTime.Now;
+
+            if (info == null)
+            {
+                // Falha: mantém o último estado conhecido (HasUpdate/LatestRelease*/LatestReleaseIgnored)
+                // e só marca a checagem como falha para o painel não mentir "está tudo atualizado".
+                _lastUpdateCheckFailed = true;
+                LogFloatingWindowEvent($"UpdateCheck ({origin}): falha ou resposta inválida — mantendo estado anterior");
+                RaiseUpdateStateChanged();
+                return;
+            }
+
+            LatestReleaseVersion = info.TagName;
+            LatestReleaseName = info.Name;
+            LatestReleaseUrl = info.HtmlUrl;
+            LatestReleasePublishedAt = info.PublishedAt;
+
+            int? cmp = CurrentAppVersion == null
+                ? null
+                : GitHubReleaseChecker.CompareVersions(info.TagName, CurrentAppVersion);
+            bool strictlyNewer = cmp.HasValue && cmp.Value > 0;
+            bool ignored = IsVersionIgnored(info.TagName);
+            HasUpdate = strictlyNewer && !ignored;
+            LatestReleaseIgnored = strictlyNewer && ignored;
+            _lastUpdateCheckFailed = false;
+            LogFloatingWindowEvent(
+                $"UpdateCheck ({origin}): latest={info.TagName} current={(CurrentAppVersion == null ? "desconhecida" : "v" + CurrentAppVersion)} strictlyNewer={strictlyNewer} ignored={ignored} hasUpdate={HasUpdate}");
+            RaiseUpdateStateChanged();
+        }
+        catch (Exception ex)
+        {
+            // Falha: mantém o último estado conhecido; só marca a checagem como falha.
+            _lastUpdateCheckFailed = true;
+            LastUpdateCheckAt = DateTime.Now;
+            LogFloatingWindowEvent($"UpdateCheck ({origin}): erro não fatal: {ex.GetType().Name}: {ex.Message}");
+            RaiseUpdateStateChanged();
+        }
+        finally
+        {
+            _updateCheckInFlight = false;
+        }
+    }
+
+    // Baixa o update Velopack pendente reportando progresso 0-100 e, ao concluir,
+    // aplica e reinicia o app (encerra este processo). Nunca derruba o app: qualquer
+    // falha vira log + status de erro na aba. progress callback pode ser null.
+    internal async Task DownloadVelopackUpdateAsync(Action<int>? progress)
+    {
+        if (_velopackDownloadInFlight)
+        {
+            LogFloatingWindowEvent("UpdateCheck: download ignorado — já há um download em andamento");
+            return;
+        }
+
+        Velopack.UpdateInfo? info = _pendingVelopackUpdate;
+        if (info == null)
+        {
+            LogFloatingWindowEvent("UpdateCheck: nenhum update Velopack pendente para baixar");
+            return;
+        }
+
+        _velopackDownloadInFlight = true;
+        VelopackDownloadProgress = 0;
+        _velopackUpdateDownloadFailed = false; // retry: limpa a mensagem de falha anterior
+        try
+        {
+            await _velopack.DownloadAsync(info, p =>
+            {
+                VelopackDownloadProgress = p;
+                try { progress?.Invoke(p); } catch { /* UI de progresso nunca derruba o download */ }
+            });
+            _velopackUpdateDownloadFailed = false;
+            LogFloatingWindowEvent($"UpdateCheck: update {info.TargetFullRelease.Version} baixado; aplicando e reiniciando");
+            // Encerra o processo e relança atualizado; não retorna em caso de sucesso.
+            _velopack.ApplyAndRestart(info);
+        }
+        catch (Exception ex)
+        {
+            _lastUpdateCheckFailed = true;
+            _velopackUpdateDownloadFailed = true;
+            LogFloatingWindowEvent($"UpdateCheck: download/apply Velopack falhou: {ex.GetType().Name}: {ex.Message}");
+            RaiseUpdateStateChanged();
+        }
+        finally
+        {
+            _velopackDownloadInFlight = false;
+        }
+    }
+
+    // A versão está ignorada quando bate com IgnoredVersion (comparando major.minor.patch
+    // normalizado; fallback para string ordinal se algum lado não parsear).
+    private bool IsVersionIgnored(string? tag)
+    {
+        string? ignored = _settings?.IgnoredVersion;
+        if (string.IsNullOrWhiteSpace(ignored) || string.IsNullOrWhiteSpace(tag))
+            return false;
+
+        int? cmp = GitHubReleaseChecker.CompareVersions(ignored, tag);
+        if (cmp.HasValue)
+            return cmp.Value == 0;
+        return string.Equals(ignored.Trim(), tag.Trim(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    // "Ignorar esta versão": persiste IgnoredVersion = tag da última checagem,
+    // apaga o badge e a mensagem de "nova versão" até sair uma release diferente.
+    internal void IgnoreLatestRelease()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(LatestReleaseVersion))
+                return;
+            _settings.IgnoredVersion = LatestReleaseVersion.Trim();
+            HasUpdate = false;
+            LatestReleaseIgnored = true;
+            SaveWindowSettings();
+            LogFloatingWindowEvent($"UpdateCheck: versão {LatestReleaseVersion} marcada como ignorada pelo usuário");
+            RaiseUpdateStateChanged();
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"UpdateCheck: falha ao ignorar versão: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    // Repositório oficial do app (link "Ver no GitHub" da aba Sobre).
+    private const string RepositoryUrl = RepoConstants.GitHubRepoUrl;
+
+    // Abre a página da release no navegador padrão (não baixa nada).
+    internal void OpenLatestReleaseInBrowser()
+    {
+        OpenGitHubUrlInBrowser(LatestReleaseUrl, "UpdateCheck: página da release");
+    }
+
+    // Abre o repositório no navegador padrão.
+    internal void OpenRepositoryInBrowser()
+    {
+        OpenGitHubUrlInBrowser(RepositoryUrl, "Sobre: repositório");
+    }
+
+    // Só abre https://github.com/... no navegador padrão — nunca outro scheme nem outro host.
+    private void OpenGitHubUrlInBrowser(string? url, string context)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? parsed) ||
+                parsed.Scheme != Uri.UriSchemeHttps ||
+                (!parsed.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase) &&
+                 !parsed.Host.Equals("www.github.com", StringComparison.OrdinalIgnoreCase)))
+            {
+                LogFloatingWindowEvent($"{context}: URL inválida ou não-GitHub — navegador não aberto");
+                return;
+            }
+            // UseShellExecute = true com FileName = URL abre no navegador padrão.
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+            LogFloatingWindowEvent($"{context}: aberto no navegador");
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"{context}: não foi possível abrir o navegador: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    private void RaiseUpdateStateChanged()
+    {
+        // Encaminha o refresh para a UI thread, independentemente de quem chamou.
+        void Raise()
+        {
+            UpdateUpdateBadge();
+            try
+            {
+                UpdateStateChanged?.Invoke(this, EventArgs.Empty);
+            }
+            catch (Exception ex)
+            {
+                LogFloatingWindowEvent($"UpdateCheck: listener UpdateStateChanged falhou: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+
+        if (Dispatcher.CheckAccess())
+            Raise();
+        else
+            _ = Dispatcher.BeginInvoke(new Action(Raise));
+    }
+
+    // Liga/desliga a bolinha laranja do botão "⚙ Ajustes" na sidebar.
+    private void UpdateUpdateBadge()
+    {
+        try
+        {
+            if (AjustesUpdateDot != null)
+                AjustesUpdateDot.Visibility = HasUpdate ? Visibility.Visible : Visibility.Collapsed;
+            if (AjustesButton != null)
+                AjustesButton.ToolTip = HasUpdate
+                    ? $"Atualização disponível ({LatestReleaseVersion}) — clique para ver nos Ajustes"
+                    : "Central de configurações do app";
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"UpdateCheck: falha ao atualizar badge: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     // Migração única: se "Iniciar com o Windows" está ativo, garante que a chave Run
@@ -1627,6 +1978,10 @@ public partial class MainWindow : Window
             // (EnsureAccountViewAsync já aplica, mas reaplicar é idempotente e cobre quem foi pulada).
             ApplyAccountVisibility();
         }
+
+        // Verifica UMA vez por abertura se há release mais nova no GitHub Releases.
+        // Fire-and-forget: falha de rede é silenciosa e não atrasa nem derruba o startup.
+        _ = CheckForUpdatesAsync("startup");
     }
 
     // Usa um WebView2 previamente inicializado. Nenhum EnsureCoreWebView2Async
@@ -4862,7 +5217,7 @@ public partial class MainWindow : Window
 
             // Aplica as preferências de áudio na WebView do jogo (chamada pelo painel de Áudio dos Ajustes).
             var window = new AjustesWindow(_settings, accountKeys, GetAccountDisplayName, SaveWindowSettings, this,
-                                           async () => await ApplyAudioSettingsAsync());
+                                           async () => await ApplyAudioSettingsAsync(), updateHost: this);
             LogFloatingWindowEvent("Ajustes_Click: ctor AjustesWindow ok");
 
             window.Show();

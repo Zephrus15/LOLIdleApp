@@ -6,26 +6,34 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.4.7](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.7)**
+**[Baixar LoL Idle Desktop v1.4.8](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.8)**
 
-### Instalador (quando disponível na Release)
+### Instalador (Velopack — instalação por usuário)
 
-Se a Release incluir o arquivo `LoLIdleDesktop-Setup-<versão>-x64.exe`:
+1. Baixe o arquivo `LoLIdle-win-Setup.exe` na página da Release.
+2. Execute e siga o assistente — **não pede admin/UAC**; instala por usuário em `%LocalAppData%\LoLIdle`.
+3. Não é preciso instalar o .NET separadamente: o pacote é self-contained (Setup ≈80 MB).
 
-1. Baixe o instalador.
-2. Execute e siga o assistente.
-3. O instalador cria os atalhos, registra a desinstalação e verifica o WebView2 automaticamente.
+As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na instalação e nas atualizações.
 
-As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
+> **Migração uma vez (quem instalou pelas versões ≤1.4.7):** a cópia instalada pelas versões antigas (Inno Setup, em Program Files, com admin) **não se atualiza sozinha**. Baixe o `LoLIdle-win-Setup.exe` da v1.4.8 e instale uma vez (instala em `%LocalAppData%\LoLIdle`) — daí em diante as atualizações são automáticas pelo próprio app. Recomenda-se desinstalar a cópia antiga.
+
+### Atualização automática (desde a v1.4.8)
+
+Instalado pelo novo Setup, o app verifica se há versão nova a cada abertura e, na aba **ℹ️ Sobre** (Ajustes), mostra **"Atualizar agora"** quando houver — download com progresso e reinício automático. Feed: GitHub Releases (`releases.win.json`). **Para quem ainda usa a cópia instalada pelas versões ≤1.4.7, isso só vale depois da migração única descrita acima.**
 
 ### Instalação pelo ZIP (portátil)
 
-1. Baixe o arquivo `LoLIdleDesktop-win-x64.zip` na página da Release.
+1. Baixe o arquivo `LoLIdle-win-Portable.zip` na página da Release.
 2. Extraia o conteúdo para uma pasta de sua preferência.
 3. Execute `LoL Idle.exe`.
 4. Aguarde o carregamento do jogo e entre normalmente na sua conta.
 
 Não é necessário instalar o .NET separadamente para utilizar o pacote publicado.
+
+### Se o WebView2 não estiver instalado
+
+O app mostra um aviso com o link oficial em vez de falhar em silêncio: https://developer.microsoft.com/microsoft-edge/webview2/ (o WebView2 Evergreen já vem no Windows 11 e na maioria dos Windows 10 atualizados).
 
 ## 💛 Apoie o projeto
 
@@ -77,7 +85,7 @@ O projeto é gratuito e feito por um desenvolvedor independente — contribuiç�
 - Restauração das dimensões e da posição da janela principal, da janela flutuante e da janela de Missões.
 - Preferência "sempre no topo" salva separadamente para a janela flutuante e para a janela de Missões.
 - Gerenciamento da sessão do WebView2.
-- Botão ⚙ "Ajustes" na sidebar — a central única de configurações (abre a janela **Ajustes**); desde a v1.4.6, as abas são 🔔 **Notificações**, ⚙ **Inicialização** e, desde a v1.4.7, 🎵 **Áudio** (antes "Opções de fechamento" — ver a seção v1.4.6).
+- Botão ⚙ "Ajustes" na sidebar — a central única de configurações (abre a janela **Ajustes**); desde a v1.4.6, as abas são 🔔 **Notificações**, ⚙ **Inicialização** e, desde a v1.4.7, 🎵 **Áudio**; desde a v1.4.8, também ℹ️ **Sobre** (identidade do app, versão instalada/última release e botões de atualização — ver a seção v1.4.8).
 - Arquivos em `%LOCALAPPDATA%\LoLIdleDesktop`: `window-settings.json` (preferências/geometria), `WebView2\` (sessão/cookies), `Extensions\HuntForLoLIdle\` (extensão Hunt, instalada sob demanda) e `floating-window.log` (log técnico).
 
 ### Limitações desta versão
@@ -92,7 +100,7 @@ O projeto é gratuito e feito por um desenvolvedor independente — contribuiç�
 - Microsoft Edge WebView2 Runtime.
 - Conexão com a internet.
 
-Se o WebView2 não estiver instalado, obtenha-o pelo [site oficial da Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/).
+Se o WebView2 não estiver instalado, o app mostra um aviso com o link oficial — ou obtenha-o pelo [site oficial da Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/).
 
 ## 🛠️ Compilar a partir do código-fonte
 
@@ -115,29 +123,28 @@ bin\Release\net8.0-windows10.0.17763.0\win-x64\publish\LoL Idle.exe
 
 As pastas `bin` e `obj` são geradas automaticamente durante a compilação e não precisam ser incluídas no código-fonte.
 
-### Gerar o instalador
+### Gerar o pacote de release
 
-O instalador é criado com o [Inno Setup 6](https://jrsoftware.org/isinfo.php). Se ainda não estiver instalado:
+Desde a v1.4.8, o pacote de release é gerado pelo **GitHub Actions** (`.github/workflows/release.yml`) com o [Velopack](https://github.com/velopack/velopack) (`vpk pack`), no push de tag `v*` ou por disparo manual. Assets publicados na Release: `LoLIdle-win-Setup.exe`, `LoLIdle-win-Portable.zip`, `LoLIdle-<versão>-full.nupkg` e `releases.win.json` (o `-delta.nupkg` passa a existir a partir das próximas releases — a v1.4.8 é a primeira release Velopack).
 
-```bat
-winget install JRSoftware.InnoSetup -e
-```
-
-Depois execute:
-
-```bat
-GERAR-INSTALADOR.bat
-```
-
-O instalador será gerado em:
-
-```text
-artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
-```
-
-O build baixa automaticamente o bootstrapper do WebView2 para `installer\redist\`. O instalador verifica se o runtime já está presente e o instala quando necessário. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na desinstalação.
+Os scripts de Inno Setup (`GERAR-INSTALADOR.bat`, pasta `installer/`) ficam no repositório apenas como fallback histórico; o CI não os usa mais. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na instalação e nas atualizações.
 
 ## 📋 Histórico de versões
+
+### v1.4.8 — 2026-11-14
+
+**Release de distribuição: migração do Inno Setup para o Velopack + atualização automática dentro do app.**
+
+- **Migração Inno → Velopack** — o instalador agora é gerado pelo Velopack: instalação **por usuário** em `%LocalAppData%\LoLIdle`, **sem UAC/admin**.
+- **Atualização automática pelo app** — a aba ℹ️ **Sobre** no Ajustes tem **"Atualizar agora"** (download com progresso + reinício automático) quando há nova release. Feed: GitHub Releases (`releases.win.json`). Vale para quem instala pelo novo Setup; quem instalou pelas versões ≤1.4.7 (Inno, Program Files) precisa migrar uma vez (ver a seção Download acima).
+- **Migração uma vez** — quem instalou pelas versões ≤1.4.7 **não migra sozinho**: baixe o `LoLIdle-win-Setup.exe` da v1.4.8 e instale uma vez; daí as atualizações são automáticas. Recomenda-se desinstalar a cópia antiga.
+- **Sem mais runtime .NET no PC** — build self-contained single-file (Setup ≈80 MB, nupkg ≈73 MB).
+- **Guarda de WebView2** — sem o runtime, o app mostra um aviso com o link oficial em vez de falhar em silêncio.
+- **Aviso de nova versão** — checagem na abertura (HTTP silencioso do GitHub Releases), **badge laranja no botão ⚙ Ajustes**, **"Ignorar esta versão"** persistente (release mais nova que a ignorada volta a avisar) e aba ℹ️ **Sobre** com versão instalada/última release/publicada em/última verificação e botões **"Procurar atualização agora"**, **"Atualizar agora"** (só em instalação Velopack), **"Abrir release no navegador"**, **"Ignorar esta versão"** e **"Ver no GitHub"**.
+- **Aba 🔁 Atualização virou ℹ️ Sobre completa** (identidade do app, stack .NET 8 · WPF · WebView2, descrição do README, créditos "Feito por Zephrus15 — desenvolvedor independente").
+- **Falha de rede/check** — mensagens discretas, nunca crash; o app mantém o último estado conhecido.
+- **Assets do Release mudaram**: `LoLIdle-win-Setup.exe`, `LoLIdle-win-Portable.zip`, `LoLIdle-1.4.8-full.nupkg`, `releases.win.json`. **Deltas só existem a partir do v1.4.8** — quem atualizar de qualquer versão anterior baixa o pacote completo.
+- **Honestidade**: verificado ao vivo pelo usuário — a instalação local do Setup v1.4.8 abre normal e mostra v1.4.8 no Sobre. **Não validado**: o auto-update de fato (só se prova na v1.4.9), os deltas, a guarda de WebView2 em PC sem o runtime e o CI do release na primeira execução real.
 
 ### v1.4.7 — 2026-11-14
 

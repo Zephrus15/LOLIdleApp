@@ -1,4 +1,4 @@
-﻿LoL Idle Desktop - versão 1.4.7
+﻿LoL Idle Desktop - versão 1.4.8
 Aplicativo desktop não oficial para Windows
 
 O que é
@@ -38,6 +38,19 @@ Requisitos
 - Windows 10 ou Windows 11 de 64 bits.
 - .NET 8 SDK para compilar.
 - Microsoft Edge WebView2 Runtime (normalmente já vem instalado com o Edge).
+  Se faltar, o app avisa com o link oficial em vez de falhar em silêncio.
+
+Instalar (v1.4.8)
+-----------------
+1. Baixe o arquivo LoLIdle-win-Setup.exe na Release v1.4.8 do repositório.
+2. Execute: não pede admin/UAC; instala por usuário em %LocalAppData%\LoLIdle.
+3. Não precisa instalar o .NET (pacote self-contained, Setup ~80 MB).
+4. As preferências em %LOCALAPPDATA%\LoLIdleDesktop são preservadas.
+   Migração (quem instalou pelas versões <=1.4.7): o Setup antigo
+   (Inno Setup, em Program Files, com admin) NÃO se atualiza sozinho.
+   Baixe o LoLIdle-win-Setup.exe da v1.4.8 e instale uma vez; daí as
+   atualizações são automáticas dentro do app (aba ℹ️ Sobre no Ajustes).
+   Recomenda-se desinstalar a cópia antiga.
 
 Como compilar
 -------------
@@ -51,17 +64,59 @@ Como compilar
 5. O executável será criado em:
    bin\Release\net8.0-windows10.0.17763.0\win-x64\publish\LoL Idle.exe
 
-Gerar instalador
-----------------
-1. Instale o Inno Setup 6 (winget install JRSoftware.InnoSetup -e).
-2. Execute GERAR-INSTALADOR.bat na pasta do projeto.
-3. O instalador será criado em:
-   artifacts\installer\LoLIdleDesktop-Setup-<versão>-x64.exe
-   Dica: installer/prune-installers.ps1 mantém só os 2 instaladores mais
-   recentes em artifacts\installer (dry-run por padrão; -Execute apaga).
+Gerar o pacote de release
+-------------------------
+Desde a v1.4.8, o pacote de release é gerado pelo GitHub Actions com o
+Velopack (vpk pack), no push de tag v* ou por disparo manual
+(.github/workflows/release.yml). Assets publicados na Release:
+LoLIdle-win-Setup.exe, LoLIdle-win-Portable.zip,
+LoLIdle-<versão>-full.nupkg e releases.win.json
+(o -delta.nupkg passa a existir a partir das próximas releases).
 
-O instalador verifica o Microsoft Edge WebView2 Runtime e o instala
-automaticamente quando necessário.
+Os scripts Inno Setup (GERAR-INSTALADOR.bat, pasta installer/) ficam
+no repositório apenas como fallback histórico; o CI não os usa mais.
+
+Novidades (v1.4.8 - 2026-11-14)
+-------------------------------
+- Migração do Inno Setup para o Velopack: o instalador agora é
+  gerado pelo Velopack, com instalação por usuário em
+  %LocalAppData%\LoLIdle, sem UAC/admin.
+- Atualização automática dentro do app: a aba ℹ️ Sobre no Ajustes
+  mostra "Atualizar agora" (download com progresso e reinício
+  automático) quando há nova release. Feed: GitHub Releases
+  (releases.win.json).
+- Migração OBRIGATÓRIA uma vez para quem instalou pelas versões
+  <=1.4.7 (Inno, Program Files, com admin): baixe o
+  LoLIdle-win-Setup.exe da v1.4.8 e instale uma vez. Só assim o
+  app passa a se atualizar sozinho. Recomenda-se desinstalar a
+  cópia antiga.
+- Sem mais runtime .NET no PC: build self-contained single-file
+  (Setup ~80 MB, nupkg ~73 MB).
+- Guarda de WebView2: sem o runtime, o app mostra um aviso com
+  o link oficial (developer.microsoft.com/microsoft-edge/webview2/)
+  em vez de falhar em silêncio.
+- Aviso de nova versão: checagem na abertura (HTTP silencioso do
+  GitHub Releases), badge laranja no botão ⚙ Ajustes,
+  "Ignorar esta versão" persistente (release mais nova que a
+  ignorada volta a avisar) e aba ℹ️ Sobre com versão instalada,
+  última release, publicada em e última verificação — botões
+  "Procurar atualização agora", "Atualizar agora" (só em instalação
+  Velopack), "Abrir release no navegador", "Ignorar esta versão"
+  e "Ver no GitHub".
+- A aba 🔁 Atualização virou ℹ️ Sobre completa (identidade do
+  app, stack .NET 8 · WPF · WebView2, descrição e créditos
+  "Feito por Zephrus15 — desenvolvedor independente").
+- Falha de rede na checagem: mensagens discretas, nunca crasha;
+  o app mantém o último estado conhecido.
+- Assets do Release mudaram: LoLIdle-win-Setup.exe,
+  LoLIdle-win-Portable.zip, LoLIdle-1.4.8-full.nupkg e
+  releases.win.json. Deltas só existem a partir do v1.4.8 —
+  quem atualiza de qualquer versão anterior baixa o pacote completo.
+- Honestidade: instalação local do Setup v1.4.8 verificada ao vivo
+  pelo usuário (abre normal e mostra v1.4.8 no Sobre). NÃO validado:
+  o auto-update de fato (prova só na v1.4.9), os deltas, a guarda
+  de WebView2 em PC sem o runtime e o CI do release na primeira
+  execução real.
 
 Novidades (v1.4.7 - 2026-11-14)
 -------------------------------
@@ -355,6 +410,9 @@ Limitações desta versão
   v1.4.7, a aba 🎵 Áudio no Ajustes permite alternar Música e Efeitos
   (MusicMuted/EffectsMuted), sincronizados automaticamente com os botões
   bt-musica/bt-efeitos do jogo via CDP trusted input.
+- Atualização automática só para quem migrou para a instalação
+  Velopack (Setup da v1.4.8 em diante); instalações Inno (<=1.4.7)
+  precisam migrar uma vez (ver "Instalar" e "Novidades v1.4.8").
 - Voto e login OAuth abrem no navegador real.
 
 Observações importantes

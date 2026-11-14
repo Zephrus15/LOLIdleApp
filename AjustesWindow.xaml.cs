@@ -18,7 +18,8 @@ namespace LoLIdleDesktop
                              Func<string, string> displayNameSelector,
                              Action saveAction,
                              Window? owner,
-                             Func<Task>? onAudioChanged = null)
+                             Func<Task>? onAudioChanged = null,
+                             MainWindow? updateHost = null)
         {
             _owner = owner;
 
@@ -47,6 +48,21 @@ namespace LoLIdleDesktop
                 Style = (Style)FindResource("AjustesTabItem"),
                 Content = _audioPanel
             });
+            // Aba "Sobre" só faz sentido com o MainWindow como fonte do estado da checagem.
+            MainWindow? updateHostResolved = updateHost ?? owner as MainWindow;
+            if (updateHostResolved != null)
+            {
+                AjustesTabs.Items.Add(new TabItem
+                {
+                    Header = "ℹ️ Sobre",
+                    Style = (Style)FindResource("AjustesTabItem"),
+                    Content = new UpdateSettingsPanel(updateHostResolved)
+                });
+            }
+            else
+            {
+                MainWindow.LogFloatingWindowEvent("AjustesWindow: updateHost/owner não é um MainWindow — aba Sobre não será exibida");
+            }
             AjustesTabs.SelectedIndex = 0;
         }
 

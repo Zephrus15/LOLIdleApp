@@ -17,6 +17,10 @@ packages/
 # Empacotamento local
 package/
 LoLIdleDesktop-win-x64.zip
+publish/
+release-assets/
+release-assets-local/
+prev-release/
 
 # Documentação local (não enviar ao GitHub)
 DOCUMENTACAO.md
