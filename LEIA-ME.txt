@@ -1,4 +1,4 @@
-﻿LoL Idle Desktop - versão 1.4.9
+﻿LoL Idle Desktop - versão 1.5.0
 Aplicativo desktop não oficial para Windows
 
 O que é
@@ -40,15 +40,15 @@ Requisitos
 - Microsoft Edge WebView2 Runtime (normalmente já vem instalado com o Edge).
   Se faltar, o app avisa com o link oficial em vez de falhar em silêncio.
 
-Instalar (v1.4.9)
+Instalar (v1.5.0)
 -----------------
-1. Baixe o arquivo LoLIdle-win-Setup.exe na Release v1.4.9 do repositório.
+1. Baixe o arquivo LoLIdle-win-Setup.exe na Release v1.5.0 do repositório.
 2. Execute: não pede admin/UAC; instala por usuário em %LocalAppData%\LoLIdle.
 3. Não precisa instalar o .NET (pacote self-contained, Setup ~80 MB).
 4. As preferências em %LOCALAPPDATA%\LoLIdleDesktop são preservadas.
    Migração (quem instalou pelas versões <=1.4.7): o Setup antigo
    (Inno Setup, em Program Files, com admin) NÃO se atualiza sozinho.
-   Baixe o LoLIdle-win-Setup.exe da v1.4.9 e instale uma vez; daí as
+   Baixe o LoLIdle-win-Setup.exe da v1.5.0 e instale uma vez; daí as
    atualizações são automáticas dentro do app (aba ℹ️ Sobre no Ajustes).
    Recomenda-se desinstalar a cópia antiga.
 
@@ -75,6 +75,33 @@ LoLIdle-<versão>-full.nupkg e releases.win.json
 
 Os scripts Inno Setup (GERAR-INSTALADOR.bat, pasta installer/) ficam
 no repositório apenas como fallback histórico; o CI não os usa mais.
+
+Novidades (v1.5.0 - 2026-11-14)
+-------------------------------
+- ✨ Selo de VIP no avatar: as abas de contas (sidebar principal e
+  faixa/rail recolhida) agora exibem um selo dourado redondo com
+  estrela vetorial no canto superior esquerdo do avatar — apenas
+  para contas VIP do jogo.
+- Como detecta: scripts injetados por conta que varrem o DOM a
+  cada ~4s + MutationObserver com debounce: procura texto curto
+  (<=40 chars) casando /vip\s*\d+\s*d\b/i (padrão do selo dourado
+  "VIP <n>d" do jogo); perfuração de shadow DOM (walk recursivo,
+  profundidade <=6, <=5000 nós); rede de segurança setInterval;
+  relatório lol-idle-vip:1|0 só na mudança de estado.
+- Validado ao vivo pelo usuário (2026-11-14): detector funcionou
+  na conta principal (Zephrus -> VIP detectado, selo aparece) e
+  na conta 2 (Mio -> não-VIP, sem selo); UI validada visualmente
+  pelo usuário.
+- Honestidade: o seletor casou com o formato atual do selo do jogo
+  ("VIP 23d"); se o jogo mudar a marcação/localização, o detector
+  pode precisar de ajuste — e manteria sem crash (fallback: não
+  VIP). Renderização confirmada apenas no PC do usuário; estrela
+  vetorial, sem dependência de fonte.
+- Nada mais mudou nesta versão além do bump (1.4.9 -> 1.5.0) e
+  desta feature.
+- Atualização: continua pelo Velopack — sua instalação 1.4.9 verá
+  "Atualização disponível — v1.5.0" na aba ℹ️ Sobre; basta clicar
+  "Atualizar agora".
 
 Novidades (v1.4.9 - 2026-11-14)
 -------------------------------

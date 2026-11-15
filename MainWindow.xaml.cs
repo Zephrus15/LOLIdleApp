@@ -187,6 +187,105 @@ public partial class MainWindow : Window
     })();";
 
     // Arrastar pelo jogo, exceto quando o clique começa nos controles flutuantes.
+    // Detector de VIP (auto-diagnosticável): a barra de status do jogo mostra um selo dourado
+    // "VIP <n>d" (dias restantes) quando a conta é VIP. Espelha o TrayNotifyScript
+    // (MutationObserver + report só na MUDANÇA de estado) e adiciona:
+    //  - perfuração de shadow DOM (walk recursivo document.body -> shadowRoot, profundidade ≤ 6,
+    //    ≤ 5000 nós visitados por scan);
+    //  - rede de segurança setInterval(report, 4000) além do observer;
+    //  - mensagem de diagnóstico "lol-idle-vip-debug:<candidatos>" (até 3 textos MAIS CURTOS
+    //    casando /vip/i, formato "<len>:<primeiros 60 chars>", separados por '|', sem nunca
+    //    persistir). O debug só é enviado quando o payload muda (nada de spam por ciclo).
+    // Match de estado: elementos com textContent curto (<= 40 chars) casando /vip\s*\d+\s*d\b/i.
+    // Sem match => não VIP. TODAS as exceções => "não VIP"/debug de erro. Nunca crash.
+    private const string VipMonitorScript = @"(() => {
+        if (window.__lolIdleVipInstalled) return;
+        window.__lolIdleVipInstalled = true;
+        // Boot probe: prova binária de que o script executou (diagnóstico de injeção).
+        try { window.chrome.webview.postMessage('lol-idle-vip-debug:boot'); } catch (_) {}
+        try {
+        const vipRe = /vip\s*\d+\s*d\b/i;
+        const vipLooseRe = /vip/i;
+        const MAX_DEPTH = 6, MAX_NODES = 5000;
+        // Walk recursivo (perfurando shadow roots) coletando textos curtos que casam /vip/i.
+        // Retorna array de strings (pode conter duplicatas; quem consome deduplica).
+        const scan = () => {
+            const texts = [];
+            let visited = 0;
+            const visit = (root, depth) => {
+                if (!root || depth > MAX_DEPTH || visited >= MAX_NODES) return;
+                let all = [];
+                try { all = root.querySelectorAll ? root.querySelectorAll('*') : []; } catch (_) { return; }
+                for (const el of all) {
+                    if (visited >= MAX_NODES) break;
+                    visited++;
+                    let t = '';
+                    try { t = (el.textContent || '').trim(); } catch (_) { continue; }
+                    if (t && t.length <= 200 && vipLooseRe.test(t)) texts.push(t);
+                    if (el.shadowRoot) visit(el.shadowRoot, depth + 1);
+                }
+            };
+            try { visit(document.body || document.documentElement, 0); } catch (_) {}
+            return texts;
+        };
+        // Estado: algum texto <= 40 chars que pareça o selo (vip + número + 'd').
+        const isVipText = (t) => t.length <= 40 && vipRe.test(t);
+        // Debug: até 3 candidatos MAIS CURTOS (deduplicados) que casam /vip/i.
+        // Payload: <len>:<texto sem quebras/pipe truncado em 60 chars>, separados por pipe;
+        // '(nenhum)' quando não há candidato; '(erro)' se o scanner falhar.
+        const buildDebug = (texts) => {
+            try {
+                if (!texts.length) return 'lol-idle-vip-debug:(nenhum)';
+                const shortest = [...new Set(texts)]
+                    .sort((a, b) => a.length - b.length)
+                    .slice(0, 3)
+                    .map(t => t.length + ':' + t.replace(/[\r\n|]+/g, ' ').substring(0, 60));
+                return 'lol-idle-vip-debug:' + shortest.join('|');
+            } catch (_) { return 'lol-idle-vip-debug:(erro)'; }
+        };
+        let lastVip = null, lastDebug = null;
+        const report = () => {
+            let v = false, dbg;
+            let texts = [];
+            try { texts = scan(); } catch (_) { texts = []; }
+            try { v = texts.some(isVipText); } catch (_) { v = false; }
+            if (v !== lastVip) {
+                lastVip = v;
+                try { window.chrome.webview.postMessage('lol-idle-vip:' + (v ? '1' : '0')); } catch (_) {}
+            }
+            try { dbg = buildDebug(texts); } catch (_) { dbg = 'lol-idle-vip-debug:(erro)'; }
+            if (dbg !== lastDebug) { // só envia quando o conjunto de candidatos muda
+                lastDebug = dbg;
+                try { window.chrome.webview.postMessage(dbg); } catch (_) {}
+            }
+        };
+        // Debounce: o jogo muta o DOM o tempo todo; reavalia 500ms após a última mutação.
+        let timer = null;
+        const schedule = () => { if (timer) return; timer = setTimeout(() => { timer = null; report(); }, 500); };
+        // Observer resiliente: no document-creation, document.documentElement ainda pode
+        // ser null (a exceção antiga matava o script antes do setInterval existir).
+        // setInterval(report) roda incondicionalmente; o observer sobe quando o target existir.
+        // Pequena proteção além do snippet: tentar -> observar -> parar de tentar (sem vazar
+        // MutationObservers a cada 2s).
+        let watcher = null;
+        const tryStartObserver = () => {
+            if (watcher) return true; // já no ar
+            const target = document.documentElement || document.body;
+            if (!target) return false; // ainda não existe: tenta de novo depois
+            try { watcher = new MutationObserver(schedule); watcher.observe(target, { childList: true, subtree: true, characterData: true }); } catch (_) { watcher = null; return false; }
+            return true;
+        };
+        setInterval(report, 4000);      // relatório roda independente de tudo
+        if (document.readyState !== 'loading') schedule();
+        tryStartObserver();              // tenta agora
+        document.addEventListener('DOMContentLoaded', () => { schedule(); tryStartObserver(); }, { once: true });
+        const observerRetry = setInterval(() => { if (tryStartObserver()) clearInterval(observerRetry); }, 2000);
+        } catch (e) {
+            // Qualquer exceção no corpo: reporta como boot-error (sem quebras de linha), nunca crash.
+            try { window.chrome.webview.postMessage('lol-idle-vip-debug:boot-error:' + String(e && e.message || e).replace(/[\r\n|]+/g, ' ').substring(0, 80)); } catch (_) {}
+        }
+    })();";
+
     private const string FloatingDragScript = @"(() => {
         if (window.__lolIdleFloatingDragInstalled) return;
         window.__lolIdleFloatingDragInstalled = true;
@@ -368,6 +467,29 @@ public partial class MainWindow : Window
     }
     private readonly List<NotificacaoItem> _ultimasNotificacoes = new();
     private readonly HashSet<string> _contasNaoLidas = new(StringComparer.OrdinalIgnoreCase);
+    // VIP por conta (true = detectado como VIP pelo selo da barra de status do jogo).
+    // Recalculado pelo detector a cada mudança; não persistido — como as outras detecções.
+    private readonly Dictionary<string, bool> _vipPorConta = new(StringComparer.OrdinalIgnoreCase);
+    private bool IsVipConta(string conta) => _vipPorConta.TryGetValue(conta, out bool vip) && vip;
+
+    // lol-idle-vip:1|0 — só chega quando o detector do jogo reporta MUDANÇA de estado.
+    private void HandleVipMessage(string key, bool isVip)
+    {
+        try
+        {
+            bool? anterior = _vipPorConta.TryGetValue(key, out bool v) ? v : null;
+            if (anterior.HasValue && anterior.Value == isVip)
+                return;
+
+            _vipPorConta[key] = isVip;
+            LogFloatingWindowEvent($"VIP: conta {key} => {(isVip ? "VIP" : "nao-VIP")}{(anterior.HasValue ? $" (era {(anterior.Value ? "VIP" : "nao-VIP")})" : "")}");
+            _ = AtualizarContaConectadaUIAsync();
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"VIP: falha ao atualizar estado da conta {key}: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
     private bool ContaNaoLida(string conta) => _contasNaoLidas.Contains(conta);
     private System.Windows.Threading.DispatcherTimer? _settingsSaveTimer;
     private System.Drawing.Icon? _appIcon;
@@ -2371,6 +2493,7 @@ public partial class MainWindow : Window
 
         await core.AddScriptToExecuteOnDocumentCreatedAsync(AudioBootstrapScript);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(TrayNotifyScript);
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(VipMonitorScript);
         core.WebMessageReceived += (_, args) =>
         {
             try
@@ -2392,6 +2515,16 @@ public partial class MainWindow : Window
                         _missionsWindow?.Hide();
                     }
                     _ = core.ExecuteScriptAsync($"document.querySelector('#lol-idle-missions')?.classList.toggle('active', {_settings.ShowMissions.ToString().ToLower()});");
+                }
+                else if (msg != null && msg.StartsWith("lol-idle-vip-debug:"))
+                {
+                    // Diagnóstico do detector de VIP: o JS só envia quando o conjunto de
+                    // candidatos /vip/i muda — nada de persistência, só log conciso.
+                    LogFloatingWindowEvent($"VIP-debug: conta {key} => {msg["lol-idle-vip-debug:".Length..]}");
+                }
+                else if (msg != null && msg.StartsWith("lol-idle-vip:"))
+                {
+                    HandleVipMessage(key, msg == "lol-idle-vip:1");
                 }
                 else if (msg != null && msg.StartsWith("lol-idle-notify:"))
                 {
@@ -5342,6 +5475,52 @@ public partial class MainWindow : Window
         return Task.CompletedTask;
     }
 
+    // Selo de VIP dos avatares: estrela vetorial de 5 pontas (dourada, aro cobre) sobre
+    // fundo redondo escuro — legível em qualquer avatar (escuro, colorido, pixel-art) e sem
+    // dependência de glifo de fonte (o ✨ U+2728 não renderizava nesta máquina).
+    private static System.Windows.FrameworkElement CriarSeloVip(double diametro)
+    {
+        var grid = new Grid { Width = diametro, Height = diametro, IsHitTestVisible = false };
+        grid.Children.Add(new System.Windows.Shapes.Ellipse
+        {
+            Fill = new SolidColorBrush(Color.FromArgb(0xB0, 0x00, 0x00, 0x00)), // preto ~69% opaco
+            Stroke = new SolidColorBrush(Color.FromRgb(0xD9, 0x7B, 0x36)),      // cobre da paleta
+            StrokeThickness = 1.5
+        });
+
+        // Estrela de 5 pontas: 10 vértices alternados (externo R / interno r), começando
+        // no topo (-90°) e girando 36° por vértice. R ≈ 6.5px e r ≈ 2.6px no selo 18.
+        // R = 0,36·diametro e r = 0,145·diametro; cy ligeiramente acima do centro geométrico
+        // para centrar a estrela opticamente dentro do anel (bbox vertical é assimétrico).
+        double cx = diametro / 2.0, cy = diametro / 2.0 - diametro * 0.034;
+        double R = diametro * 0.36, r = diametro * 0.145;
+        var figure = new System.Windows.Media.PathFigure
+        {
+            StartPoint = new System.Windows.Point(cx, cy - R),
+            IsClosed = true
+        };
+        for (int i = 1; i < 10; i++)
+        {
+            double ang = -Math.PI / 2.0 + i * Math.PI / 5.0;
+            double rad = (i % 2 == 0) ? R : r;
+            figure.Segments.Add(new System.Windows.Media.LineSegment(
+                new System.Windows.Point(cx + rad * Math.Cos(ang), cy + rad * Math.Sin(ang)),
+                isStroked: true));
+        }
+        var path = new System.Windows.Shapes.Path
+        {
+            Data = new System.Windows.Media.PathGeometry(new[] { figure }),
+            Fill = new SolidColorBrush(Color.FromRgb(0xE8, 0xCF, 0x8F)),  // dourado claro da paleta
+            Stroke = new SolidColorBrush(Color.FromRgb(0xD9, 0x7B, 0x36)),
+            StrokeThickness = 1.2,
+            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
+            VerticalAlignment = System.Windows.VerticalAlignment.Center,
+            IsHitTestVisible = false
+        };
+        grid.Children.Add(path);
+        return grid;
+    }
+
     // Cria um item de avatar clicável (usado na faixa da sidebar recolhida e na faixa da borda quando minimizada).
     // horizontalStrip: true para a faixa horizontal (WrapPanel) da sidebar; false para a rail vertical da sidebar minimizada.
     private Border CriarAvatarStripItem(string conta, string display, bool destacado, bool horizontalStrip)
@@ -5375,6 +5554,16 @@ public partial class MainWindow : Window
                 IsHitTestVisible = false
             };
             grid.Children.Add(bolinha);
+        }
+
+        // Estrela VIP (canto superior esquerdo; canto direito fica com a bolinha de não lida).
+        if (IsVipConta(conta))
+        {
+            var selo = CriarSeloVip(15);
+            selo.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
+            selo.VerticalAlignment = VerticalAlignment.Top;
+            selo.Margin = new Thickness(-2, -2, 0, 0);
+            grid.Children.Add(selo);
         }
 
         var item = new Border
@@ -6214,6 +6403,18 @@ public partial class MainWindow : Window
                 VerticalAlignment = VerticalAlignment.Top,
                 IsHitTestVisible = false
             });
+        }
+
+        // Estrela VIP (canto superior esquerdo do avatar; só contas VIP). Fundo redondo escuro
+        // com aro cobre para o glifo não se perder em avatares escuros/complexos.
+        // Sem texto, sem tooltip: apenas o selo. Recriada quando o detector reporta mudança.
+        if (IsVipConta(conta))
+        {
+            var selo = CriarSeloVip(18);
+            selo.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
+            selo.VerticalAlignment = VerticalAlignment.Top;
+            selo.Margin = new Thickness(-4, -4, 0, 0);
+            avatarStack.Children.Add(selo);
         }
 
         // Nome + subtítulo

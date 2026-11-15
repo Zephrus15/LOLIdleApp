@@ -6,7 +6,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.4.9](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.4.9)**
+**[Baixar LoL Idle Desktop v1.5.0](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.5.0)**
 
 ### Instalador (Velopack — instalação por usuário)
 
@@ -16,7 +16,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na instalação e nas atualizações.
 
-> **Migração uma vez (quem instalou pelas versões ≤1.4.7):** a cópia instalada pelas versões antigas (Inno Setup, em Program Files, com admin) **não se atualiza sozinha**. Baixe o `LoLIdle-win-Setup.exe` da v1.4.9 e instale uma vez (instala em `%LocalAppData%\LoLIdle`) — daí em diante as atualizações são automáticas pelo próprio app. Recomenda-se desinstalar a cópia antiga.
+> **Migração uma vez (quem instalou pelas versões ≤1.4.7):** a cópia instalada pelas versões antigas (Inno Setup, em Program Files, com admin) **não se atualiza sozinha**. Baixe o `LoLIdle-win-Setup.exe` da v1.5.0 e instale uma vez (instala em `%LocalAppData%\LoLIdle`) — daí em diante as atualizações são automáticas pelo próprio app. Recomenda-se desinstalar a cópia antiga.
 
 ### Atualização automática (desde a v1.4.8)
 
@@ -130,6 +130,16 @@ Desde a v1.4.8, o pacote de release é gerado pelo **GitHub Actions** (`.github/
 Os scripts de Inno Setup (`GERAR-INSTALADOR.bat`, pasta `installer/`) ficam no repositório apenas como fallback histórico; o CI não os usa mais. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na instalação e nas atualizações.
 
 ## 📋 Histórico de versões
+
+### v1.5.0 — 2026-11-14
+
+**✨ Selo de VIP no avatar.**
+
+- **✨ Selo VIP** — as abas de contas (sidebar principal e faixa/rail recolhida) agora exibem um selo dourado redondo com estrela vetorial no canto superior esquerdo do avatar — **apenas para contas VIP** do jogo.
+- **Como detecta** — scripts injetados por conta (`AddScriptToExecuteOnDocumentCreatedAsync`) que varrem o DOM a cada ~4s + `MutationObserver` com debounce: procura texto curto (≤40 chars) casando `/vip\s*\d+\s*d\b/i` (padrão do selo dourado "VIP <n>d" do jogo); perfuração de shadow DOM (walk recursivo, profundidade ≤6, ≤5000 nós); rede de segurança `setInterval`; relatório `lol-idle-vip:1|0` só na mudança de estado.
+- **Validado ao vivo pelo usuário** (2026-11-14) — detector funcionou na conta principal (Zephrus → VIP detectado, selo aparece no avatar) e na conta 2 (Mio → não-VIP, sem selo); UI validada visualmente pelo usuário.
+- **Honestidade** — o seletor casou com o formato atual do selo do jogo ("VIP 23d"); se o jogo mudar a marcação/localização, o detector pode precisar de ajuste — e manteria sem crash (fallback: não-VIP). A renderização nunca foi confirmada em ambiente diferente do PC do usuário; a estrela é vetorial, sem dependência de fonte (o ✨ U+2728 não renderizava no WPF).
+- Nada mais mudou nesta versão além do bump (1.4.9 → 1.5.0) e desta feature; build/CI mantidos.
 
 ### v1.4.9 — 2026-11-14
 
