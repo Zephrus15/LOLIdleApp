@@ -86,7 +86,11 @@ Novidades (v1.4.9 - 2026-11-14)
   persistem em window-settings.json (NotificationVolume,
   SoundTimbres). Padrão = como antes (100% + sons originais);
   se a reprodução falhar, toca o aviso padrão do Windows.
-  Validado ao vivo pelo usuário (UI, slider, ▶ Tocar, timbres).
+  Validado ao vivo pelo usuário (UI, slider, ▶ Tocar, timbres, tema;
+  persistência ao reabrir o app; timbre escolhido no painel
+  reproduzido na notificação real; validação visual básica do
+  popup/UI com a escala do Windows alterada, fora do 100% —
+  2026-11-14).
 - Guarda de WebView2 reforçada: o app agora trata exceção OU
   resposta vazia/whitespace do GetAvailableBrowserVersionString()
   como runtime ausente -> aviso com o link oficial + saída com
@@ -183,7 +187,14 @@ Novidades (v1.4.7 - 2026-11-14)
 - Popup: ícone de livro (📖) para missões que só trocam de
   personagem.
 - Notas de honestidade: Popup já foi validado ao vivo em sessão
-  pequena (notifications com popup, fullscreen); DND do Windows 11
+  pequena (notifications com popup, fullscreen); as animações de
+  entrada/saída do popup (fade + deslize, 450/350 ms) também foram
+  validadas ao vivo pelo usuário (2026-11-14, gameplay real) — vistas
+  funcionando normalmente; adendo 2026-11-14 (gameplay real):
+  popup real renderizado no jogo com avatar da conta
+  ("Item épico obtido!", conta "Mio") e notificação real
+  disparada com o jogo em fullscreen — matriz de supressão
+  (tela cheia = só som) mantida; DND do Windows 11
   manual não foi implementável (informação oculta — app tem toggle
   próprio).
 
@@ -193,11 +204,16 @@ Novidades (v1.4.6 - 2026-11-14)
   cobre), avatar da conta, nome na linha 1, mensagem na linha 2; botão X
   fecha só o popup; até 3 empilhados (o 4º fecha o mais antigo); some em
   6 s (hover pausa); clique no card = mesma ação da notificação.
+  Validado ao vivo em gameplay real (2026-11-14): popup real
+  renderizado no jogo com avatar da conta ("Item épico obtido!",
+  conta "Mio").
 - Toast do Windows virou registro silencioso na Central de Ações (sem
   banner); histórico continua clicável. Balão clássico só se o toast falhar.
 - Assistência de Foco / tela cheia / apresentação suprimem o popup
-  (som e histórico continuam). Limitação: o Não Perturbar manual do
-  Windows 11 (Sessão de Foco) pode não suprimir o popup.
+  (som e histórico continuam). Adendo 2026-11-14 (gameplay real):
+  aviso real disparado com o jogo em fullscreen — a matriz
+  (tela cheia = só som) se manteve. Limitação: o Não Perturbar manual
+  do Windows 11 (Sessão de Foco) pode não suprimir o popup.
 - Diárias com recompensa automática: clicar na notificação da diária
   clica sozinho no banner (#rastreio-diaria-rift, via CDP
   Input.dispatchMouseEvent). Recompensa creditada pelo jogo. Testado ao
@@ -227,7 +243,11 @@ Novidades (v1.4.6 - 2026-11-14)
 - Instalador: installer/prune-installers.ps1 mantém os 2 mais recentes.
 - Diagnóstico: log "Missao classificada:" para missões.
 - Honestidade: auto-claim da diária e detecção de poção testados ao
-  vivo; popup em si (empilhamento, multi-monitor, DPI) e Não Perturbar
+  vivo; popup real renderizado no jogo com avatar da conta e
+  notificação em tela cheia seguindo a matriz validados ao vivo
+  (2026-11-14); validação visual básica do popup/UI fora do 100%
+  (escala do Windows) também de 2026-11-14. Empilhamento,
+  multi-monitor, transparência real em gameplay e Não Perturbar
   manual do Win11 seguem sem validação completa.
 
 Novidades (v1.4.5 - hotfix de 2026-11-13)
