@@ -293,6 +293,24 @@
                             </Grid.RowDefinitions>
 
                             <StackPanel Grid.Row="0" VerticalAlignment="Top">
+                                <!-- Pastilha "PRÉ-RELEASE": só visível em build de desenvolvimento
+                                     (caminho bin\). No build público fica Collapsed e nada muda. -->
+                                <Border x:Name="PreReleaseBadge"
+                                        Visibility="Collapsed"
+                                        Background="{StaticResource AccentSoft}"
+                                        BorderBrush="{StaticResource Accent}"
+                                        BorderThickness="1"
+                                        CornerRadius="4"
+                                        Padding="8,3"
+                                        Margin="0,2,0,6"
+                                        HorizontalAlignment="Left"
+                                        IsHitTestVisible="False">
+                                    <TextBlock Text="PRÉ-RELEASE"
+                                               Foreground="{StaticResource Accent}"
+                                               FontFamily="pack://application:,,,/Assets/Fonts/Rajdhani-SemiBold.ttf#Rajdhani"
+                                               FontSize="11"
+                                               FontWeight="SemiBold" />
+                                </Border>
                                 <WrapPanel x:Name="ContasStripPanel"
                                             Visibility="Collapsed"
                                             Margin="0,4,0,0"

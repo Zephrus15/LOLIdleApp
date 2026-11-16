@@ -97,6 +97,12 @@ Novidades (v1.5.0 - 2026-11-14)
   pode precisar de ajuste — e manteria sem crash (fallback: não
   VIP). Renderização confirmada apenas no PC do usuário; estrela
   vetorial, sem dependência de fonte.
+- Atualização pública v1.4.9 -> v1.5.0 (2026-11-14/15, ~1 min):
+  o releases.win.json da v1.5.0 lista Full (79.876.643 B) e
+  Delta (313.236 B); o pacote instalado (79.874.007 B, SHA1
+  69D74079...) difere do full do feed -> forte evidência de
+  delta aplicado em produção (reconstrução sobre a base 1.4.9).
+  Sem log do cliente, o caminho não é formalmente provado.
 - Nada mais mudou nesta versão além do bump (1.4.9 -> 1.5.0) e
   desta feature.
 - Atualização: continua pelo Velopack — sua instalação 1.4.9 verá
@@ -132,7 +138,7 @@ Novidades (v1.4.9 - 2026-11-14)
   em teste local end-to-end (feed fake) e em produção: a
   atualização pública v1.4.8 -> v1.4.9 pelo GitHub foi validada no
   PC do usuário em 2026-11-14 (Sobre -> Atualizar agora). Deltas
-  não provados. O CI da v1.4.9 também passou (tag v1.4.9, com
+  não provados na v1.4.8→v1.4.9 (pacote byte-idêntico ao full do feed — provável full); na v1.5.0, forte evidência de delta aplicado em produção (pacote instalado difere do full do feed; sem log do cliente, sem prova formal). O CI da v1.4.9 também passou (tag v1.4.9, com
   delta 1.4.9 gerado). A v1.4.8 não inclui o hardening da guarda
   acima.
 - Migração uma vez para quem instalou pelas versões <=1.4.7
@@ -181,7 +187,7 @@ Novidades (v1.4.8 - 2026-11-14)
   Auto-update validado em teste local end-to-end (2026-11-14) —
   feed local fake; o caminho pela release pública foi exercido
   depois, em produção (2026-11-14, atualização pública
-  v1.4.8 -> v1.4.9 no PC do usuário). Deltas não provados. Guarda
+  v1.4.8 -> v1.4.9 no PC do usuário). Deltas não provados na v1.4.8→v1.4.9 (pacote byte-idêntico ao full do feed — provável full); na v1.5.0, forte evidência de delta aplicado em produção (pacote instalado difere do full do feed; sem log do cliente, sem prova formal). Guarda
   de WebView2 em PC sem o
   runtime ainda não validada; a v1.4.8 não inclui o hardening de
   empty-string (vai na v1.4.9).

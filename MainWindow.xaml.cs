@@ -286,6 +286,85 @@ public partial class MainWindow : Window
         }
     })();";
 
+    // Diagnóstico SOMENTE-LEITURA da mecânica de Fazenda do jogo: o aviso de colheita/plantio
+    // dispara após ~30 min de preparo, e ainda não sabemos como o jogo o exibe (log, botão
+    // piscando, toast, badge). Este script OBSERVA e LOGA — nunca escreve no jogo.
+    // Varre o DOM no DOMContentLoaded (botão/aba já existentes contam) e observa mutações.
+    // Match: texto curto (≤ 160 chars) casando /fazenda|colheita|farm|harvest|planta/i.
+    // Payload: TAG[id][class]|texto≤140 — id/class ajudam o seletor final. Dedup por payload,
+    // cap de 40 mensagens por conta por sessão. Qualquer exceção é engolida silenciosamente.
+    // (Sem aspas duplas neste JS — a string C# é verbatim.)
+    private const string FarmDebugScript = @"(() => {
+        if (window.__lolIdleFarmDebugInstalled) return;
+        window.__lolIdleFarmDebugInstalled = true;
+        const farmRe = /fazenda|colheita|farm|harvest|planta/i;
+        const MAX_MSG = 40;
+        const seen = new Set();
+        let sent = 0;
+        const clean = (s) => (s || '').replace(/[\s\r\n]+/g, ' ').replace(/[|]/g, '/').trim();
+        const sanitizeId = (s) => (s || '').toString().replace(/[[\]|\s]/g, '').substring(0, 40);
+        const sanitizeClass = (el) => {
+            const raw = (typeof el.className === 'string' ? el.className : (el.className && el.className.baseVal) || '').toString();
+            return clean(raw).replace(/[\[\]]/g, '').replace(/\s+/g, '.').substring(0, 60);
+        };
+        const considerNode = (node) => {
+            try {
+                if (sent >= MAX_MSG) return;
+                if (!node) return;
+                if (node.nodeType === 3) node = node.parentElement; // Text -> elemento pai
+                if (node.nodeType !== 1) return;
+                const text = (node.textContent || '').trim();
+                if (!text || text.length > 160) return; // selo/botão é curto
+                if (!farmRe.test(text)) return;
+                const payload = (node.tagName || '?').toLowerCase() + '[' + sanitizeId(node.id) + '][' + (sanitizeClass(node) || '-') + ']|' + clean(text).substring(0, 140);
+                if (seen.has(payload)) return;
+                seen.add(payload);
+                sent++;
+                window.chrome.webview.postMessage('lol-idle-farm-debug:' + payload);
+            } catch (_) {}
+        };
+        const considerTree = (root) => {
+            considerNode(root);
+            try {
+                const all = root.querySelectorAll ? root.querySelectorAll('*') : [];
+                for (const el of all) { if (sent >= MAX_MSG) break; considerNode(el); }
+            } catch (_) {}
+        };
+        const onMutations = (list) => {
+            try {
+                for (const m of list) {
+                    if (sent >= MAX_MSG) return;
+                    if (m.type === 'characterData') considerNode(m.target);
+                    if (m.addedNodes) for (const node of m.addedNodes) considerTree(node);
+                }
+            } catch (_) {}
+        };
+        // Varredura única no DOMContentLoaded: textos já existentes (ex.: aba Fazenda no HUD).
+        const sweep = () => {
+            try {
+                const all = document.querySelectorAll('*');
+                for (const el of all) { if (sent >= MAX_MSG) break; considerNode(el); }
+            } catch (_) {}
+        };
+        // Observer resiliente: no document-creation, document.documentElement pode ser null.
+        let watcher = null;
+        const tryStartObserver = () => {
+            if (watcher) return true;
+            const target = document.documentElement || document.body;
+            if (!target) return false;
+            try { watcher = new MutationObserver(onMutations); watcher.observe(target, { childList: true, subtree: true, characterData: true }); } catch (_) { watcher = null; return false; }
+            return true;
+        };
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => { sweep(); tryStartObserver(); }, { once: true });
+        } else {
+            sweep();
+            tryStartObserver();
+        }
+        tryStartObserver();
+        const observerRetry = setInterval(() => { if (tryStartObserver()) clearInterval(observerRetry); }, 2000);
+    })();";
+
     private const string FloatingDragScript = @"(() => {
         if (window.__lolIdleFloatingDragInstalled) return;
         window.__lolIdleFloatingDragInstalled = true;
@@ -331,6 +410,46 @@ public partial class MainWindow : Window
                 }
             } catch (_) {}
         };
+        // Extração da rodada da MISSÃO REPETÍVEL do Passe: procura /rodada\s*(\d+)\s*de\s*5/i
+        // no documento (limitado a textos curtos, perfurando shadow DOM como o VipMonitorScript).
+        // O primeiro match encontrado é o da missão. null = não encontrado.
+        const findRodada = () => {
+            try {
+                const rodadaRe = /rodada\s*(\d+)\s*de\s*5/i;
+                const MAX_DEPTH = 6, MAX_NODES = 4000;
+                let rodada = null, visited = 0;
+                const visit = (root, depth) => {
+                    if (rodada || !root || depth > MAX_DEPTH || visited >= MAX_NODES) return;
+                    let all = [];
+                    try { all = root.querySelectorAll ? root.querySelectorAll('*') : []; } catch (_) { return; }
+                    for (const el of all) {
+                        if (rodada || visited >= MAX_NODES) break;
+                        visited++;
+                        let t = '';
+                        try { t = (el.textContent || '').trim(); } catch (_) { continue; }
+                        if (!t || t.length > 40) continue;
+                        const m = t.match(rodadaRe);
+                        if (m) { rodada = m[1]; return; }
+                        if (el.shadowRoot) visit(el.shadowRoot, depth + 1);
+                    }
+                };
+                visit(document.body || document.documentElement, 0);
+                return rodada;
+            } catch (_) { return null; }
+        };
+        // Linha do log do Passe: Missão do Passe completa: ... (repetível) ... — posta o tipo
+        // novo com a rodada extraída do DOM (ou 'no-rodada' se não casar). Sem essa linha, o
+        // fluxo genérico de mission segue como sempre.
+        let lastRepeatable = 0;
+        const REPEATABLE_RE = /miss[aã]o\s+do\s+passe\s+completa[\s\S]{0,200}repet[ií]vel/i;
+        const sendRepeatable = () => {
+            const nowR = Date.now();
+            if (nowR - lastRepeatable < 3000) return;
+            lastRepeatable = nowR;
+            let rodada = null;
+            try { rodada = findRodada(); } catch (_) { rodada = null; }
+            try { window.chrome.webview.postMessage('lol-idle-mission-repetable:' + (rodada || 'no-rodada')); } catch (_) {}
+        };
         const send = (kind, ctx) => {
             const now = Date.now();
             if (now - last[kind] < 3000) return;
@@ -363,6 +482,9 @@ public partial class MainWindow : Window
         const checkText = (t) => {
             const s = (t || '').toLowerCase();
             if (!s.trim()) return;
+            // Missão repetível do Passe tem notificação própria (ver sendRepeatable);
+            // não também como mission genérica.
+            if (REPEATABLE_RE.test(s)) { sendRepeatable(); return; }
             if (inventoryRe.test(s)) { send('inventory'); return; }
             if (missionRe.test(s)) send('mission', collectMissionContext());
         };
@@ -467,6 +589,9 @@ public partial class MainWindow : Window
     }
     private readonly List<NotificacaoItem> _ultimasNotificacoes = new();
     private readonly HashSet<string> _contasNaoLidas = new(StringComparer.OrdinalIgnoreCase);
+    // Build de PRÉ-RELEASE (dev, bin\Release) vs build público instalado (…\LoLIdle\current\).
+    // Só o caminho decide — mesmos binários, mesma release CI; nada de #if DEBUG.
+    private static bool IsPreReleaseRun => AppContext.BaseDirectory.Contains("bin", StringComparison.OrdinalIgnoreCase);
     // VIP por conta (true = detectado como VIP pelo selo da barra de status do jogo).
     // Recalculado pelo detector a cada mudança; não persistido — como as outras detecções.
     private readonly Dictionary<string, bool> _vipPorConta = new(StringComparer.OrdinalIgnoreCase);
@@ -621,12 +746,15 @@ public partial class MainWindow : Window
     private readonly List<LinhaUsoVisual> _usoLinhasVisual = new();
 
     // Meta de referência de RAM do dispositivo/app (bloco "Consumo total").
-    // 200 MB para o app + 1,0 GB por conta ABERTA (WebView instanciada).
+    // 200 MB para o app/host + 1 GB para a conta principal (default) + 400 MB por conta adicional.
     private double MetaRamBytes()
     {
-        double baseBytes = 200.0 * 1024.0 * 1024.0;          // 200 MB para o app em si
-        double porConta  = (_accountViews?.Count ?? 1) * 1024.0 * 1024.0 * 1024.0; // 1 GB por WebView instanciada
-        return baseBytes + porConta;
+        double mb = 1024.0 * 1024.0;
+        int views = _accountViews?.Count ?? 1;
+        double hostBytes = 200.0 * mb;                     // 200 MB para o app em si
+        double principal = views >= 1 ? 1024.0 * mb : 0.0;  // 1 GB para a conta principal
+        double adicionais = Math.Max(0, views - 1) * 400.0 * mb; // 400 MB por conta extra
+        return hostBytes + principal + adicionais;
     }
     private static readonly CultureInfo PtBrCulture = CultureInfo.GetCultureInfo("pt-BR");
     private System.Windows.Threading.DispatcherTimer? _consumoRevertTimer;
@@ -1534,10 +1662,10 @@ public partial class MainWindow : Window
         if (conta != null && kind != null
             && kind.StartsWith("potion", StringComparison.OrdinalIgnoreCase))
             _ = VoltarParaFonteAsync(conta);
-        // Missão do Fosso do Dragão no clique da notificação: devolve o personagem à Fonte (igual poção).
-        if (conta != null && context != null && IsMissaoDoFossoDoDragao(context))
+        // Missão de tarefa no clique da notificação: devolve o personagem à Fonte (igual poção).
+        if (conta != null && KindVaiVoltarParaFonte(kind, context))
         {
-            LogFloatingWindowEvent($"Missão do Fosso do Dragão no clique da notificação — devolvendo '{conta}' para a Fonte");
+            LogFloatingWindowEvent($"Missão de tarefa no clique da notificação — devolvendo '{conta}' para a Fonte");
             await VoltarParaFonteAsync(conta, "missão Fosso do Dragão");
         }
         // Auto-claim da diária: somente mission_diaria clica no banner azul do jogo
@@ -2046,6 +2174,13 @@ public partial class MainWindow : Window
 
     private async void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        if (IsPreReleaseRun)
+        {
+            Title = "LoL Idle (Pré-release)";
+            if (PreReleaseBadge != null)
+                PreReleaseBadge.Visibility = Visibility.Visible;
+        }
+
         RestoreWindowSettings();
         IniciarUsoRecursosTimer();
         IniciarAutoHideFullScreenTimer();
@@ -2494,6 +2629,7 @@ public partial class MainWindow : Window
         await core.AddScriptToExecuteOnDocumentCreatedAsync(AudioBootstrapScript);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(TrayNotifyScript);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(VipMonitorScript);
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(FarmDebugScript);
         core.WebMessageReceived += (_, args) =>
         {
             try
@@ -2515,6 +2651,17 @@ public partial class MainWindow : Window
                         _missionsWindow?.Hide();
                     }
                     _ = core.ExecuteScriptAsync($"document.querySelector('#lol-idle-missions')?.classList.toggle('active', {_settings.ShowMissions.ToString().ToLower()});");
+                }
+                else if (msg != null && msg.StartsWith("lol-idle-mission-repetable:"))
+                {
+                    // Missão repetível do Passe: tipo próprio dentro da família mission (toggle 🔔 Missões cobre).
+                    string rodada = msg["lol-idle-mission-repetable:".Length..].Trim();
+                    HandleNotification(key, "mission_repetable", context: string.IsNullOrEmpty(rodada) ? "no-rodada" : rodada);
+                }
+                else if (msg != null && msg.StartsWith("lol-idle-farm-debug:"))
+                {
+                    // Diagnóstico somente-leitura da Fazenda: log, zero estado/UI/persistência.
+                    LogFloatingWindowEvent($"Farm-debug: conta {key} => {msg["lol-idle-farm-debug:".Length..]}");
                 }
                 else if (msg != null && msg.StartsWith("lol-idle-vip-debug:"))
                 {
@@ -3337,13 +3484,9 @@ public partial class MainWindow : Window
 
     private async void LiberarEspaco_Click(object sender, RoutedEventArgs e)
     {
-        bool confirmar = MostrarConfirmacaoRemover(
-            "Limpar cache?",
-            "Limpar o cache do WebView2?",
-            "Isso remove só o cache (arquivos temporários do WebView2). Cookies, sessão e progresso do jogo ficam intactos.",
-            "Limpar cache");
-        if (!confirmar) return;
-
+        // Sem confirmação: a operação só remove o cache do WebView2 (cookies/sessão intactos)
+        // e é reversível por natureza (o cache é recriado). A limpeza já pede consentimento
+        // implícito ao clicar no botão.
         string root = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "LoLIdleDesktop", "WebView2");
@@ -4148,6 +4291,12 @@ public partial class MainWindow : Window
                         var core2 = _floatingView?.CoreWebView2;
                         if (core2 != null) _ = core2.ExecuteScriptAsync($"document.querySelector('#lol-idle-missions')?.classList.toggle('active', {_settings.ShowMissions.ToString().ToLower()});");
                     }
+                    else if (message != null && message.StartsWith("lol-idle-mission-repetable:"))
+                    {
+                        // Missão repetível do Passe: tipo próprio na família mission (toggle existente).
+                        string rodada = message["lol-idle-mission-repetable:".Length..].Trim();
+                        HandleNotification(_floatingAccountKey, "mission_repetable", context: string.IsNullOrEmpty(rodada) ? "no-rodada" : rodada);
+                    }
                     else if (message != null && message.StartsWith("lol-idle-notify:"))
                     {
                         if (TryParseNotifyPayload(message["lol-idle-notify:".Length..], out var kind, out var ctx))
@@ -4315,6 +4464,16 @@ public partial class MainWindow : Window
         return s.Contains("fosso do dragao") || s.Contains("capitao da legiao") || s.Contains("capita da legiao") || s.Contains("tarefa pronta");
     }
 
+    // Só a missão de tarefa (Fosso do Dragão/Capitão da Legião/"tarefa pronta") volta à Fonte
+    // no clique da notificação; diárias, semanais e missões genéricas nunca.
+    // context pode ser null (sem captura da linha) — nunca manda sem evidência textual.
+    private static bool KindVaiVoltarParaFonte(string? kind, string? context)
+    {
+        return string.Equals(kind, "mission_tarefa", StringComparison.OrdinalIgnoreCase)
+            && context != null
+            && IsMissaoDoFossoDoDragao(context);
+    }
+
     // Monta o nome curto da missão a partir do contexto ORIGINAL (não normalizado), para exibição:
     // Percorre as linhas não-vazias NA ORDEM (split por \n/\r) e pula as "contador-puras" —
     // linhas que, ignorando espaços, só têm dígitos e separadores de progresso
@@ -4372,12 +4531,14 @@ public partial class MainWindow : Window
     {
         shortName = MontarNomeCurtoMissao(context);
         var norm = NormalizarTexto(context);
-        if (norm.Contains("fosso do dragao") || norm.Contains("capitao da legiao") || norm.Contains("capita da legiao") || norm.Contains("tarefa pronta"))
-            return "mission_tarefa";
+        // Ordem importa: o painel do Capitão da Legião cita o NPC tanto nas tarefas
+        // quanto nas diárias — "diaria"/"semanal" precisam vencer "capitao da legiao".
         if (norm.Contains("diaria"))
             return "mission_diaria";
         if (norm.Contains("semanal"))
             return "mission_semanal";
+        if (norm.Contains("fosso do dragao") || norm.Contains("capitao da legiao") || norm.Contains("capita da legiao") || norm.Contains("tarefa pronta"))
+            return "mission_tarefa";
         return "mission";
     }
 
@@ -4420,11 +4581,9 @@ public partial class MainWindow : Window
             LogFloatingWindowEvent($"Missao classificada: {kind} | nome='{shortName}' | ctx='{ctxLog}'");
         }
 
-        if (context != null
-            && kind.StartsWith("mission", StringComparison.OrdinalIgnoreCase)
-            && IsMissaoDoFossoDoDragao(context))
+        if (KindVaiVoltarParaFonte(kind, context))
         {
-            LogFloatingWindowEvent($"Missão concluída com contexto do Fosso do Dragão (conta='{key}') — clique na notificação devolverá o personagem à Fonte");
+            LogFloatingWindowEvent($"Missão de tarefa concluída com contexto Fosso/Capitão (conta='{key}') — clique na notificação devolverá o personagem à Fonte");
         }
 
         // Registra nas "Últimas notificações" e marca a conta como não lida quando o
@@ -4512,6 +4671,21 @@ public partial class MainWindow : Window
         return (message, "mission");
     }
 
+    // Missão REPETÍVEL do Passe: o rodada vem como contexto no formato "N" (ou "no-rodada").
+    // Nada de rotulo/shortName — mensagem pronta, curta e direta na família mission (mesmo som).
+    private static (string message, string family) TextoMissaoRepetable(string? context)
+    {
+        string? rodada = context?.Trim();
+        if (!string.IsNullOrEmpty(rodada)
+            && !string.Equals(rodada, "no-rodada", StringComparison.OrdinalIgnoreCase)
+            && int.TryParse(rodada, out int n)
+            && n > 0)
+        {
+            return ($"Diária repetível: rodada {n} de 5", "mission");
+        }
+        return ("Diária repetível concluída!", "mission");
+    }
+
     // Texto/família por tipo de notificação (balão, som e lista "Últimas notificações").
     // `context` é opcional e retrocompatível: sem ele, a família "mission" sai sem o nome
     // (igual ao comportamento de antes). Os demais kinds ignoram o contexto.
@@ -4524,6 +4698,7 @@ public partial class MainWindow : Window
         "mission_tarefa" => TextoMissao("Tarefa", context, ignorarNome: true),
         "mission_diaria" => TextoMissao("Diária", context),
         "mission_semanal" => TextoMissao("Semanal", context),
+        "mission_repetable" => TextoMissaoRepetable(context),
         "mission" => TextoMissao("Missão", context),
         "inventory" => ("Inventário cheio!", "inventory"),
         "level" => ("Subiu de nível!", "level"),
@@ -5995,9 +6170,9 @@ public partial class MainWindow : Window
                 await SwitchAccountAsync(item.Conta);
                 if (item.Kind.StartsWith("potion", StringComparison.OrdinalIgnoreCase))
                     _ = VoltarParaFonteAsync(item.Conta);
-                if (item.Contexto != null && IsMissaoDoFossoDoDragao(item.Contexto))
+                if (KindVaiVoltarParaFonte(item.Kind, item.Contexto))
                 {
-                    LogFloatingWindowEvent($"Missão do Fosso do Dragão no clique da linha — devolvendo '{item.Conta}' para a Fonte");
+                    LogFloatingWindowEvent($"Missão de tarefa no clique da linha — devolvendo '{item.Conta}' para a Fonte");
                     await VoltarParaFonteAsync(item.Conta, "missão Fosso do Dragão");
                 }
                 if (string.Equals(item.Kind, "mission_diaria", StringComparison.OrdinalIgnoreCase))
@@ -6032,9 +6207,9 @@ public partial class MainWindow : Window
         await SwitchAccountAsync(item.Conta);
         if (item.Kind.StartsWith("potion", StringComparison.OrdinalIgnoreCase))
             _ = VoltarParaFonteAsync(item.Conta);
-        if (item.Contexto != null && IsMissaoDoFossoDoDragao(item.Contexto))
+        if (KindVaiVoltarParaFonte(item.Kind, item.Contexto))
         {
-            LogFloatingWindowEvent($"Missão do Fosso do Dragão no clique da linha — devolvendo '{item.Conta}' para a Fonte");
+            LogFloatingWindowEvent($"Missão de tarefa no clique da linha — devolvendo '{item.Conta}' para a Fonte");
             await VoltarParaFonteAsync(item.Conta, "missão Fosso do Dragão");
         }
         if (string.Equals(item.Kind, "mission_diaria", StringComparison.OrdinalIgnoreCase))
