@@ -5,6 +5,7 @@
         Width="1280" Height="800"
         MinWidth="480" MinHeight="320"
         WindowStyle="None"
+        PreviewKeyDown="Window_PreviewKeyDown"
         Background="{StaticResource BgApp}"
         ResizeMode="CanResize"
         Loaded="Window_Loaded"
@@ -123,18 +124,21 @@
 
         <Grid>
             <Grid.RowDefinitions>
-                <RowDefinition Height="42"/>
+                <RowDefinition x:Name="TitleBarRow" Height="42"/>
                 <RowDefinition Height="*"/>
-                <RowDefinition Height="30"/>
+                <RowDefinition x:Name="FooterBarRow" Height="30"/>
             </Grid.RowDefinitions>
 
             <!-- Barra de título -->
-            <Grid Grid.Row="0"
+            <Grid x:Name="TitleBarGrid" Grid.Row="0"
                   Background="{StaticResource BgPanel}"
                   MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
 
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="44"/>
+                    <ColumnDefinition Width="44"/>
+                    <ColumnDefinition Width="44"/>
                     <ColumnDefinition Width="44"/>
                     <ColumnDefinition Width="44"/>
                     <ColumnDefinition Width="44"/>
@@ -165,6 +169,46 @@
                 </StackPanel>
 
                 <Button Grid.Column="1"
+                        x:Name="FullScreenButton"
+                        Click="FullScreenButton_Click"
+                        Style="{StaticResource WindowButton}"
+                        ToolTip="Tela cheia (F11)"
+                        Width="36" Height="34">
+                    <Canvas Width="14" Height="14">
+                        <Path Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              Stretch="Uniform" Width="14" Height="14"
+                              Data="M4 4h6v2H6v4H4z M20 4h-6v2h4v4h2z M4 20h6v-2H6v-4H4z M20 20h-6v-2h4v-4h2z"/>
+                    </Canvas>
+                </Button>
+
+                <Button Grid.Column="2"
+                        x:Name="FloatingToggleButton"
+                        Click="FloatingToggleButton_Click"
+                        Style="{StaticResource WindowButton}"
+                        ToolTip="Mostrar/esconder controles"
+                        Visibility="Collapsed"
+                        Width="36" Height="34">
+                    <Canvas Width="13" Height="13">
+                        <Path Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              Stretch="Uniform" Width="13" Height="13"
+                              Data="M4 4h7v7H4z M13 4h7v7h-7z M4 13h7v7H4z M13 13h7v7h-7z"/>
+                    </Canvas>
+                </Button>
+
+                <Button Grid.Column="3"
+                        x:Name="ShowFloatingButton"
+                        Click="ShowFloatingButton_Click"
+                        Style="{StaticResource WindowButton}"
+                        ToolTip="HUD compacta (ouro e tarefa atual)"
+                        Width="36" Height="34">
+                    <Canvas Width="14" Height="13">
+                        <Path Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              Stretch="Uniform" Width="14" Height="12"
+                              Data="M3 4h18v7H3z M3 13h18v7H3z"/>
+                    </Canvas>
+                </Button>
+
+                <Button Grid.Column="4"
                         Click="HuntTitle_Click"
                         Style="{StaticResource WindowButton}"
                         ToolTip="Hunt for LoL Idle (painel de zonas e builds)"
@@ -177,7 +221,7 @@
                     </Canvas>
                 </Button>
 
-                <Button Grid.Column="2"
+                <Button Grid.Column="5"
                         Click="Minimize_Click"
                         Style="{StaticResource WindowButton}"
                         ToolTip="Minimizar para a barra de tarefas"
@@ -190,14 +234,14 @@
                     </Canvas>
                 </Button>
 
-                <Button Grid.Column="3"
+                <Button Grid.Column="6"
                         x:Name="MaximizeButton"
                         Click="Maximize_Click"
                         Style="{StaticResource WindowButton}"
                         ToolTip="Maximizar"
                         Width="36" Height="34"/>
 
-                <Button Grid.Column="4"
+                <Button Grid.Column="7"
                         Click="Close_Click"
                         Style="{StaticResource CloseButton}"
                         ToolTip="Fechar para a bandeja"
@@ -534,7 +578,7 @@
             </Grid>
 
             <!-- Barra de status (rodapé) -->
-            <Border Grid.Row="2"
+            <Border x:Name="FooterBarBorder" Grid.Row="2"
                     Height="30"
                     Background="{StaticResource BgApp}"
                     BorderBrush="{StaticResource BorderSubtle}"

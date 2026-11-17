@@ -2,11 +2,11 @@
 
 Aplicativo desktop não oficial para Windows que permite jogar [LoL Idle](https://lolidle.com/jogar) em uma janela própria, sem precisar manter o navegador aberto.
 
-O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência integrada ao Windows, com recursos de janela flutuante, controle de áudio e gerenciamento pela bandeja do sistema.
+O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência integrada ao Windows, com HUD compacta própria, controle de áudio e gerenciamento pela bandeja do sistema.
 
 ## 📥 Download
 
-**[Baixar LoL Idle Desktop v1.5.0](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.5.0)**
+**[Baixar LoL Idle Desktop v1.6.0](https://github.com/Zephrus15/LOLIdleApp/releases/tag/v1.6.0)**
 
 ### Instalador (Velopack — instalação por usuário)
 
@@ -16,7 +16,7 @@ O projeto utiliza **Microsoft Edge WebView2** para oferecer uma experiência int
 
 As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na instalação e nas atualizações.
 
-> **Migração uma vez (quem instalou pelas versões ≤1.4.7):** a cópia instalada pelas versões antigas (Inno Setup, em Program Files, com admin) **não se atualiza sozinha**. Baixe o `LoLIdle-win-Setup.exe` da v1.5.0 e instale uma vez (instala em `%LocalAppData%\LoLIdle`) — daí em diante as atualizações são automáticas pelo próprio app. Recomenda-se desinstalar a cópia antiga.
+> **Migração uma vez (quem instalou pelas versões ≤1.4.7):** a cópia instalada pelas versões antigas (Inno Setup, em Program Files, com admin) **não se atualiza sozinha**. Baixe o `LoLIdle-win-Setup.exe` da v1.6.0 e instale uma vez (instala em `%LocalAppData%\LoLIdle`) — daí em diante as atualizações são automáticas pelo próprio app. Recomenda-se desinstalar a cópia antiga.
 
 ### Atualização automática (desde a v1.4.8)
 
@@ -52,26 +52,26 @@ O projeto é gratuito e feito por um desenvolvedor independente — contribuiç�
 - Interface sem abas ou barra de endereço do navegador.
 - Sessão e cookies persistidos entre execuções.
 - Links externos (fora de `lolidle.com`) abrem no navegador padrão.
-- Na janela principal: o link não abre a flutuante.
+- Na janela principal: o link externo não abre a HUD.
 - Botão **"🏹 Hunt"** (mira) na barra de título, ao lado de minimizar: instala sob demanda (com confirmação) e abre/fecha o painel da extensão "Hunt for LoL Idle" em janela própria (v1.4.4).
-- Na janela flutuante: o link abre no navegador real. Se vier via `window.open` (nova janela), a flutuante fica aberta; se for navegação direta da própria flutuante, ela fecha e o link abre no navegador.
+- Botão **"▭▭"** na barra de título, ao lado de minimizar: abre/fecha a **HUD compacta** (fica aceso enquanto a HUD estiver aberta) (v1.6.0).
 - Hosts tratados: `discord.com`, `discordapp.com`, `discord.gg`, `accounts.google.com`, `topidle.com/voto`, YouTube, TikTok, Instagram.
 
-### Janela flutuante
-- A flutuante não é aberta por botão da interface principal. Ela abre quando o jogo solicita nova janela (`window.open` / `NewWindowRequested`, `HandleNewWindowRequested`).
-- Ao abrir, a janela principal é oculta sem ir para a bandeja. Ao fechar a flutuante pelo ×, a principal é restaurada.
-- Opção de manter a janela sempre no topo (preferência salva e restaurada ao reabrir).
-- Possibilidade de movimentar a janela arrastando pela área do jogo (exceto controles).
-- Controles personalizados para áudio, fixar e fechar.
-- Controle de silenciamento geral do áudio.
-- Possibilidade de fechar a janela flutuante e retornar à janela principal.
+### HUD compacta (v1.6.0)
+- Janelinha própria do app que mostra **Ouro**, **Mochila** (ex.: 15/30) e a **tarefa atual** (a mesma do rastreador de Missões).
+- Sempre no topo — botão de fixar/soltar na própria HUD (pino laranja = fixada; cinza = solta).
+- Abre/fecha pelo botão **▭▭** da barra de título (fica aceso enquanto a HUD estiver aberta).
+- Arrastável, fecha no **×**, com fade na entrada e na saída.
+- A **posição é lembrada** entre sessões.
+- Ao abrir a HUD, a **janela do jogo se esconde** (a sessão continua rodando); ao fechar a HUD, o jogo volta.
+- **Por que a HUD e não mais a janela flutuante:** o jogo foi atualizado e o antigo botão de janela flutuante deixou de existir; por isso a flutuante foi substituída por uma HUD própria.
 
 ### Janela de Missões
-- Janela separada e destacável, visível só com a janela flutuante aberta.
-- Mostra dados das missões (somente leitura) vindos da janela flutuante.
+- Missões: a HUD mostra a missão atual em **"TAREFA"**. A janela separada de Missões não tem botão nesta versão — o botão 📖 vivia na janela flutuante antiga, removida com a atualização do jogo.
+- Mostra dados das missões (somente leitura).
 - Arrastável e redimensionável (canto inferior direito, largura e altura).
-- Salva tamanho, local e preferência "sempre no topo" (independente da flutuante).
-- Lembra o último estado ativo/inativo ao reabrir a flutuante.
+- Salva tamanho, local e preferência "sempre no topo".
+- Lembra o último estado ativo/inativo ao reabrir.
 
 ### Bandeja do Windows
 - Fechar a janela principal (pelo × ou Alt+F4/fechar pelo sistema) abre o diálogo "Fechar o LoL Idle?" (ou aplica a preferência `CloseBehavior`, se definida) e mostra o ícone na bandeja quando a opção "continuar em segundo plano" é usada.
@@ -83,13 +83,14 @@ O projeto é gratuito e feito por um desenvolvedor independente — contribuiç�
 ### Preferências e sessão
 - Salvamento automático do tamanho, da posição e das preferências de áudio.
 - Restauração das dimensões e da posição da janela principal, da janela flutuante e da janela de Missões.
+- A posição da HUD compacta é lembrada entre sessões (desde a v1.6.0).
 - Preferência "sempre no topo" salva separadamente para a janela flutuante e para a janela de Missões.
 - Gerenciamento da sessão do WebView2.
 - Botão ⚙ "Ajustes" na sidebar — a central única de configurações (abre a janela **Ajustes**); desde a v1.4.6, as abas são 🔔 **Notificações**, ⚙ **Inicialização** e, desde a v1.4.7, 🎵 **Áudio**; desde a v1.4.8, também ℹ️ **Sobre** (identidade do app, versão instalada/última release e botões de atualização — ver a seção v1.4.8).
 - Arquivos em `%LOCALAPPDATA%\LoLIdleDesktop`: `window-settings.json` (preferências/geometria), `WebView2\` (sessão/cookies), `Extensions\HuntForLoLIdle\` (extensão Hunt, instalada sob demanda) e `floating-window.log` (log técnico).
 
 ### Limitações desta versão
-- Painéis disponíveis: **Missões** (somente leitura) incluído. **Barra lateral interativa** e **Personagem** não incluídos (o jogo bloqueia a segunda sessão).
+- Painéis disponíveis: **nenhum** — a HUD mostra a missão atual em "TAREFA"; a janela separada de Missões não tem botão nesta versão. **Barra lateral interativa** e **Personagem** não incluídos (o jogo bloqueia a segunda sessão).
 - O controle de áudio disponível silencia todo o áudio do jogo. Desde a v1.4.7, a aba 🎵 **Áudio** no Ajustes permite alternar Música e Efeitos (`MusicMuted`/`EffectsMuted`), sincronizados automaticamente com os botões `bt-musica`/`bt-efeitos` do jogo via CDP trusted input.
 - O voto e o login OAuth abrem no navegador real (a antiga janela separada de voto foi removida do código).
 - O botão fechar (×) e o Alt+F4/fechar pelo sistema abrem o diálogo "Fechar o LoL Idle?" (a menos que a preferência `CloseBehavior` esteja definida — ajuste pelo botão ⚙ "Ajustes" na sidebar, aba ⚙ "Inicialização"). Para encerrar direto, use **Sair** no menu da bandeja ou a opção "Sair e desligar as contas".
@@ -130,6 +131,16 @@ Desde a v1.4.8, o pacote de release é gerado pelo **GitHub Actions** (`.github/
 Os scripts de Inno Setup (`GERAR-INSTALADOR.bat`, pasta `installer/`) ficam no repositório apenas como fallback histórico; o CI não os usa mais. As preferências em `%LOCALAPPDATA%\LoLIdleDesktop` são preservadas na instalação e nas atualizações.
 
 ## 📋 Histórico de versões
+
+### v1.6.0 — 2026-11-17
+
+**HUD compacta no lugar da janela flutuante + correções de missões.**
+
+- **▭▭ HUD compacta (nova)** — janelinha própria do app com **Ouro**, **Mochila** (ex.: 15/30) e a **tarefa atual** (a mesma do rastreador de Missões). Fica sempre no topo (botão de fixar/soltar na HUD), abre/fecha pelo botão **▭▭** da barra de título (aceso enquanto aberta), arrastável, fecha no × e faz fade na entrada/saída. **A posição é lembrada entre sessões.** Ao abrir a HUD, a janela do jogo se esconde (a sessão continua rodando); ao fechar, o jogo volta.
+- **Por que a mudança:** o jogo foi atualizado e removeu o botão nativo de abrir a janela flutuante — a flutuante deixou de abrir pelo jogo; por isso ela foi substituída por uma HUD própria.
+- **Missões:** a "Missão diária do Capitão" volta a ser diária (era tratada como tarefa e mandava o personagem para a Fonte ao clicar). As diárias do Capitão e do Fosso voltam a contar como diárias. Nova notificação para a **"Missão do Passe (repetível)"** com a rodada (ex.: "Diária repetível: rodada 3 de 5"; se não der para ler a rodada, "Diária repetível concluída!"). Missões de tarefa continuam voltando à Fonte; diárias e semanais não voltam mais.
+- **Missões:** a HUD mostra a missão atual em "TAREFA". A janela separada de Missões não tem botão nesta versão.
+- **Atualização:** com instalação Velopack, o app avisa sobre a nova versão na abertura e você atualiza pelo Ajustes › ℹ️ Sobre → **"Atualizar agora"**.
 
 ### v1.5.0 — 2026-11-14
 

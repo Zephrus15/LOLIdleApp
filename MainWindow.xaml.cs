@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Reflection;
 using System.Collections.Generic;
 using Microsoft.Web.WebView2.Core;
@@ -286,83 +286,73 @@ public partial class MainWindow : Window
         }
     })();";
 
-    // Diagnóstico SOMENTE-LEITURA da mecânica de Fazenda do jogo: o aviso de colheita/plantio
-    // dispara após ~30 min de preparo, e ainda não sabemos como o jogo o exibe (log, botão
-    // piscando, toast, badge). Este script OBSERVA e LOGA — nunca escreve no jogo.
-    // Varre o DOM no DOMContentLoaded (botão/aba já existentes contam) e observa mutações.
-    // Match: texto curto (≤ 160 chars) casando /fazenda|colheita|farm|harvest|planta/i.
-    // Payload: TAG[id][class]|texto≤140 — id/class ajudam o seletor final. Dedup por payload,
-    // cap de 40 mensagens por conta por sessão. Qualquer exceção é engolida silenciosamente.
-    // (Sem aspas duplas neste JS — a string C# é verbatim.)
-    private const string FarmDebugScript = @"(() => {
-        if (window.__lolIdleFarmDebugInstalled) return;
-        window.__lolIdleFarmDebugInstalled = true;
-        const farmRe = /fazenda|colheita|farm|harvest|planta/i;
-        const MAX_MSG = 40;
-        const seen = new Set();
-        let sent = 0;
-        const clean = (s) => (s || '').replace(/[\s\r\n]+/g, ' ').replace(/[|]/g, '/').trim();
-        const sanitizeId = (s) => (s || '').toString().replace(/[[\]|\s]/g, '').substring(0, 40);
-        const sanitizeClass = (el) => {
-            const raw = (typeof el.className === 'string' ? el.className : (el.className && el.className.baseVal) || '').toString();
-            return clean(raw).replace(/[\[\]]/g, '').replace(/\s+/g, '.').substring(0, 60);
+
+
+    // Botão "Tela cheia" do próprio jogo (modal de configurações): o jogo só esconde o HUD;
+    // este script observa cliques com capture=true em qualquer botão cujo texto case
+    // /tela\s?cheia/i e manda 'lol-idle-appscreen:toggle' para o app alternar borderless fullscreen.
+    // Não toca nos handlers do jogo; só escuta. Sem Match por id - sobrevive a mudança de layout.
+    // Resiliência de injeção (document_created pode pegar documentElement == null) e debounce
+    // nos mutations para não reexecutar em alta frequência — o jogo tem o botão estático, e o
+    // retry de 2s cobre o início tardio (findButton idempotente via __hooked).
+    private const string AppScreenToggleScript = @"(() => {
+        if (window.__lolIdleAppScreenInstalled) return;
+        window.__lolIdleAppScreenInstalled = true;
+        const findButton = () => {
+            for (const b of document.querySelectorAll('button, [role=button]')) {
+                const t = (b.innerText || b.textContent || '').replace(/\s+/g, ' ').trim();
+                if (/tela\s?cheia/i.test(t)) return b;
+            }
+            return null;
         };
-        const considerNode = (node) => {
+        const tryHook = () => {
             try {
-                if (sent >= MAX_MSG) return;
-                if (!node) return;
-                if (node.nodeType === 3) node = node.parentElement; // Text -> elemento pai
-                if (node.nodeType !== 1) return;
-                const text = (node.textContent || '').trim();
-                if (!text || text.length > 160) return; // selo/botão é curto
-                if (!farmRe.test(text)) return;
-                const payload = (node.tagName || '?').toLowerCase() + '[' + sanitizeId(node.id) + '][' + (sanitizeClass(node) || '-') + ']|' + clean(text).substring(0, 140);
-                if (seen.has(payload)) return;
-                seen.add(payload);
-                sent++;
-                window.chrome.webview.postMessage('lol-idle-farm-debug:' + payload);
-            } catch (_) {}
-        };
-        const considerTree = (root) => {
-            considerNode(root);
-            try {
-                const all = root.querySelectorAll ? root.querySelectorAll('*') : [];
-                for (const el of all) { if (sent >= MAX_MSG) break; considerNode(el); }
-            } catch (_) {}
-        };
-        const onMutations = (list) => {
-            try {
-                for (const m of list) {
-                    if (sent >= MAX_MSG) return;
-                    if (m.type === 'characterData') considerNode(m.target);
-                    if (m.addedNodes) for (const node of m.addedNodes) considerTree(node);
+                const btn = findButton();
+                if (btn && !btn.__hooked) {
+                    btn.__hooked = true;
+                    btn.addEventListener('click', () => {
+                        try { window.chrome.webview.postMessage('lol-idle-appscreen:toggle'); } catch (_) {}
+                    }, true);
                 }
             } catch (_) {}
         };
-        // Varredura única no DOMContentLoaded: textos já existentes (ex.: aba Fazenda no HUD).
-        const sweep = () => {
-            try {
-                const all = document.querySelectorAll('*');
-                for (const el of all) { if (sent >= MAX_MSG) break; considerNode(el); }
-            } catch (_) {}
+        let scheduled = false;
+        const scheduleTryHook = () => {
+            if (scheduled) return;
+            scheduled = true;
+            setTimeout(() => { scheduled = false; tryHook(); }, 150);
         };
-        // Observer resiliente: no document-creation, document.documentElement pode ser null.
-        let watcher = null;
         const tryStartObserver = () => {
-            if (watcher) return true;
+            if (window.__lolIdleAppScreenObserverUp) return true;
             const target = document.documentElement || document.body;
-            if (!target) return false;
-            try { watcher = new MutationObserver(onMutations); watcher.observe(target, { childList: true, subtree: true, characterData: true }); } catch (_) { watcher = null; return false; }
+            if (!target) return false; // ainda sem elemento: tenta de novo depois
+            try {
+                new MutationObserver(scheduleTryHook).observe(target, { childList: true, subtree: true });
+                window.__lolIdleAppScreenObserverUp = true;
+            } catch (_) { return false; }
             return true;
         };
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => { sweep(); tryStartObserver(); }, { once: true });
+            document.addEventListener('DOMContentLoaded', tryHook, { once: true });
         } else {
-            sweep();
-            tryStartObserver();
+            tryHook();
         }
         tryStartObserver();
         const observerRetry = setInterval(() => { if (tryStartObserver()) clearInterval(observerRetry); }, 2000);
+    })();";
+
+
+
+    // Ponte de Esc: se o jogo tem foco (WebView2) e consome Esc antes do WPF, este script
+    // repassa um aviso — o app sai do fullscreen no C#. SEM preventDefault/stopPropagation:
+    // o jogo continua recebendo Esc normalmente (fechar menus etc.). Capture-phase.
+    private const string GameEscapeBridgeScript = @"(() => {
+        if (window.__lolIdleEscapeBridgeInstalled) return;
+        window.__lolIdleEscapeBridgeInstalled = true;
+        window.addEventListener('keydown', (e) => {
+            if (e.key !== 'Escape') return;
+            try { window.chrome.webview.postMessage('lol-idle-escape:exit'); } catch (_) {}
+        }, true);
     })();";
 
     private const string FloatingDragScript = @"(() => {
@@ -479,14 +469,21 @@ public partial class MainWindow : Window
             if (cls.includes('epico') && el.querySelector('img')) { send('epic'); return; }
             if (cls.includes('alerta') || inventoryRe.test(txtSaque)) { send('inventory'); return; }
         };
-        const checkText = (t) => {
+        const checkText = (t, n) => {
             const s = (t || '').toLowerCase();
             if (!s.trim()) return;
             // Missão repetível do Passe tem notificação própria (ver sendRepeatable);
             // não também como mission genérica.
             if (REPEATABLE_RE.test(s)) { sendRepeatable(); return; }
             if (inventoryRe.test(s)) { send('inventory'); return; }
-            if (missionRe.test(s)) send('mission', collectMissionContext());
+            if (missionRe.test(s)) {
+                // Contexto = o próprio nó que deu o match (linha de log da missão), NÃO o
+                // rastreador inteiro (#rastreador cita Missões diárias sempre e fazia
+                // tudo virar mission_diaria). Fallback no rastreador só se o nó vier vazio.
+                const ctx = ((n && n.nodeType === 1 ? n.textContent : (n && n.nodeType === 3 ? n.nodeValue : '')) || '').trim().substring(0, 500);
+                send('mission', ctx || collectMissionContext());
+                return;
+            }
         };
         // Mesmo rastreador de missões usado pelo MissionsScript: o texto bruto captado aqui
         // segue SEM normalização — quem normaliza (acento/caixa) é o C#.
@@ -526,11 +523,11 @@ public partial class MainWindow : Window
                     if (n.nodeType === 1) {
                         checkSaqueNode(n);
                         // Log de missões (canal Servidor #log); ignora painéis fora dele.
-                        if ((n.textContent) && inNotifyArea(n)) checkText(n.textContent);
-                    } else if (n.nodeType === 3 && inNotifyArea(n)) checkText(n.nodeValue);
+                        if ((n.textContent) && inNotifyArea(n)) checkText(n.textContent, n);
+                    } else if (n.nodeType === 3 && inNotifyArea(n)) checkText(n.nodeValue, n);
                 }
                 if (m.type === 'characterData' && m.target) {
-                    if (inNotifyArea(m.target)) checkText(m.target.textContent);
+                    if (inNotifyArea(m.target)) checkText(m.target.textContent, m.target);
                     // Nível: observa #hud-nivel (o jogo usa som 'nivel' ao upar)
                     const pel = m.target.parentElement;
                     const hud = (m.target.closest ? m.target.closest('#hud-nivel') : null) || (pel?.closest ? pel.closest('#hud-nivel') : null) || (pel?.id === 'hud-nivel' ? pel : null);
@@ -579,6 +576,14 @@ public partial class MainWindow : Window
     private bool _isHiddenToTray;
     private bool _settingsReady;
 
+    // HUD compacta (▭▭ na title bar): overlay companheiro com ouro/diamantes/gemas.
+    private HudCompactaWindow? _hudCompactaWindow;
+    private System.Windows.Threading.DispatcherTimer? _hudPollTimer;
+    private bool _hudPollErrorLogged;
+    private bool _hudPollTickRunning;
+    // true quando a HUD foi quem escondeu a janela principal (só nesse caso restauramos).
+    private bool _hudHidMain;
+
     // Notificações recentes (só memória, não persistidas): últimas 4, mais recente primeiro.
     private sealed class NotificacaoItem
     {
@@ -589,9 +594,25 @@ public partial class MainWindow : Window
     }
     private readonly List<NotificacaoItem> _ultimasNotificacoes = new();
     private readonly HashSet<string> _contasNaoLidas = new(StringComparer.OrdinalIgnoreCase);
-    // Build de PRÉ-RELEASE (dev, bin\Release) vs build público instalado (…\LoLIdle\current\).
-    // Só o caminho decide — mesmos binários, mesma release CI; nada de #if DEBUG.
-    private static bool IsPreReleaseRun => AppContext.BaseDirectory.Contains("bin", StringComparison.OrdinalIgnoreCase);
+    // Build de PRÉ-RELEASE (dev, bin\Release ou bin\Debug) vs build público instalado
+    // (…\LoLIdle\current\). Só o caminho decide — mesmos binários, mesma release CI; nada de
+    // #if DEBUG. Checagem por segmentos: "bin" seguido de "Release"/"Debug" (e não um "bin"
+    // solto no meio do caminho, ex.: um diretório que contenha "bin" no nome).
+    private static bool IsPreReleaseRun
+    {
+        get
+        {
+            var segments = AppContext.BaseDirectory.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            for (int i = 0; i < segments.Length - 1; i++)
+            {
+                if (string.Equals(segments[i], "bin", StringComparison.OrdinalIgnoreCase)
+                    && (string.Equals(segments[i + 1], "Release", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(segments[i + 1], "Debug", StringComparison.OrdinalIgnoreCase)))
+                    return true;
+            }
+            return false;
+        }
+    }
     // VIP por conta (true = detectado como VIP pelo selo da barra de status do jogo).
     // Recalculado pelo detector a cada mudança; não persistido — como as outras detecções.
     private readonly Dictionary<string, bool> _vipPorConta = new(StringComparer.OrdinalIgnoreCase);
@@ -672,6 +693,10 @@ public partial class MainWindow : Window
         bind();
         new MutationObserver(bind).observe(document.documentElement, { childList: true, subtree: true });
     })();";
+
+    // Poll da HUD compacta: lê os stats HTML do jogo (ouro/diamantes/gemas/online).
+    // Sem aspas duplas dentro de verbatim — só single quotes. Consumido como string JSON.
+    private const string HudPollScript = @"(() => { const g = id => document.getElementById(id)?.textContent?.trim() || ''; const gt = id => { const el = document.getElementById(id); const t = el?.textContent?.trim(); return t ? t : (el?.getAttribute('title') || '').trim(); }; const moRaw = document.getElementById('mochila-qtd')?.textContent?.trim() || document.getElementById('bolsa-qtd')?.textContent?.trim() || document.getElementById('hud-bolsa-n')?.textContent?.trim() || ''; return JSON.stringify({ ouro: g('st-ouro'), tarefa: gt('rastreio-tarefa'), mochila: moRaw }); })()";
 
     private const string MissionsScript = @"(() => {
         if (window.__lolIdleMissionsInstalled) return;
@@ -896,6 +921,9 @@ public partial class MainWindow : Window
         public double MissionsHeight { get; set; } = 320;
         public double MissionsLeft { get; set; } = 200;
         public double MissionsTop { get; set; } = 200;
+        public bool HasHudBounds { get; set; }
+        public double HudLeft { get; set; } = 100;
+        public double HudTop { get; set; } = 100;
         public bool IsMaximized { get; set; }
         // Comportamento ao fechar (1 = continuar em segundo plano, 2 = sair)
         public int CloseBehavior { get; set; } = 1;
@@ -1745,6 +1773,7 @@ public partial class MainWindow : Window
     private void RestoreFromTray()
     {
         _isHiddenToTray = false;
+        UpdateFloatingToggleButtonVisibility();
 
         if (_floatingWindow != null)   // flutuante aberta: traz ELA de volta, não a principal
         {
@@ -2120,6 +2149,12 @@ public partial class MainWindow : Window
         try { _missionsWindow?.Close(); } catch { }
         _missionsWindow = null;
 
+        // Fecha a HUD compacta junto com o processo (e o poll não segura o encerramento).
+        try { _hudPollTimer?.Stop(); } catch { }
+        _hudPollTimer = null;
+        try { _hudCompactaWindow?.Close(); } catch { }
+        _hudCompactaWindow = null;
+
         // Fecha a janela flutuante junto com o processo quando o usuário escolhe Sair.
         if (_floatingWindow != null)
         {
@@ -2371,16 +2406,63 @@ public partial class MainWindow : Window
                 return;
             }
 
-            LogFloatingWindowEvent($"Popup: estado do host — preparedWindowNull={_preparedFloatingWindow == null}, preparedViewNull={_preparedFloatingView == null}, coreWebView2Null={_preparedFloatingView?.CoreWebView2 == null}, ready={_preparedFloatingReady}");
+            // Consome o par pré-inicializado e exibe a janela flutuante (mesmo caminho do
+            // botão in-game). args.NewWindow recebe o CoreWebView2 pelo mesmo objeto.
+            var coreDelivered = _preparedFloatingView?.CoreWebView2;
+            SwitchToFloatingWindow();
+            if (coreDelivered != null)
+            {
+                args.NewWindow = coreDelivered;
+                args.Handled = true;
+                LogFloatingWindowEvent("Popup: Core pré-inicializado entregue ao jogo.");
+            }
+            return;
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"Popup: erro ao entregar WebView preparado: {ex}");
+        }
+    }
+
+    // Caminho compartilhado "alternar para a janela flutuante": consome o par pré-inicializado
+    // (_preparedFloatingWindow/View) e exibe a flutuante. Usado pelo pedido do jogo
+    // (NewWindowRequested → args.NewWindow) e pelo botão ▭▭ da title bar.
+    // Idempotente por consumo do par: sem par pronto, no-op com log. Nunca derruba
+    // a janela principal.
+    //
+    // NAVEGAÇÃO: no fluxo do jogo, quem navega o view é o PRÓPRIO jogo via args.NewWindow
+    // (HUD compacta, respeito próprio). No botão manual do app este fluxo pula a navegação,
+    // então passamos navigateGameUrl=true para navegar no braço para GameUrl (HUD completa
+    // da página de jogo — melhor do que janela preta/vazia).
+    private void SwitchToFloatingWindow(bool navigateGameUrl = false)
+    {
+        try
+        {
+            LogFloatingWindowEvent($"Floating: estado do host — preparedWindowNull={_preparedFloatingWindow == null}, preparedViewNull={_preparedFloatingView == null}, coreWebView2Null={_preparedFloatingView?.CoreWebView2 == null}, ready={_preparedFloatingReady}");
             if (!_preparedFloatingReady || _preparedFloatingWindow == null || _preparedFloatingView?.CoreWebView2 == null)
             {
-                LogFloatingWindowEvent("Popup: WebView pré-inicializado indisponível ou ainda não preparado por completo; mantendo comportamento padrão do WebView2.");
+                LogFloatingWindowEvent("Floating: WebView pré-inicializado indisponível ou ainda não preparado por completo; nada a abrir (já estamos na flutuante?).");
                 return;
             }
 
             var window = _preparedFloatingWindow;
             var view = _preparedFloatingView;
             var core = view.CoreWebView2;
+
+            // Navegação manual (botão ▭▭): apenas quando navigateGameUrl == true.
+            // Caminho do jogo (navigateGameUrl == false) permanece intacto.
+            if (navigateGameUrl)
+            {
+                try
+                {
+                    view.Source = new Uri(GameUrl);
+                }
+                catch (Exception navEx)
+                {
+                    LogFloatingWindowEvent($"Floating (manual): navegar para GameUrl falhou: {navEx.GetType().Name}: {navEx.Message}");
+                    return; // não consome o par; nada abre
+                }
+            }
 
             _preparedFloatingWindow = null;
             _preparedFloatingView = null;
@@ -2395,9 +2477,6 @@ public partial class MainWindow : Window
                 _ = view.CoreWebView2.AddScriptToExecuteOnDocumentCreatedAsync(seed);
             }
             catch { }
-            args.NewWindow = core;
-            args.Handled = true;
-            LogFloatingWindowEvent("Popup: Core pré-inicializado entregue ao jogo.");
 
             ShowFloatingWindow(window);
             SaveWindowSettings();
@@ -2411,13 +2490,13 @@ public partial class MainWindow : Window
                 var c2 = view.CoreWebView2;
                 if (c2 != null) _ = c2.ExecuteScriptAsync("document.querySelector('#lol-idle-missions')?.classList.add('active');");
             }
-            LogFloatingWindowEvent("Popup: janela exibida. Janela principal fechada (sem bandeja).");
+            LogFloatingWindowEvent("Floating: janela flutuante exibida. Janela principal fechada (sem bandeja).");
 
-            _ = PrepareFloatingWebViewAsync(this, "HandleNewWindowRequested");
+            _ = PrepareFloatingWebViewAsync(this, "SwitchToFloatingWindow");
         }
         catch (Exception ex)
         {
-            LogFloatingWindowEvent($"Popup: erro ao entregar WebView preparado: {ex}");
+            LogFloatingWindowEvent($"Floating: erro ao alternar para janela flutuante: {ex}");
         }
     }
 
@@ -2500,6 +2579,7 @@ public partial class MainWindow : Window
         window.Topmost = _settings.FloatingTopmost;
         window.Activate();
         SyncFloatingControls();
+        UpdateFloatingToggleButtonVisibility();
     }
 
     private void SyncFloatingControls()
@@ -2629,7 +2709,8 @@ public partial class MainWindow : Window
         await core.AddScriptToExecuteOnDocumentCreatedAsync(AudioBootstrapScript);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(TrayNotifyScript);
         await core.AddScriptToExecuteOnDocumentCreatedAsync(VipMonitorScript);
-        await core.AddScriptToExecuteOnDocumentCreatedAsync(FarmDebugScript);
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(AppScreenToggleScript);
+        await core.AddScriptToExecuteOnDocumentCreatedAsync(GameEscapeBridgeScript);
         core.WebMessageReceived += (_, args) =>
         {
             try
@@ -2652,16 +2733,25 @@ public partial class MainWindow : Window
                     }
                     _ = core.ExecuteScriptAsync($"document.querySelector('#lol-idle-missions')?.classList.toggle('active', {_settings.ShowMissions.ToString().ToLower()});");
                 }
+                else if (msg == "lol-idle-showfloating:toggle")
+                {
+                    // Botão in-game (▭▭): mesmo caminho do pedido do jogo (NewWindowRequested).
+                    SwitchToFloatingWindow();
+                }
+                else if (msg == "lol-idle-escape:exit")
+                {
+                    // Só sai — nunca entra (Esc não alterna). Não marca nada: o jogo decide o seu fluxo.
+                    if (_gameFullScreen) ExitGameFullScreen();
+                }
+                else if (msg == "lol-idle-appscreen:toggle")
+                {
+                    ToggleGameFullScreen();
+                }
                 else if (msg != null && msg.StartsWith("lol-idle-mission-repetable:"))
                 {
                     // Missão repetível do Passe: tipo próprio dentro da família mission (toggle 🔔 Missões cobre).
                     string rodada = msg["lol-idle-mission-repetable:".Length..].Trim();
                     HandleNotification(key, "mission_repetable", context: string.IsNullOrEmpty(rodada) ? "no-rodada" : rodada);
-                }
-                else if (msg != null && msg.StartsWith("lol-idle-farm-debug:"))
-                {
-                    // Diagnóstico somente-leitura da Fazenda: log, zero estado/UI/persistência.
-                    LogFloatingWindowEvent($"Farm-debug: conta {key} => {msg["lol-idle-farm-debug:".Length..]}");
                 }
                 else if (msg != null && msg.StartsWith("lol-idle-vip-debug:"))
                 {
@@ -2695,6 +2785,22 @@ public partial class MainWindow : Window
         core.Settings.IsStatusBarEnabled = false;
         core.Settings.AreDevToolsEnabled = false;
         core.Settings.IsZoomControlEnabled = true;
+
+        // Fullscreen pedido pelo jogo (o botão "Tela cheia" do próprio LoL Idle faz a página
+        // chamar document.requestFullscreen; o WebView2 avisa pelo evento abaixo). Cada view
+        // recebe no máximo UM subscriber (guard _fullScreenHooked); a transição real é única
+        // por janela (_gameFullScreen guard inside Enter/Exit).
+        if (_fullScreenHooked.Add(view))
+        {
+            try
+            {
+                core.ContainsFullScreenElementChanged += OnContainsFullScreenElementChanged;
+            }
+            catch (Exception hookEx)
+            {
+                LogFloatingWindowEvent($"Fullscreen: falha ao registrar ContainsFullScreenElementChanged: {hookEx.GetType().Name}: {hookEx.Message}");
+            }
+        }
 
         core.NavigationStarting += (_, args) =>
         {
@@ -4138,6 +4244,7 @@ public partial class MainWindow : Window
                     var closedView = _floatingView;
                     _floatingWindow = null;
                     _floatingView = null;
+                    UpdateFloatingToggleButtonVisibility();
 
                     // Notifica ao WebView2 que o popup foi realmente fechado,
                     // para que o jogo atualize o estado de window.closed.
@@ -5383,6 +5490,191 @@ public partial class MainWindow : Window
         }
     }
 
+    // Tela cheia na title bar: mesmo caminho do botão de fullscreen do jogo/F11.
+    private void FullScreenButton_Click(object sender, RoutedEventArgs e) => ToggleGameFullScreen();
+
+    // Toggle do painel flutuante de controles: só age quando a janela flutuante está visível.
+    private void FloatingToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        var view = _floatingView;
+        if (view?.CoreWebView2 != null && _floatingWindow?.IsVisible == true)
+            _ = view.CoreWebView2.ExecuteScriptAsync(
+                "var p=document.getElementById('lol-idle-floating-controls'); if(p) p.style.display = (p.style.display === 'none' ? 'flex' : 'none');");
+    }
+
+    // ▭▭ da title bar: alterna a janela HUD compacta (overlay com ouro/diamantes/gemas).
+    // Não mexe na janela flutuante do jogo — só cria/esconde a nossa HUD.
+    private void ShowFloatingButton_Click(object sender, RoutedEventArgs e) => ToggleHudCompacta();
+
+    private void ToggleHudCompacta()
+    {
+        try
+        {
+            if (_hudCompactaWindow == null)
+            {
+                _hudCompactaWindow = new HudCompactaWindow(_settings);
+                // X da HUD -> mesmo caminho de ocultação do toggle (restaura a principal se hid).
+                _hudCompactaWindow.CloseRequested += HideHudAndRestoreMain;
+                // Persiste a posição como nas Missões: cada movimento grava HudLeft/Top e marca flag.
+                _hudCompactaWindow.LocationChanged += (_, _) =>
+                {
+                    _settings.HudLeft = _hudCompactaWindow!.Left;
+                    _settings.HudTop = _hudCompactaWindow.Top;
+                    _settings.HasHudBounds = true;
+                    SaveWindowSettings();
+                };
+            }
+
+            if (_hudCompactaWindow.IsVisible)
+            {
+                HideHudAndRestoreMain();
+            }
+            else
+            {
+                _hudCompactaWindow.ShowAnimated();
+                StartHudPoll();
+                SetHudButtonActive(true);
+                // Mesma semântica do modo flutuante: esconde a principal enquanto a HUD estiver aberta.
+                SaveWindowSettings();
+                _isHiddenToTray = true;
+                Hide();
+                _ = ApplyAudioSettingsAsync();
+                _hudHidMain = true;
+                LogFloatingWindowEvent("HUD: toggle -> exibir (indicador on)");
+            }
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"HUD: falha no toggle: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    // Ocultação única da HUD: animação + stop do poll + indicador off + restauração da principal
+    // (SOMENTE se quem escondeu a principal foi a HUD). Usada pelos DOIS caminhos de fechar
+    // (▭▭ toggle e X da HUD via CloseRequested). RestoreFromTray faz o trabalho pesado.
+    private void HideHudAndRestoreMain()
+    {
+        try { _hudCompactaWindow?.HideAnimated(); } catch { }
+        StopHudPoll();
+        SetHudButtonActive(false);
+
+        if (_hudHidMain)
+        {
+            _hudHidMain = false;
+            try
+            {
+                RestoreFromTray();
+                LogFloatingWindowEvent("HUD: janela principal restaurada após fechar a HUD.");
+            }
+            catch (Exception ex)
+            {
+                LogFloatingWindowEvent($"HUD: falha ao restaurar a principal: {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+        else
+        {
+            LogFloatingWindowEvent("HUD: esconder (indicador off)");
+        }
+    }
+
+    private void StartHudPoll()
+    {
+        if (_hudPollTimer == null)
+        {
+            _hudPollTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            _hudPollTimer.Tick += async (_, _) => await HudPollTickAsync();
+        }
+        _hudPollTimer.Start();
+    }
+
+    private void StopHudPoll()
+    {
+        try { _hudPollTimer?.Stop(); } catch { }
+    }
+
+    // Pinta/apaga o ShowFloatingButton (▭▭) da title bar para mostrar que a HUD está ativa.
+    // active=true: Foreground AccentHover (#E8903F) + Background AccentSoft (#3A2A1C);
+    // active=false: Foreground TextPrimary + Background Transparent (estado de fábrica).
+    private void SetHudButtonActive(bool active)
+    {
+        if (ShowFloatingButton == null) return;
+        try
+        {
+            ShowFloatingButton.Foreground = active
+                ? (System.Windows.Media.Brush)FindResource("AccentHover")
+                : (System.Windows.Media.Brush)FindResource("TextPrimary");
+            ShowFloatingButton.Background = active
+                ? (System.Windows.Media.Brush)FindResource("AccentSoft")
+                : System.Windows.Media.Brushes.Transparent;
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"HUD: SetHudButtonActive({active}) falhou: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    // Poll a cada 2s: lê stats HTML. Falha silenciosa (mantém últimos valores; loga 1x por sessão).
+    private async Task HudPollTickAsync()
+    {
+        // Guard de reentrância: um tick por vez (o script pode demorar mais que o interval).
+        if (_hudPollTickRunning) return;
+        _hudPollTickRunning = true;
+        try
+        {
+            // Captura a instância local: evita NRE/corrida com _hudCompactaWindow trocando entre ticks.
+            var hud = _hudCompactaWindow;
+            if (hud == null || !hud.IsVisible)
+            {
+                StopHudPoll();
+                return;
+            }
+
+            // ActiveView (mesma convenção dos polls de missão — nunca a conta secundária).
+            var view = ActiveView;
+            if (view?.CoreWebView2 == null)
+                return;
+
+            string raw = await view.CoreWebView2.ExecuteScriptAsync(HudPollScript);
+            if (string.IsNullOrWhiteSpace(raw) || raw == "null")
+                return;
+
+            string? json = null;
+            try { json = System.Text.Json.JsonSerializer.Deserialize<string>(raw); } catch { return; }
+            if (string.IsNullOrWhiteSpace(json) || json == "{}")
+                return;
+
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            string Get(string k) => root.TryGetProperty(k, out var v) ? (v.GetString() ?? "").Trim() : "";
+            string mochilaRaw = Get("mochila");
+            var m = System.Text.RegularExpressions.Regex.Match(mochilaRaw, @"(\d+)\s*/\s*(\d+)");
+            string mochila = m.Success ? (m.Groups[1].Value + "/" + m.Groups[2].Value) : (string.IsNullOrWhiteSpace(mochilaRaw) ? "—" : mochilaRaw.Trim());
+            hud.SetStats(Get("ouro"), Get("tarefa"), mochila);
+
+            // Um tick com sucesso: reseta o mute de erros (para não silenciar erros futuros).
+            _hudPollErrorLogged = false;
+        }
+        catch (Exception ex)
+        {
+            if (!_hudPollErrorLogged)
+            {
+                _hudPollErrorLogged = true;
+                LogFloatingWindowEvent($"HUD: poll falhou (uma linha; silenciamos as próximas): {ex.GetType().Name}: {ex.Message}");
+            }
+        }
+        finally
+        {
+            _hudPollTickRunning = false;
+        }
+    }
+
+    // O FloatingToggleButton só faz sentido com a janela flutuante visível; fora do modo floating fica oculto.
+    private void UpdateFloatingToggleButtonVisibility()
+    {
+        if (FloatingToggleButton != null)
+            FloatingToggleButton.Visibility = (_floatingWindow != null && _floatingWindow.IsVisible) ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     private void Minimize_Click(object sender, RoutedEventArgs e)
     {
         SaveWindowSettings();
@@ -5394,6 +5686,27 @@ public partial class MainWindow : Window
     private double _restoreTop;
     private double _restoreWidth;
     private double _restoreHeight;
+    // Fullscreen pedido PELO JOGO (o jogo chama document.requestFullscreen; o WebView2
+    // sinaliza via ContainsFullScreenElementChanged): a MainWindow vira borderless cobrindo
+    // o MONITOR inteiro (incl. área da taskbar) — mesma geometria que um F11 — e na saída
+    // restaura exatamente o estado salvo. Guard duplo: _fullScreenHooked por view (sem
+    // subscribe duplo) e _gameFullScreen por janela (transições no-op fora de ordem).
+    // A janela JÁ é WindowStyle=None/ResizeMode=CanResize; o caminho restaura ambos.
+    private readonly HashSet<Microsoft.Web.WebView2.Wpf.WebView2> _fullScreenHooked = new();
+    private bool _gameFullScreen;
+    private double _gfsLeft;
+    private double _gfsTop;
+    private double _gfsWidth;
+    private double _gfsHeight;
+    private WindowStyle _gfsWindowStyle;
+    private WindowState _gfsWindowState;
+    private ResizeMode _gfsResizeMode;
+    private bool _gfsTopmost;
+    private bool _gfsIsCustomMaximized;
+    // Chrome do app escondido no fullscreen (e restaurado na saída): tamanhos/vis da title bar
+    // e da footer bar + flag da sidebar (a visibilidade da sidebar reaplica a partir do setting).
+    private GridLength _gfsTitleBarRowHeight;
+    private GridLength _gfsFooterRowHeight;
 
     private void Maximize_Click(object sender, RoutedEventArgs e)
     {
@@ -5426,6 +5739,168 @@ public partial class MainWindow : Window
         {
             MaximizeButton.Content = _isCustomMaximized ? "❐" : "□";
             MaximizeButton.ToolTip = _isCustomMaximized ? "Restaurar" : "Maximizar";
+        }
+    }
+
+    // ContainsFullScreenElementChanged → decide Entre/Sair. Unico handler por view (guard
+    // _fullScreenHooked no registro). Nunca derruba a janela; tab fora de ordem vira no-op.
+    private void OnContainsFullScreenElementChanged(object? sender, object e)
+    {
+        try
+        {
+            if (sender is not Microsoft.Web.WebView2.Core.CoreWebView2 core)
+                return;
+
+            if (core.ContainsFullScreenElement)
+                EnterGameFullScreen();
+            else
+                ExitGameFullScreen();
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"ContainsFullScreenElementChanged falhou: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    // Entra em fullscreen: cobre o MONITOR inteiro (incluindo a área da taskbar) onde a
+    // janela está hoje — trabalho (WorkArea) aparece ao usuário como "janela maximizada"
+    // comum; fullscreen de verdade = Bounds do monitor. Monitor escolhido pelo CENTRO da
+    // janela atual (fallback: cursor; fallback: primário). DPI convertido via DpiScaleX
+    // (Screen.Bounds é físico; Left/Top/Width/Height da janela são DIP). Se qualquer coisa
+    // falhar, cai para WindowState=Maximized como rede de segurança.
+    private void EnterGameFullScreen()
+    {
+        if (_gameFullScreen) return; // Enter→Enter: no-op
+
+        _gfsLeft = Left; _gfsTop = Top; _gfsWidth = Width; _gfsHeight = Height;
+        _gfsWindowStyle = WindowStyle; _gfsResizeMode = ResizeMode; _gfsWindowState = WindowState;
+        _gfsTopmost = Topmost; _gfsIsCustomMaximized = _isCustomMaximized;
+
+        // Chrome do app (title bar, footer bar, sidebar): some no fullscreen; setting da
+        // sidebar fica intocável (persistido) e reaplicado no Exit via ApplySidebarLayout().
+        _gfsTitleBarRowHeight = TitleBarRow?.Height ?? new GridLength(42);
+        _gfsFooterRowHeight = FooterBarRow?.Height ?? new GridLength(30);
+        if (TitleBarGrid != null) TitleBarGrid.Visibility = Visibility.Collapsed;
+        if (TitleBarRow != null) TitleBarRow.Height = new GridLength(0);
+        if (FooterBarBorder != null) FooterBarBorder.Visibility = Visibility.Collapsed;
+        if (FooterBarRow != null) FooterBarRow.Height = new GridLength(0);
+        if (SidebarPanel != null) SidebarPanel.Visibility = Visibility.Collapsed;
+        if (SidebarRailPanel != null) SidebarRailPanel.Visibility = Visibility.Collapsed;
+        if (SidebarColumn != null) SidebarColumn.Width = new GridLength(0);
+        if (SidebarRailColumn != null) SidebarRailColumn.Width = new GridLength(0);
+
+        try
+        {
+            WindowState = WindowState.Normal;
+            WindowStyle = WindowStyle.None;
+            ResizeMode = ResizeMode.NoResize;
+
+            double dpi = 1.0;
+            try { dpi = VisualTreeHelper.GetDpi(this).DpiScaleX; } catch { dpi = 1.0; }
+            if (dpi <= 0 || double.IsNaN(dpi) || double.IsInfinity(dpi)) dpi = 1.0;
+
+            int centerX = (int)(Left + Width / 2.0);
+            int centerY = (int)(Top + Height / 2.0);
+            var point = new System.Drawing.Point(centerX, centerY);
+            Forms.Screen? screen = Forms.Screen.FromPoint(point);
+            if (screen == null)
+            {
+                // fallback: posição do cursor (o monitor com o mouse provavelmente é o do jogo)
+                var c = Forms.Cursor.Position;
+                screen = Forms.Screen.FromPoint(new System.Drawing.Point(c.X, c.Y));
+            }
+            screen ??= Forms.Screen.PrimaryScreen;
+            if (screen?.Bounds is { } b)
+            {
+                Left = b.Left / dpi; Top = b.Top / dpi;
+                Width = b.Width / dpi; Height = b.Height / dpi;
+                LogFloatingWindowEvent($"Fullscreen do jogo: ENTROU em {screen.DeviceName} ({b.Width}x{b.Height} físicos)");
+            }
+            else
+            {
+                WindowState = WindowState.Maximized; // fallback seguro: nunca fica sem janela
+                LogFloatingWindowEvent("Fullscreen do jogo: ENTROU (fallback Maximized, monitor desconhecido)");
+            }
+
+            // No fullscreen, a maximização "customizada" do app fica fora de jogo; guarda e zera.
+            _isCustomMaximized = false;
+            _gameFullScreen = true;
+        }
+        catch (Exception ex)
+        {
+            // Falha parcial (ex.: DPI/monitor): tenta ao menos maximizar para não travar o usuário.
+            try { WindowState = WindowState.Maximized; } catch { }
+            _gameFullScreen = true;
+            LogFloatingWindowEvent($"Fullscreen do jogo: falha entrando ({ex.GetType().Name}: {ex.Message}) — fallback Maximized");
+        }
+    }
+
+    // Sai do fullscreen: devolve absolutamente tudo que o Enter salvou, na ordem inversa.
+    private void ExitGameFullScreen()
+    {
+        if (!_gameFullScreen) return; // Exit→Exit: no-op
+
+        try
+        {
+            WindowState = WindowState.Normal;
+            WindowStyle = _gfsWindowStyle;
+            ResizeMode = _gfsResizeMode;
+            Left = _gfsLeft; Top = _gfsTop; Width = _gfsWidth; Height = _gfsHeight;
+            Topmost = _gfsTopmost;
+            WindowState = _gfsWindowState;
+            _isCustomMaximized = _gfsIsCustomMaximized;
+            // Restaura o chrome do app: rows de title/footer e visibilidade das barras.
+            // A sidebar reaplica a partir do setting persistido (visível só se estava antes).
+            if (TitleBarRow != null) TitleBarRow.Height = _gfsTitleBarRowHeight;
+            if (FooterBarRow != null) FooterBarRow.Height = _gfsFooterRowHeight;
+            if (TitleBarGrid != null) TitleBarGrid.Visibility = Visibility.Visible;
+            if (FooterBarBorder != null) FooterBarBorder.Visibility = Visibility.Visible;
+            try { ApplySidebarLayout(); } catch { }
+            UpdateMaximizeButton();
+            LogFloatingWindowEvent("Fullscreen do jogo: SAIU — estado restaurado");
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"Fullscreen do jogo: falha saindo ({ex.GetType().Name}: {ex.Message})");
+        }
+        finally
+        {
+            _gameFullScreen = false;
+        }
+    }
+
+    // Alterna entre o modo borderless fullscreen (chrome escondido) e o estado anterior.
+    private void ToggleGameFullScreen()
+    {
+        if (_gameFullScreen) ExitGameFullScreen();
+        else EnterGameFullScreen();
+    }
+
+    // Atalho único app-wide para alternar o borderless fullscreen (mesmo caminho do botão
+    // "Tela cheia"): F11 ou Alt+Enter. Captura o teclado no WPF — dentro do conteúdo do jogo
+    // (WebView2) o próprio jogo pode consumidor Alt+Enter (fullscreen dele) antes de chegar aqui.
+    private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        try
+        {
+            // Esc: somente SAI do fullscreen (nunca entra — F11 faz isso).
+            if (e.Key == System.Windows.Input.Key.Escape && _gameFullScreen)
+            {
+                ExitGameFullScreen();
+                e.Handled = true;
+                return;
+            }
+
+            bool alt = (System.Windows.Input.Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Alt) != 0;
+            if (e.Key == System.Windows.Input.Key.F11 || (e.Key == System.Windows.Input.Key.Enter && alt))
+            {
+                ToggleGameFullScreen();
+                e.Handled = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            LogFloatingWindowEvent($"Window_PreviewKeyDown falhou: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
